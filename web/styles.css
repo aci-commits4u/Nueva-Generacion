@@ -125,6 +125,20 @@ details summary { cursor: pointer; color: var(--ink-2); margin: 6px 0 12px; }
 .funds.safe { border-color: var(--pass); color: var(--pass); } .funds.safe::before { background: var(--pass); }
 .funds.charged { border-color: var(--ink); } .funds.charged::before { background: var(--orange); }
 .funds small { display: block; font-weight: 400; color: var(--ink-2); }
+/* ---- flow: re-shop + consent ---- */
+.reshop-hint { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: #ece7e0; color: var(--ink); font-size: .92rem; }
+.reshop-hint strong { display: block; margin-top: 6px; }
+.offer.is-held { border-style: dashed; background: #f6f2ec; }
+.offer .held-badge { display: inline-block; margin-top: 6px; background: var(--block-bg); color: var(--block); font-weight: 500; }
+.offer .pick:disabled { opacity: .55; cursor: not-allowed; }
+.consent { border: 0; margin: 0 0 8px; padding: 0; }
+.consent legend { padding: 0; margin-bottom: 10px; color: var(--ink-2); font-size: .92rem; }
+.consent-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin-bottom: 8px; border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer; }
+.consent-row:has(input:checked) { border-color: var(--ink); }
+.consent-row input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--ink); }
+.consent-foot { margin: 0 0 14px; font-size: .8rem; color: var(--ink-2); }
+#dx-ok:disabled { opacity: .5; cursor: not-allowed; }
+/* ---- end flow ---- */
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .chip { font-size: .8rem; padding: 3px 10px; border-radius: 999px; background: #ece7e0; color: var(--ink); }
 .chip.bad { background: var(--block-bg); color: var(--block); }

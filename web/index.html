@@ -120,9 +120,12 @@
 <dialog id="dlg-exception" aria-labelledby="dx-title">
   <form method="dialog" id="exception-form">
     <h3 id="dx-title">Accept this exception</h3>
-    <p>You are accepting exactly this, on exactly this offer:</p>
-    <blockquote id="dx-quote"></blockquote>
-    <div class="row end"><button class="pill ghost" value="cancel" type="button" id="dx-cancel">Cancel</button><button class="pill primary" id="dx-ok" type="submit" value="ok">Accept and record</button></div>
+    <fieldset class="consent">
+      <legend>Check each one you accept. Nothing is accepted by default.</legend>
+      <div id="dx-rows"></div>
+    </fieldset>
+    <p class="consent-foot" id="dx-foot"></p>
+    <div class="row end"><button class="pill ghost" value="cancel" type="button" id="dx-cancel">Cancel</button><button class="pill primary" id="dx-ok" type="submit" value="ok" disabled>Accept and record</button></div>
   </form>
 </dialog>
 
