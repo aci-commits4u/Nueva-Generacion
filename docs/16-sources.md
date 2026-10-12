@@ -1,0 +1,21 @@
+# Sources
+- Mastercard, Verifiable Intent (Mar 5, 2026): https://www.mastercard.com/us/en/news-and-trends/stories/2026/verifiable-intent.html
+- Verifiable Intent spec & code: https://github.com/agent-intent/verifiable-intent · https://verifiableintent.dev
+- Google AP2: https://github.com/google-agentic-commerce/AP2
+- Mastercard, Scaling agentic commerce with trust (Agent Pay Acceptance Framework): https://www.mastercard.com/global/en/news-and-trends/stories/2025/lady-gaga-dance-contest-abracadabra-fan-version/scaling-agentic-commerce-with-trust.html
+- The Paypers, Agent Pay trust & intelligence services (Oct 1, 2026): https://thepaypers.com/payments/news/mastercard-expands-agent-pay-with-trust-and-intelligence-services
+- Mastercard, True cost of a chargeback: https://mastercard.com/us/en/news-and-trends/Insights/2025/what-s-the-true-cost-of-a-chargeback-in-2025.html
+- Goodwin, Authorizing agentic payments (Jun 2026): https://www.goodwinlaw.com/en/insights/publications/2026/06/insights-technology-aiml-authorizing-agentic-payments
+- Chargeflow, agentic chargebacks & liability: https://www.chargeflow.io/blog/agentic-commerce-chargebacks-liability
+- FinTech Weekly (Oct 4, 2026): https://www.fintechweekly.com/magazine/articles/agentic-commerce-launch-month-liability-risk-2026
+- Ipsos, Views on shopping with AI (Jul 2026): https://www.ipsos.com/sites/default/files/ct/publication/documents/2026-07/ipsos-views-shopping-with-AI.pdf
+- Fortune, Amex agent purchase protection (Apr 14, 2026): https://fortune.com/2026/04/14/american-express-ai-payments-developers-purchase-protection/
+- Visa Agentic Ready (Apr 29, 2026): https://corporate.visa.com/en/sites/visa-perspectives/newsroom/visa-agentic-ready-program-expands-globally.html
+- Visa Trusted Agent Protocol: https://developer.visa.com/capabilities/trusted-agent-protocol/overview
+- PPC Land, Microsoft Copilot Checkout: https://ppc.land/microsoft-launches-checkout-inside-copilot-as-ai-commerce-battle-intensifies/
+- Major Matters, agentic commerce stack: https://majormatters.co/p/agentic-commerce-stack-q1-2026
+- eMarketer, Target limits liability: https://www.emarketer.com/content/target-limits-liability-ai-shopping-assistants-gain-traction
+- Cloud Security Alliance, agentic AI liability (Jul 2026): https://labs.cloudsecurityalliance.org/research/csa-research-note-agentic-ai-liability-legal-risk-20260703-c/
+- ADN / Washington Post, Operator's $31 eggs: https://www.adn.com/alaska-life/2025/02/09/i-let-chatgpts-new-agent-manage-my-life-it-spent-31-on-a-dozen-eggs/
+- Mastercard Developers Agent Toolkit (MCP): https://developer.mastercard.com/platform/documentation/agent-toolkit/
+- Hacker News threads: https://news.ycombinator.com/item?id=47371289 · https://news.ycombinator.com/item?id=49885109
