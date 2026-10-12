@@ -62,5 +62,6 @@ def test_injection_note_in_merchant_data_is_ignored(bundle):
 
 def test_approved_requirements_are_signed_into_l2(bundle):
     signed = vi.signed_requirements(bundle)
+    assert signed["category"] == "flight"
     assert signed["max_stops"] == 0 and signed["max_total_cents"] == 30000
-    assert signed["type"] == vi.FLIGHT_CONSTRAINT_TYPE
+    assert signed["type"] == vi.CONSTRAINT_TYPE

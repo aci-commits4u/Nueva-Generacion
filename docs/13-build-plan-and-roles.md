@@ -24,7 +24,7 @@ If behind at the checkpoint: drop UI polish, Prompt 3 (evidence narrative), and 
 ## Definition of done (maps to official Build Readiness Checklist)
 - [ ] Core journey works end to end (approve → check → hold → exception/cancel → purchase enforcement → dispute packet)
 - [ ] Discovery alignment: client's three-layover example is scenario 2
-- [ ] Scope: flights only; no extra features
+- [ ] Scope: one fully working category (flights); category-neutral by design; no extra features
 - [ ] We can state live vs simulated (see Q&A)
 - [ ] AI tested with varied inputs incl. injection (scenario 11)
 - [ ] Error handling: model timeout → mock fallback; missing fields → HOLD; bad signature → BLOCK
