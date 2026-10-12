@@ -96,6 +96,7 @@ class VerifiedOffer:
     vi_chain_valid: bool
     merchant_signature_valid: bool
     errors: list[str] = field(default_factory=list)
+    signed_requirements: dict | None = None
 
 
 # --------------------------------------------------------------------------- issuance
@@ -106,6 +107,8 @@ def issue_credentials(req: ApprovedRequirements, acceptable_offers: list[tuple[s
     signed by the user key, so the agent cannot silently drop e.g. "nonstop".
     ``acceptable_offers`` is a list of (offer_id, title); defaults to the fixture offers.
     """
+    if req.category != "flight":
+        raise ValueError("Only the flight schema has deterministic checks in this demo")
     now = int(time.time())
     if acceptable_offers is None:
         from app.fixtures_loader import all_offer_ids
@@ -137,7 +140,8 @@ def issue_credentials(req: ApprovedRequirements, acceptable_offers: list[tuple[s
             "cabin": req.cabin,
             "refundable_required": req.refundable_required,
             "passengers": req.passengers,
-            "approved_at": req.approved_at.isoformat(),
+            "approved_at": req.model_dump(mode="json")["approved_at"],
+            "approved_by_traveler": req.approved_by_traveler,
         },
     )
     mandate = UserMandate(
@@ -177,7 +181,7 @@ def tamper_l2(bundle: CredentialBundle) -> CredentialBundle:
 
 def signed_requirements(bundle: CredentialBundle) -> dict | None:
     """Read the approved requirements back out of the (user-signed) L2 - evidence only."""
-    claims = resolve_disclosures(bundle.l2)
+    claims = resolve_disclosures(decode_sd_jwt(bundle.l2_ser))
     for delegate in claims.get("delegate_payload", []):
         if isinstance(delegate, dict) and delegate.get("vct") == "mandate.checkout.open.1":
             for c in delegate.get("constraints", []):
@@ -208,7 +212,9 @@ def merchant_sign_offer(offer: FlightOffer, signer: KeyPair | None = None, note:
             item[key] = value
     if note:
         item["note"] = note
-    total: dict = {"currencyCode": offer.currency, "includes_taxes_and_fees": True}
+    total: dict = {"includes_taxes_and_fees": True}
+    if offer.currency is not None:
+        total["currencyCode"] = offer.currency
     if offer.total_cents is not None:
         total["amount_cents"] = offer.total_cents
     payload = {
@@ -230,6 +236,12 @@ def _verify_merchant_signature(checkout_jwt: str) -> tuple[bool, dict | None]:
         header, payload, signature = _jwt_decode_parts(checkout_jwt)
         signing_input = checkout_jwt.rsplit(".", 1)[0].encode("ascii")
         ok = header.get("alg") == "ES256" and es256_verify(signing_input, signature, MERCHANT.public_key)
+        ok = ok and isinstance(payload, dict)
+        if ok:
+            expiry, issued = payload.get("exp"), payload.get("iat")
+            ok = (type(expiry) is int and type(issued) is int
+                  and issued <= time.time() + 300 and expiry >= time.time()
+                  and payload.get("iss") == MERCHANTS[0]["website"])
         return bool(ok), (payload if ok else None)
     except Exception:
         return False, None
@@ -246,7 +258,7 @@ def _offer_from_payload(payload: dict, offer_hash: str) -> FlightOffer:
             for s in item["segments"]
         ],
         total_cents=total.get("amount_cents") if total.get("includes_taxes_and_fees", False) else None,
-        currency=total.get("currencyCode", "USD"), cabin=item.get("cabin"), refundable=item.get("refundable"),
+        currency=total.get("currencyCode") or None, cabin=item.get("cabin"), refundable=item.get("refundable"),
         passengers=item.get("passengers"), offer_hash=offer_hash,
     )
 
@@ -276,6 +288,31 @@ def _role_presentations(l2: SdJwt) -> tuple[str, str]:
     return l2.serialize(include_disclosures=checkout_idx), l2.serialize(include_disclosures=payment_idx)
 
 
+def _flight_requirements_from_verified_claims(claims: dict) -> dict:
+    """Read exactly one approved requirements extension after serialized chain verification."""
+    constraints = [
+        constraint
+        for delegate in claims.get("delegate_payload", [])
+        if isinstance(delegate, dict) and delegate.get("vct") == "mandate.checkout.open.1"
+        for constraint in delegate.get("constraints", [])
+        if constraint.get("type") == CONSTRAINT_TYPE
+    ]
+    if len(constraints) != 1:
+        raise ValueError("Exactly one signed requirements constraint is required")
+    required = {k: v for k, v in constraints[0].items() if k != "type"}
+    if required.get("category") != "flight":
+        raise ValueError("Unsupported signed requirements category")
+    return required
+
+
+def requirements_match(req: ApprovedRequirements, signed: dict | None) -> bool:
+    """Compare rule authority fields, not the informational original words or summary."""
+    if signed is None:
+        return False
+    expected = req.model_dump(mode="json", exclude={"source_text"})
+    return expected == signed
+
+
 def verify_and_extract(bundle: CredentialBundle, checkout_jwt: str) -> VerifiedOffer:
     """Simulate the agent building L3a/L3b from the merchant's checkout_jwt, then verify everything.
 
@@ -287,15 +324,17 @@ def verify_and_extract(bundle: CredentialBundle, checkout_jwt: str) -> VerifiedO
     sig_ok, payload = _verify_merchant_signature(checkout_jwt)
     c_hash = checkout_hash(checkout_jwt)
     chain_ok = False
+    approved = None
     try:
         now = int(time.time())
         l2_ser = bundle.l2_ser
         l2_base = l2_ser.split("~")[0]
-        l2 = bundle.l2
+        l2 = decode_sd_jwt(l2_ser)
 
-        unverified = json.loads(__import__("base64").urlsafe_b64decode(checkout_jwt.split(".")[1] + "=="))
-        sku = unverified["cart"]["items"][0]["sku"]
-        amount = unverified["cart"]["total"].get("amount_cents", 0)
+        if not sig_ok or payload is None:
+            raise ValueError("merchant signature invalid; untrusted checkout data was not read")
+        sku = payload["cart"]["items"][0]["sku"]
+        amount = payload["cart"].get("total", {}).get("amount_cents", 0)
 
         payment_disc = _find_disclosure(l2, lambda v: isinstance(v, dict) and v.get("vct") == "mandate.payment.open.1")
         checkout_disc = _find_disclosure(l2, lambda v: isinstance(v, dict) and v.get("vct") == "mandate.checkout.open.1")
@@ -339,10 +378,24 @@ def verify_and_extract(bundle: CredentialBundle, checkout_jwt: str) -> VerifiedO
         )
         errors += merchant_side.errors + network_side.errors
         chain_ok = merchant_side.valid and network_side.valid
+        if chain_ok:
+            approved = _flight_requirements_from_verified_claims(network_side.l2_claims)
     except Exception as exc:  # any failure is untrusted -> BLOCK path
+        chain_ok = False
+        approved = None
         errors.append(f"{type(exc).__name__}: {exc}")
 
-    offer = _offer_from_payload(payload, c_hash) if (sig_ok and payload) else None
+    offer = None
+    if sig_ok and payload:
+        try:
+            offer = _offer_from_payload(payload, c_hash)
+            if offer.category != "flight":
+                raise ValueError("Unsupported signed offer category")
+        except Exception as exc:
+            chain_ok = False
+            approved = None
+            errors.append(f"Invalid signed itinerary: {type(exc).__name__}: {exc}")
     if not sig_ok:
         errors.append("merchant signature invalid")
-    return VerifiedOffer(offer=offer, vi_chain_valid=chain_ok, merchant_signature_valid=sig_ok, errors=errors)
+    return VerifiedOffer(offer=offer, vi_chain_valid=chain_ok, merchant_signature_valid=sig_ok,
+                         errors=errors, signed_requirements=approved)

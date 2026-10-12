@@ -59,7 +59,7 @@ class FlightOffer(BaseModel):
     merchant_name: str
     segments: list[Segment]
     total_cents: int | None = None  # None => missing
-    currency: str = "USD"
+    currency: str | None = None
     cabin: str | None = None
     refundable: bool | None = None
     passengers: int | None = None

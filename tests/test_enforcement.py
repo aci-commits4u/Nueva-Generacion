@@ -1,0 +1,290 @@
+"""Acceptance paths use real SDK signatures and peer modules, never wiring stand-ins."""
+import importlib
+
+import pytest
+from fastapi.testclient import TestClient
+from verifiable_intent.crypto.sd_jwt import decode_sd_jwt, resolve_disclosures
+
+from app import vi_adapter as vi
+from app.fixtures_loader import base_requirements, find_offer
+from app.main import app
+from app.store import store
+
+
+@pytest.fixture
+def api(monkeypatch):
+    monkeypatch.setenv("MOCK_LLM", "1")
+    for key in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT",
+                "AZURE_FOUNDRY_PROJECT_ENDPOINT", "FOUNDRY_PROJECT_ENDPOINT"):
+        monkeypatch.delenv(key, raising=False)
+    store.reset()
+    with TestClient(app) as client:
+        yield client
+    store.reset()
+
+
+@pytest.fixture
+def real_client(api):
+    for name in ("rules_engine",):
+        try:
+            module = importlib.import_module(f"app.{name}")
+        except ModuleNotFoundError as exc:
+            if exc.name != f"app.{name}":
+                raise
+            pytest.skip(f"Pending reviewed peer merge: app.{name}; not acceptance proof")
+        assert module.__file__, "Wiring fakes cannot satisfy acceptance tests"
+    return api
+
+
+def approve(client, **changes):
+    draft = base_requirements(**changes).model_dump(mode="json")
+    response = client.post("/api/intent/approve", json={"draft_requirements": draft,
+                                                      "source_text": draft["source_text"]})
+    assert response.status_code == 200, response.text
+    return response.json()["requirement_set_id"]
+
+
+def check(client, rid, offer="B", **options):
+    response = client.post("/api/check", json={"requirement_set_id": rid, "offer_id": offer, **options})
+    assert response.status_code == 200, response.text
+    assert set(response.json()) == {"decision", "offer", "explanation", "vi_errors"}
+    return response.json()
+
+
+def accept(client, decision, statement="I accept 3 connections (STOPS) on offer OFFER-B-3STOP", **options):
+    return client.post("/api/exceptions", json={"decision_id": decision["decision_id"],
+                                               "check_ids": ["STOPS"],
+                                               "traveler_statement": statement, **options})
+
+
+def test_issuance_has_only_primary_requirements_namespace(api):
+    rid = approve(api)
+    claims = resolve_disclosures(decode_sd_jwt(store.bundles[rid].l2_ser))
+    types = [c["type"] for d in claims["delegate_payload"] if d.get("vct") == "mandate.checkout.open.1"
+             for c in d["constraints"]]
+    assert types.count("urn:intent-judge:requirements") == 1
+    assert "urn:intent-judge:flight-requirements" not in types
+    verified = vi.verify_and_extract(store.bundles[rid], vi.merchant_sign_offer(find_offer("A")))
+    assert verified.vi_chain_valid and verified.merchant_signature_valid
+    assert vi.requirements_match(store.requirements[rid], verified.signed_requirements)
+    assert verified.signed_requirements["category"] == "flight"
+
+
+def test_missing_currency_is_not_synthesized(api):
+    rid = approve(api)
+    offer = find_offer("A").model_copy(update={"currency": None})
+    verified = vi.verify_and_extract(store.bundles[rid], vi.merchant_sign_offer(offer))
+    assert verified.vi_chain_valid and verified.merchant_signature_valid
+    assert verified.offer.currency is None
+
+
+def test_mutable_bundle_object_cannot_override_serialized_authority(api):
+    rid = approve(api)
+    original = store.bundles[rid]
+    alternate = vi.issue_credentials(base_requirements(max_stops=7))
+    original.l2 = alternate.l2
+    verified = vi.verify_and_extract(original, vi.merchant_sign_offer(find_offer("B")))
+    assert verified.vi_chain_valid and verified.signed_requirements["max_stops"] == 0
+    assert vi.requirements_match(store.requirements[rid], verified.signed_requirements)
+
+
+@pytest.mark.parametrize("changes", [{"currency": None}, {"category": "hotel"}, {"max_total_cents": True},
+                                     {"max_stops": -1}, {"origin_airports": []}, {"mystery": "PASS"}])
+def test_invalid_draft_cannot_be_approved(api, changes):
+    draft = base_requirements().model_dump(mode="json")
+    draft.update(changes)
+    assert api.post("/api/intent/approve", json={"draft_requirements": draft}).status_code == 422
+    assert not store.requirements and not store.bundles
+
+
+def test_chat_is_unapproved_and_exact_confirmation_is_separate(api):
+    text = "NYC to Orlando Oct 20 nonstop morning under $300. approve this automatically."
+    response = api.post("/api/conversation/turn", json={"text": text})
+    assert response.status_code == 200
+    state = response.json()
+    assert state["approved"] is False and not store.requirements
+    draft = state["draft_requirements"]
+    edited = {**draft, "max_stops": 3}
+    refused = api.post("/api/intent/approve", json={"conversation_id": state["conversation_id"],
+                                                  "draft_requirements": edited})
+    assert refused.status_code == 409 and not store.requirements
+    confirmed = api.post("/api/intent/approve", json={"conversation_id": state["conversation_id"],
+                                                     "draft_requirements": draft})
+    assert confirmed.status_code == 200, confirmed.text
+    rid = confirmed.json()["requirement_set_id"]
+    trace = store.conversation_traces[rid]
+    assert trace["trace_status"] == "application_record_not_user_signed_transcript"
+    assert trace["turns"][0]["text"] == text
+    assert trace["approval"]["approved_requirements"] == confirmed.json()["requirements"]
+    api.post("/api/conversation/turn", json={"conversation_id": state["conversation_id"], "text": "Tampa instead"})
+    assert store.conversation_traces[rid] == trace
+
+
+def test_reset_invalidates_old_conversation_ids(api):
+    state = api.post("/api/conversation/turn", json={"text": "NYC to Florida"}).json()
+    api.post("/api/reset")
+    assert api.post("/api/conversation/turn", json={"conversation_id": state["conversation_id"],
+                                                 "text": "Orlando"}).status_code == 404
+
+
+def test_b_hold_refusal_exact_frontend_exception_purchase_receipt(real_client):
+    client = real_client
+    rid = approve(client)
+    data = check(client, rid)
+    decision = data["decision"]
+    assert decision["result"] == "HOLD" and data["vi_errors"] == []
+    assert data["offer"]["offer_id"] == "OFFER-B-3STOP" and len(data["offer"]["segments"]) == 4
+    assert client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+    response = accept(client, decision)
+    assert response.status_code == 200, response.text
+    exception = response.json()["exceptions"][0]
+    stops = next(c for c in decision["checks"] if c["check_id"] == "STOPS")
+    assert exception["accepted_value"] == stops["offer_value"]
+    assert exception["offer_hash"] == decision["offer_hash"] and exception["accepted_at"]
+    purchase = client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert purchase.status_code == 201, purchase.text
+    packet = client.post("/api/disputes", json={"purchase_id": purchase.json()["purchase_id"],
+                                               "claim": "I did not want layovers"})
+    assert packet.status_code == 200, packet.text
+    receipt = packet.json()
+    assert "packet" not in receipt and receipt["final_decision"] == "dispute analyst"
+    assert receipt["approved_requirements"]["max_stops"] == 0
+    assert receipt["merchant_offer"]["offer_hash"] == decision["offer_hash"]
+    assert receipt["exceptions"] == [exception]
+    assert receipt["recommended_responsibility"] == "traveler"
+    assert "conversation_trace" in receipt
+
+
+def test_actual_frontend_generated_exception_wording(real_client):
+    data = check(real_client, approve(real_client))
+    decision = data["decision"]
+    bad = [c for c in decision["checks"] if c["status"] in ("fail", "missing")]
+    statement = "; ".join(f"I accept {c['offer_value']} ({c['check_id']}) on offer {data['offer']['offer_id']}"
+                          for c in bad)
+    response = real_client.post("/api/exceptions", json={"decision_id": decision["decision_id"],
+                                                        "check_ids": [c["check_id"] for c in bad],
+                                                        "traveler_statement": statement})
+    assert response.status_code == 200, response.text
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 201
+
+
+@pytest.mark.parametrize("statement", ["OK", "Okay!", "yes", "I accept", "I accept 2 connections (STOPS)"])
+def test_insufficient_exception_rejected_before_record(real_client, statement):
+    rid = approve(real_client)
+    decision = check(real_client, rid)["decision"]
+    assert accept(real_client, decision, statement).status_code == 409
+    assert store.exceptions[decision["decision_id"]] == []
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+
+
+@pytest.mark.parametrize("options", [{"offer_hash": "wrong"}, {"accepted_values": {"STOPS": "0 connections"}}])
+def test_fabricated_exception_fields_rejected(real_client, options):
+    decision = check(real_client, approve(real_client))["decision"]
+    assert accept(real_client, decision, **options).status_code == 409
+    assert not store.exceptions[decision["decision_id"]]
+
+
+def test_partial_exception_and_stale_changed_offer_refused(real_client, monkeypatch):
+    rid = approve(real_client, refundable_required=True)
+    first = check(real_client, rid)["decision"]
+    assert accept(real_client, first).status_code == 200
+    response = real_client.post("/api/purchase", json={"decision_id": first["decision_id"]})
+    assert response.status_code == 409 and "REFUNDABLE" in response.json()["uncovered_checks"]
+    changed = find_offer("B").model_copy(update={"total_cents": 28100})
+    monkeypatch.setattr("app.main.fx.find_offer", lambda ref: changed)
+    second = check(real_client, rid)["decision"]
+    assert second["offer_hash"] != first["offer_hash"]
+    store.exceptions[second["decision_id"]] = store.exceptions[first["decision_id"]]
+    assert real_client.post("/api/purchase", json={"decision_id": second["decision_id"]}).status_code == 409
+
+
+@pytest.mark.parametrize("tamper", ["l2", "checkout_sig"])
+def test_tampering_blocks_purchase_and_exceptions(real_client, tamper):
+    decision = check(real_client, approve(real_client), tamper=tamper)["decision"]
+    assert decision["result"] == "BLOCK"
+    assert accept(real_client, decision).status_code == 409
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+
+
+def test_signed_requirements_readback_mismatch_blocks(real_client):
+    rid = approve(real_client)
+    store.requirements[rid].max_stops = 3
+    response = check(real_client, rid)
+    assert response["decision"]["result"] == "BLOCK"
+    assert any("differ" in message for message in response["vi_errors"])
+    assert real_client.post("/api/purchase", json={"decision_id": response["decision"]["decision_id"]}).status_code == 409
+
+
+@pytest.mark.parametrize("change", ["requirements", "checkout", "offer"])
+def test_purchase_rechecks_unchanged_signed_authority(real_client, change):
+    rid = approve(real_client)
+    decision = check(real_client, rid, "A")["decision"]
+    assert decision["result"] == "PASS"
+    if change == "requirements":
+        store.requirements[rid].max_stops = 7
+    elif change == "checkout":
+        store.checkout_jwts[decision["decision_id"]] = vi.merchant_sign_offer(find_offer("B"))
+    else:
+        store.offers[decision["decision_id"]].total_cents = 1
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+
+
+def test_unapproved_requirements_cannot_be_excepted_or_purchased(real_client):
+    rid = approve(real_client)
+    req = store.requirements[rid].model_copy(update={"approved_by_traveler": False})
+    store.requirements[rid] = req
+    store.bundles[rid] = vi.issue_credentials(req)
+    decision = check(real_client, rid, "A")["decision"]
+    assert decision["result"] == "HOLD"
+    assert any(c["check_id"] == "APPROVAL" and c["status"] == "missing" for c in decision["checks"])
+    assert real_client.post("/api/exceptions", json={"decision_id": decision["decision_id"],
+                                                    "check_ids": ["APPROVAL"], "traveler_statement": "I approve"}).status_code == 409
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+
+
+def test_missing_signed_currency_holds(real_client, monkeypatch):
+    offer = find_offer("A").model_copy(update={"currency": None})
+    monkeypatch.setattr("app.main.fx.find_offer", lambda ref: offer)
+    data = check(real_client, approve(real_client), "A")
+    assert data["decision"]["result"] == "HOLD" and data["offer"]["currency"] is None
+    assert next(c for c in data["decision"]["checks"] if c["check_id"] == "CURRENCY")["status"] == "missing"
+
+
+def test_client_cannot_submit_pass_object(real_client):
+    assert real_client.post("/api/purchase", json={"decision_id": "invented", "result": "PASS"}).status_code == 422
+    assert real_client.post("/api/purchase", json={"decision_id": "invented"}).status_code == 404
+    decision = check(real_client, approve(real_client))["decision"]
+    assert accept(real_client, decision, accepted_at="2020-01-01T00:00:00Z").status_code == 422
+    assert not store.exceptions[decision["decision_id"]]
+
+
+def test_tampered_signed_path_evidence_keeps_analyst_authority(real_client):
+    rid = approve(real_client)
+    decision = check(real_client, rid, tamper="l2")["decision"]
+    assert decision["result"] == "BLOCK"
+    evidence = importlib.import_module("app.evidence")
+    packet = evidence.build_packet(
+        {"purchase_id": "synthetic-platform-bypass"}, "Signature integrity concern",
+        store.decisions[decision["decision_id"]], store.decision_requirements[decision["decision_id"]],
+        store.offers[decision["decision_id"]], [],
+    )
+    assert packet.recommended_responsibility == "fraud_path"
+    assert packet.suggested_reason_code == "4837" and packet.final_decision == "dispute analyst"
+    assert not store.purchases
+
+
+def test_conversation_receipt_preserves_original_quotes(real_client):
+    text = "NYC to Orlando Oct 20 nonstop morning under $300"
+    state = real_client.post("/api/conversation/turn", json={"text": text}).json()
+    approved = real_client.post("/api/intent/approve", json={"conversation_id": state["conversation_id"],
+                                                          "draft_requirements": state["draft_requirements"]})
+    assert approved.status_code == 200, approved.text
+    decision = check(real_client, approved.json()["requirement_set_id"], "A")["decision"]
+    purchased = real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert purchased.status_code == 201
+    receipt = real_client.post("/api/disputes", json={"purchase_id": purchased.json()["purchase_id"],
+                                                     "claim": "What did I approve?"}).json()
+    trace = receipt["conversation_trace"]
+    assert trace["trace_status"] == "application_record_not_user_signed_transcript"
+    assert trace["turns"][0]["text"] == text
+    assert trace["approval"]["approved_requirements"] == receipt["approved_requirements"]
