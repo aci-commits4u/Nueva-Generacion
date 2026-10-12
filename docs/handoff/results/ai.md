@@ -175,3 +175,45 @@ A fresh safe local availability/configuration-presence probe printed `az availab
 - Continuation writes are restricted to `app/foundry_client.py`, `tests/test_conversation.py`, and this report. No comments, public/shared contracts, adapter, peer implementation, frontend, other worktree, or runtime environment were changed.
 - Other commands: git status/HEAD/branch/log inspection, owned-file diff checks, local clock/availability checks, and scoped git add/commit. No fetch, merge, push, Azure call, cloud configuration, or payment was performed.
 - Integration alone assembles and publishes the approved tree to `victor/build`. This worker did **not** push this feature to that branch or to main. Preserve both review fixes when assembling; rerun the integrated enforcement/scenario suite and final scoped review before publication.
+
+## Correction round 3 — direct route connector only
+
+Updated October 12, 2026 at 13:51 EDT. **This appended section supersedes the prior current-delivery status and totals; both earlier correction rounds and their actual proof remain preserved above.** Current status: **DONE_WITH_CONCERNS; 136 offline tests passed. Final scoped review and AI integration are still pending. Live remains BLOCKED / NOT_TESTED, with no SDK authentication or inference attempted and latency not measured.**
+
+Incremental implementation commit: **`a3881c3e40e84a3ec536540a6e6e24d749025ca6`**, parent `e191ecd704dea27a70012a16073b956333b4e809`. Only `app/foundry_client.py` and `tests/test_conversation.py` changed in that commit. This report is appended in a separate subsequent documentation commit; no history was amended.
+
+The latest supplied scoped review found a new P2: `Actually Orlando or Tampa, I want to fly to Tampa` incorrectly cleared the unrelated NYC origin and replaced its source quote. The bounded fix adds one full-match condition to the existing guard (`app/foundry_client.py:167-172`): infer an opposite ambiguous endpoint only when the immediately preceding location connects directly to the first labeled location through `to` or `from`, with only surrounding whitespace and an optional single comma. Intervening clauses such as `I want to fly to` no longer qualify. No general language-parser rewrite or new comments were added.
+
+- The exact repeated-destination repro now preserves NYC origin, its original source, budget, currency, stops, date, departure window, and every other unrelated value/source. Destination remains conservatively unresolved and gets one destination question.
+- The repeated-origin analogue `Actually NYC or Boston, I want a flight from Boston` likewise preserves Orlando destination and every unrelated value/source; only origin is unresolved.
+- Both new regressions check exact correction quotes, null interpretations, the correct user turn id, one affected-field question, `approved=False`, and offline fallback (`tests/test_conversation.py:211-231`).
+- The original mixed forward and reverse routes still clear both endpoints. Two additional simple comma-connector variants are covered alongside those original cases (`tests/test_conversation.py:234-258`). The existing single-`to` and single-`from` regressions remain green (`tests/test_conversation.py:193-208`).
+
+### Actual third-round proof
+
+All commands ran in the same AI worktree with the existing `../victor-rules/.venv/bin/python`; bytecode and pytest cache writes were disabled. No runtime installation, configuration, cloud call, or SDK authentication occurred.
+
+```sh
+MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 ../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_conversation.py -k 'repeated_endpoint_clause or mixed_labeled_ambiguous_route or labeled_ambiguous_route_clears_only'
+# RED on e191ecd parser, with new tests but before guard change:
+# 2 failed, 6 passed, 31 deselected in 0.10s; exit 1.
+# Repeated destination erased NYC origin; repeated origin erased MCO destination.
+# GREEN after the direct-connector guard:
+# 8 passed, 31 deselected in 0.08s; exit 0.
+
+MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 ../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider
+# Precommit full run started 2026-10-12 13:50:53 EDT:
+# 136 passed in 0.64s; exit 0.
+# Fresh committed-code rerun on a3881c3e40e84a3ec536540a6e6e24d749025ca6,
+# started 2026-10-12 13:51:10 EDT:
+# 136 passed in 0.64s; exit 0.
+
+git diff --check
+# Passed before code/tests commit.
+git diff --cached --check
+# Passed for scoped code/tests staging; only the two owned paths were staged.
+```
+
+The new total is **120 AI/conversation/boundary cases plus 16 unchanged VI adapter cases**, four more cases than the prior 132-test suite. This remains feature-worktree proof, not a fresh run of the assembled integration MVP or purchase-enforcement scenarios. No live latency or live fallback observation is claimed.
+
+Continuation writes are limited to the two implementation/test paths and this AI report. Commands additionally inspected status/HEAD/log/diffs, checked the clock and runtime path, and used scoped git add/commit. Both new commits use the requested `Generated with [Devin](https://devin.ai)` and `158243242+devin-ai-integration[bot]@users.noreply.github.com` footer. No shared adapter, models, web, config, peer files, other worktrees, or environment were edited; no code comments, push, merge, amendment, or destructive operation was performed. Integration should take this incremental fix after the prior AI history, perform the last scoped review, and rerun its assembled suite before publishing the AI merge.
