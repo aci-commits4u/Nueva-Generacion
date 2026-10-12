@@ -1,0 +1,172 @@
+{
+  "first_turn": {
+    "conversation_id": "b0d0a9c1-9333-4b29-a335-5487146f57f7",
+    "turns": [
+      {
+        "turn_id": "4aaef31c-eeec-4f09-b293-71ef17067326",
+        "role": "user",
+        "text": "NYC to Florida cheap next week",
+        "created_at": "2026-10-12T17:10:01.691473+00:00"
+      },
+      {
+        "turn_id": "92c85855-f2c1-4c83-bd2d-6301cc4baf5f",
+        "role": "assistant",
+        "text": "Which destination city or airport do you want? What exact departure date should I use?",
+        "created_at": "2026-10-12T17:10:01.692619+00:00"
+      }
+    ],
+    "draft_requirements": {
+      "origin_airports": [
+        "JFK",
+        "LGA",
+        "EWR"
+      ],
+      "destination_airports": null,
+      "depart_date": null,
+      "depart_window": null,
+      "arrive_by": null,
+      "max_stops": null,
+      "max_total_cents": null,
+      "currency": null,
+      "cabin": null,
+      "refundable_required": null,
+      "passengers": 1
+    },
+    "field_sources": {
+      "origin_airports": [
+        {
+          "turn_id": "4aaef31c-eeec-4f09-b293-71ef17067326",
+          "quote": "NYC to Florida cheap next week",
+          "interpretation": [
+            "JFK",
+            "LGA",
+            "EWR"
+          ]
+        }
+      ]
+    },
+    "questions": [
+      "Which destination city or airport do you want?",
+      "What exact departure date should I use?"
+    ],
+    "notes": "Draft only. One traveler is the demo default; review before confirming.",
+    "llm_fallback": true,
+    "approved": false
+  },
+  "second_turn": {
+    "conversation_id": "b0d0a9c1-9333-4b29-a335-5487146f57f7",
+    "turns": [
+      {
+        "turn_id": "4aaef31c-eeec-4f09-b293-71ef17067326",
+        "role": "user",
+        "text": "NYC to Florida cheap next week",
+        "created_at": "2026-10-12T17:10:01.691473+00:00"
+      },
+      {
+        "turn_id": "92c85855-f2c1-4c83-bd2d-6301cc4baf5f",
+        "role": "assistant",
+        "text": "Which destination city or airport do you want? What exact departure date should I use?",
+        "created_at": "2026-10-12T17:10:01.692619+00:00"
+      },
+      {
+        "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+        "role": "user",
+        "text": "Orlando on Oct 20, nonstop, morning, under $300.",
+        "created_at": "2026-10-12T17:10:01.692649+00:00"
+      },
+      {
+        "turn_id": "c86b56e7-c825-45f2-acfb-0b95b595e287",
+        "role": "assistant",
+        "text": "Review these requirements and explicitly confirm them before checkout.",
+        "created_at": "2026-10-12T17:10:01.692811+00:00"
+      }
+    ],
+    "draft_requirements": {
+      "origin_airports": [
+        "JFK",
+        "LGA",
+        "EWR"
+      ],
+      "destination_airports": [
+        "MCO"
+      ],
+      "depart_date": "2026-10-20",
+      "depart_window": {
+        "earliest": "06:00",
+        "latest": "12:00"
+      },
+      "arrive_by": null,
+      "max_stops": 0,
+      "max_total_cents": 30000,
+      "currency": "USD",
+      "cabin": null,
+      "refundable_required": null,
+      "passengers": 1
+    },
+    "field_sources": {
+      "origin_airports": [
+        {
+          "turn_id": "4aaef31c-eeec-4f09-b293-71ef17067326",
+          "quote": "NYC to Florida cheap next week",
+          "interpretation": [
+            "JFK",
+            "LGA",
+            "EWR"
+          ]
+        }
+      ],
+      "destination_airports": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": [
+            "MCO"
+          ]
+        }
+      ],
+      "depart_date": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": "2026-10-20"
+        }
+      ],
+      "depart_window": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": {
+            "earliest": "06:00",
+            "latest": "12:00"
+          }
+        }
+      ],
+      "max_stops": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": 0
+        }
+      ],
+      "max_total_cents": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": 30000
+        }
+      ],
+      "currency": [
+        {
+          "turn_id": "cc441e80-a027-42d7-b99e-52ea16a3ff58",
+          "quote": "Orlando on Oct 20, nonstop, morning, under $300.",
+          "interpretation": "USD"
+        }
+      ]
+    },
+    "questions": [],
+    "notes": "Draft only. One traveler is the demo default; review before confirming. Morning is shown as 06:00\u201312:00 airport-local time; review this interpretation.",
+    "llm_fallback": true,
+    "approved": false
+  },
+  "status": "offline_unapproved_draft_no_purchase"
+}
