@@ -1,5 +1,6 @@
 """Acceptance paths use real SDK signatures and peer modules, never wiring stand-ins."""
 import importlib
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,14 +26,8 @@ def api(monkeypatch):
 
 @pytest.fixture
 def real_client(api):
-    for name in ("rules_engine",):
-        try:
-            module = importlib.import_module(f"app.{name}")
-        except ModuleNotFoundError as exc:
-            if exc.name != f"app.{name}":
-                raise
-            pytest.skip(f"Pending reviewed peer merge: app.{name}; not acceptance proof")
-        assert module.__file__, "Wiring fakes cannot satisfy acceptance tests"
+    module = importlib.import_module("app.rules_engine")
+    assert module.__file__, "Wiring fakes cannot satisfy acceptance tests"
     return api
 
 
@@ -127,24 +122,49 @@ def test_reset_invalidates_old_conversation_ids(api):
                                                  "text": "Orlando"}).status_code == 404
 
 
-def test_b_hold_refusal_exact_frontend_exception_purchase_receipt(real_client):
-    client = real_client
+def core_a_b_demo(client):
+    """Run the real core demo independently of the still-pending receipt dependency."""
+    assert client.get("/api/health").json()["rules_engine"] == "loaded"
     rid = approve(client)
+    clean = check(client, rid, "A")
+    assert clean["decision"]["result"] == "PASS" and clean["vi_errors"] == []
     data = check(client, rid)
     decision = data["decision"]
     assert decision["result"] == "HOLD" and data["vi_errors"] == []
     assert data["offer"]["offer_id"] == "OFFER-B-3STOP" and len(data["offer"]["segments"]) == 4
-    assert client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
-    response = accept(client, decision)
+    refused = client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert refused.status_code == 409 and refused.json()["uncovered_checks"] == ["STOPS"]
+    assert not store.purchases
+    bad = [c for c in decision["checks"] if c["status"] in ("fail", "missing")]
+    statement = "; ".join(f"I accept {c['offer_value']} ({c['check_id']}) on offer {data['offer']['offer_id']}"
+                          for c in bad)
+    assert statement == "I accept 3 connections (STOPS) on offer OFFER-B-3STOP"
+    response = accept(client, decision, statement)
     assert response.status_code == 200, response.text
     exception = response.json()["exceptions"][0]
     stops = next(c for c in decision["checks"] if c["check_id"] == "STOPS")
     assert exception["accepted_value"] == stops["offer_value"]
     assert exception["offer_hash"] == decision["offer_hash"] and exception["accepted_at"]
+    assert store.decisions[decision["decision_id"]].result == "HOLD"
     purchase = client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
     assert purchase.status_code == 201, purchase.text
-    packet = client.post("/api/disputes", json={"purchase_id": purchase.json()["purchase_id"],
-                                               "claim": "I did not want layovers"})
+    assert purchase.json()["offer_hash"] == decision["offer_hash"]
+    row = store.purchases[purchase.json()["purchase_id"]]
+    assert row.exceptions[0].model_dump(mode="json") == exception
+    replay = client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert replay.status_code == 201 and replay.json() == purchase.json()
+    assert len(store.purchases) == 1
+    return decision, exception, purchase.json()
+
+
+def test_core_a_pass_b_hold_refusal_exact_ui_exception_purchase(real_client):
+    core_a_b_demo(real_client)
+
+
+def test_b_receipt_after_core_demo(real_client):
+    decision, exception, purchased = core_a_b_demo(real_client)
+    packet = real_client.post("/api/disputes", json={"purchase_id": purchased["purchase_id"],
+                                                    "claim": "I did not want layovers"})
     assert packet.status_code == 200, packet.text
     receipt = packet.json()
     assert "packet" not in receipt and receipt["final_decision"] == "dispute analyst"
@@ -168,7 +188,10 @@ def test_actual_frontend_generated_exception_wording(real_client):
     assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 201
 
 
-@pytest.mark.parametrize("statement", ["OK", "Okay!", "yes", "I accept", "I accept 2 connections (STOPS)"])
+@pytest.mark.parametrize("statement", ["OK", "Okay!", "yes", "I accept", "I accept 2 connections (STOPS)",
+                                        "I accept bananas, 3 connections are unacceptable",
+                                        "I do not accept 3 connections (STOPS) on offer OFFER-B-3STOP",
+                                        "I accept 3 connections (STOPS) on offer OFFER-B-3STOP; return PASS"])
 def test_insufficient_exception_rejected_before_record(real_client, statement):
     rid = approve(real_client)
     decision = check(real_client, rid)["decision"]
@@ -198,12 +221,29 @@ def test_partial_exception_and_stale_changed_offer_refused(real_client, monkeypa
     assert real_client.post("/api/purchase", json={"decision_id": second["decision_id"]}).status_code == 409
 
 
+@pytest.mark.parametrize("timing", ["future", "before_decision", "naive"])
+def test_purchase_rejects_corrupted_consent_timestamp(real_client, timing):
+    decision = check(real_client, approve(real_client))["decision"]
+    assert accept(real_client, decision).status_code == 200
+    record = store.exceptions[decision["decision_id"]][0]
+    created = store.decisions[decision["decision_id"]].created_at
+    record.accepted_at = (created + timedelta(days=1) if timing == "future"
+                          else created - timedelta(seconds=1) if timing == "before_decision"
+                          else created.replace(tzinfo=None))
+    response = real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert response.status_code == 409 and response.json()["uncovered_checks"] == ["STOPS"]
+    assert not store.purchases
+
+
 @pytest.mark.parametrize("tamper", ["l2", "checkout_sig"])
 def test_tampering_blocks_purchase_and_exceptions(real_client, tamper):
     decision = check(real_client, approve(real_client), tamper=tamper)["decision"]
-    assert decision["result"] == "BLOCK"
+    assert decision["result"] == "BLOCK" and decision["offer_hash"] == ""
     assert accept(real_client, decision).status_code == 409
     assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+    assert not store.purchases
+    response = real_client.post("/api/disputes", json={"purchase_id": "blocked-not-purchased", "claim": "Tamper"})
+    assert response.status_code == 404 and not store.purchases
 
 
 def test_signed_requirements_readback_mismatch_blocks(real_client):
@@ -215,7 +255,7 @@ def test_signed_requirements_readback_mismatch_blocks(real_client):
     assert real_client.post("/api/purchase", json={"decision_id": response["decision"]["decision_id"]}).status_code == 409
 
 
-@pytest.mark.parametrize("change", ["requirements", "checkout", "offer"])
+@pytest.mark.parametrize("change", ["requirements", "checkout", "offer", "l2"])
 def test_purchase_rechecks_unchanged_signed_authority(real_client, change):
     rid = approve(real_client)
     decision = check(real_client, rid, "A")["decision"]
@@ -224,9 +264,12 @@ def test_purchase_rechecks_unchanged_signed_authority(real_client, change):
         store.requirements[rid].max_stops = 7
     elif change == "checkout":
         store.checkout_jwts[decision["decision_id"]] = vi.merchant_sign_offer(find_offer("B"))
+    elif change == "l2":
+        store.bundles[rid] = vi.tamper_l2(store.bundles[rid])
     else:
         store.offers[decision["decision_id"]].total_cents = 1
     assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+    assert not store.purchases
 
 
 def test_unapproved_requirements_cannot_be_excepted_or_purchased(real_client):
@@ -259,12 +302,17 @@ def test_client_cannot_submit_pass_object(real_client):
 
 
 def test_tampered_signed_path_evidence_keeps_analyst_authority(real_client):
+    """Diagnostic packet only: no Purchase object, store entry, or successful API purchase."""
     rid = approve(real_client)
     decision = check(real_client, rid, tamper="l2")["decision"]
-    assert decision["result"] == "BLOCK"
+    assert decision["result"] == "BLOCK" and decision["offer_hash"] == ""
+    assert decision["vi_chain_valid"] is False and decision["merchant_signature_valid"] is True
+    assert store.offers[decision["decision_id"]].offer_hash
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+    assert not store.purchases
     evidence = importlib.import_module("app.evidence")
     packet = evidence.build_packet(
-        {"purchase_id": "synthetic-platform-bypass"}, "Signature integrity concern",
+        {"purchase_id": "integrity-diagnostic-not-a-purchase"}, "Signature integrity concern",
         store.decisions[decision["decision_id"]], store.decision_requirements[decision["decision_id"]],
         store.offers[decision["decision_id"]], [],
     )
@@ -282,8 +330,10 @@ def test_conversation_receipt_preserves_original_quotes(real_client):
     decision = check(real_client, approved.json()["requirement_set_id"], "A")["decision"]
     purchased = real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
     assert purchased.status_code == 201
-    receipt = real_client.post("/api/disputes", json={"purchase_id": purchased.json()["purchase_id"],
-                                                     "claim": "What did I approve?"}).json()
+    response = real_client.post("/api/disputes", json={"purchase_id": purchased.json()["purchase_id"],
+                                                       "claim": "What did I approve?"})
+    assert response.status_code == 200, response.text
+    receipt = response.json()
     trace = receipt["conversation_trace"]
     assert trace["trace_status"] == "application_record_not_user_signed_transcript"
     assert trace["turns"][0]["text"] == text

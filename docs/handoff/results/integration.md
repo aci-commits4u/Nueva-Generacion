@@ -61,3 +61,44 @@ At inspection, all three peer branch tips remained `f9848f1`; their uncommitted 
 4. After authorized merges, rerun full suite without any acceptance skips, resolve contract failures with module owners (do not patch their files here), start the real server (never `scripts/dev_server.py` fakes), and rehearse B HOLD ->409 ->specific acceptance ->201 ->receipt plus tamper BLOCK/409. Target working demo13:41 EDT, freeze14:00, submit14:30.
 
 Limitations: synthetic demo keys/offers, in-memory unsigned conversation/exception records, simulated purchases only, exceptions are not newly signed VI mandates, no tested universal categories, no real payments, live model proof, certification, dispute/liability guarantee, or durable authenticated production system.
+
+## Authorized rules integration — October 12, 2026, 13:34 EDT
+
+This footer supersedes the preparation-only test status above. Continued from preparation commit `4f80aa95700c43a80fba33b3eb0ee7432b7eb55c` in the SAME integration worktree and branch. Merged ONLY coordinator-authorized rules SHA `c802ab20e307297e988dfbff19f4fffc8914f3bc`, using `git merge --no-ff`; integration merge commit is `df1d8867d916b2d7f90e948a975c50ec94ab8d33`. The merge adds the reviewed rules, its two owned test files, and its results record. No evidence or AI commit has been merged. No peer implementation was edited, no push/install/cloud/live inference was performed, and no server (fake or real) was started.
+
+### Core demo is now proven through the real API
+
+`tests/test_enforcement.py:125-161` runs health `rules_engine=loaded`, approval/signing, A PASS, B HOLD with 3 connections, purchase409 with STOPS uncovered and no purchase created, the EXACT existing frontend-generated `I accept 3 connections (STOPS) on offer OFFER-B-3STOP`, exception200, and purchase201 with the exact signed offer hash and copied exception. The deterministic decision remains HOLD; the specific application exception permits the purchase, not an AI approval. Repeating purchase returns the same simulated purchase id and creates no duplicate.
+
+- Removed the former acceptance-test skip for absent rules: real-client setup now requires the real module and fails if it is missing/fake.
+- Bare OK, unrelated acceptance, negated acceptance, appended PASS instructions, wrong values/hash, partial exceptions, and old-decision/changed-offer exceptions are refused.
+- Added API refusal proof for corrupted exception timestamps (future, predating the decision, and naive); no purchase is created.
+- Purchase-time revalidation now has explicit tests for a changed serialized L2 as well as changed approved requirements, signed checkout, and stored offer. Prepared `app/main.py` orchestration needed NO further implementation patch to pass the reviewed rules.
+- Both real tamper paths (L2 and forged checkout signer) BLOCK with the reviewed rules' deliberately EMPTY decision hash, reject exceptions and purchase with409, and leave purchases empty. A dispute request for a nonexistent blocked purchase returns404. No hash is appended to BLOCK, no blocked purchase is manufactured, and `/api/disputes` cannot purchase anything.
+- The pending integrity evidence test passes the ACTUAL tampered-chain decision plus the valid merchant-signed offer to `build_packet`, unchanged hashes, and a clearly labeled diagnostic-only id mapping. This is not a `Purchase`, stored transaction, or API purchase; it tests the evidence owner's narrow invalid-integrity construction path only.
+
+### Exact current verification (zero skips)
+
+All commands used the existing `/Users/victor/Nueva-Generacion/.worktrees/victor-rules/.venv/bin/python` from THIS integration workdir, `MOCK_LLM=1`, with Azure key/endpoint/deployment and Foundry project endpoint variables removed via `env -u`. The API fixtures also remove these credentials. No rules or SDK stand-ins were used in acceptance.
+
+| Command arguments after `python -m pytest` | Actual result |
+| --- | --- |
+| `-q tests/test_rules_engine.py tests/test_purchase_eligibility.py tests/test_scenarios.py -rs` | **187 passed, zero skips**: 175 reviewed rules/consent tests plus all 12 real signed HTTP scenarios |
+| `-q tests/test_enforcement.py tests/test_scenarios.py tests/test_injection.py -k 'not receipt and not tampered_signed_path_evidence' -rs` | **52 passed, 4 deliberately deselected, zero skips**; the deselections are the four pending receipt-dependent tests below |
+| `-q --ignore=tests/test_api_wiring.py -rs` | **260 passed, 4 failed, zero skips**; every failure is the missing evidence dependency |
+| `-q -rs` | **273 passed, 4 failed, zero skips**; includes 13 preserved Josue wiring tests using isolated fakes, NOT additional real acceptance proof |
+
+All 12 fixture scenarios now genuinely pass through approval, real merchant signing, serialized VI verification, real rules, and real HTTP purchase enforcement: scenario1 PASS/201; scenario2 HOLD/409; scenario3 PASS/201 with STOPS not_required; scenarios4-11 HOLD/409 for their specified failures/missing/injection/summary/agent-description cases; scenario12 actual L2 tamper BLOCK/409. Do not present the entire suite as green: receipt remains unimplemented here.
+
+Four remaining failures (not skipped or replaced with fakes):
+
+1. `tests/test_enforcement.py:164` B flat receipt after the passing core flow: `/api/disputes` returns501 because `app.evidence` is absent.
+2. `tests/test_enforcement.py:304` actual tampered-chain/valid merchant offer diagnostic packet: importing `app.evidence` fails. Corrected evidence must handle BLOCK's empty hash WITHOUT changing rules/decision authority.
+3. `tests/test_enforcement.py:324` conversation quote/approval trace in the flat receipt: dispute returns501. The real prototype conversation, exact separate approval, and A purchase already pass.
+4. `tests/test_injection.py:47` deep-copy narrative protection on the flat receipt: dispute returns501.
+
+`git diff --check` passed. Diff against preparation SHA for `web/`, `tests/test_api_wiring.py`, `requirements.txt`, and `requirements-victor.txt` is EMPTY. Only `tests/test_enforcement.py` and this integration footer were edited after the authorized rules merge; main/store/VI/shared models keep their preparation changes intact. No UI rewrite or contract wrapper was introduced.
+
+### Ready for coordinator's next exact authorization
+
+Return now rather than polling. Core A/B purchase demo is ready; receipt and reviewed AI remain pending. DO NOT merge the initial evidence SHA: coordinator review found weak-consent/future-time and invalid-integrity construction bugs, and its owner is correcting them. Await the coordinator-authorized corrected evidence SHA and AI SHA. Then rerun the full real suite with no acceptance skips, preserve the flat packet/additive trace, and let the coordinator browser-verify the real FastAPI server. No live Foundry proof is claimed. All purchases remain simulated and all receipt recommendations remain advisory to a dispute analyst.
