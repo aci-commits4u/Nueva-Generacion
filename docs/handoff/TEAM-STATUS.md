@@ -1,12 +1,12 @@
 # Intent Judge — coordination and conflict-avoidance handoff
 
-Updated October 12, 2026, 13:36 America/New_York. Coordinator-owned file; implementation owners update their own result files, not this file. This is an incremental delivery record, not permission to overwrite another owner's work.
+Updated October 12, 2026, 13:43 America/New_York. Coordinator-owned file; implementation owners update their own result files, not this file. This is an incremental delivery record, not permission to overwrite another owner's work.
 
 ## Read first
 
 Read `AGENTS.md`, `DEVIN-HANDOFF.md`, the latest `JOSSUE-UPDATES.md` supplied by Victor, this file, and your feature brief/result before making changes. The latest Josue update supersedes old namespace/scaffold claims: the primary VI extension is `urn:intent-judge:requirements`; existing models retain flight fields plus `category='flight'`. Flights are the only implemented category.
 
-Victor requests small, understandable commits plus Markdown contracts. Commit one coherent implementation/fix/test milestone at a time. Commit updated result proof separately where recording a previous SHA. Do not squash, amend, reset, revert others, or force-push. No push or shared-main merge is currently authorized. All commits are local until Victor explicitly requests sharing them remotely.
+Victor requests small, understandable commits plus Markdown contracts. Commit one coherent implementation/fix/test milestone at a time. Commit updated result proof separately where recording a previous SHA. Do not squash, amend, reset, revert others, or force-push. Victor explicitly authorized publication to the NEW `victor/build` branch at 13:41 EDT. Push reviewed incremental checkpoints there using normal fast-forward updates only. Do not push or merge shared `main`, force-push, or overwrite an existing unrelated remote branch. Earlier checkpoint notes describe their historical local-only state; later publication records supersede that state.
 
 ## Workspace and exclusive ownership
 
@@ -18,7 +18,7 @@ Base prototype: `f9848f13a369d5ac4210a4e6fa3f5e45b9fc8063` on `victor/rules`; re
 | Rules & Consent | `devin/rules-consent` / `devin-rules-consent` | `app/rules_engine.py`, `tests/test_rules_engine.py`, `tests/test_purchase_eligibility.py` | `docs/handoff/results/rules.md` |
 | Vendor Evidence | `devin/vendor-evidence` / `devin-vendor-evidence` | `app/evidence.py`, `tests/test_evidence.py` | `docs/handoff/results/evidence.md` |
 | API Integration | `devin/api-integration` / `devin-api-integration` | `app/main.py`, `app/store.py`, `tests/test_enforcement.py`, `tests/test_scenarios.py`, `tests/test_injection.py`; sole designated editor for bounded shared-model/VI-adapter integration fixes | `docs/handoff/results/integration.md` |
-| Josue | `origin/jossue/build` snapshot `4a9a4f0` | ALL `web/` files and frontend/user flow | Latest team update |
+| Josue | Latest fetched `origin/jossue/build` snapshot `67c0037`; `4a9a4f0` was the initial integration checkpoint | ALL `web/` files and frontend/user flow | Latest team update |
 | Coordinator | Integration worktree, serialized documentation commits | This `docs/handoff/TEAM-STATUS.md` only | This file |
 
 Shared models, fixtures and adapter are contracts, not freely editable. Request bounded changes through the integration owner. Never edit a peer module to make integration tests pass. Read Josue's newest branch/current work before any shared API changes. Do not send teammates messages without Victor's instruction.
@@ -64,7 +64,11 @@ Original prototype freshly verified: 33 passed. Rules feature freshly verified: 
 
 Integration at `c003f4c`: all 12 real signed HTTP scenarios pass; A PASS; B HOLD with THREE connections; purchase409; exact existing UI acceptance; simulated purchase201; tampered L2/forged merchant BLOCK and purchase409. Full suite is NOT green yet: receipt-dependent tests fail because reviewed evidence is not merged. See integration result for exact commands/counts and distinctions from the 13 preserved fake wiring tests.
 
-Current next steps: finish/review evidence fixes; finish/review AI; merge exact approved tips into integration; run full suite without acceptance skips; verify the real UI in a browser; record final proof here and in owner results. Do not use `scripts/dev_server.py` (fake engine) as the real demo.
+Current next steps: merge reviewed evidence `3863ee1` (implementation fix `8aebb1d`, all three findings addressed); finish scoped review of AI correction commit `089484c` (fresh feature suite 130 passed); integrate newer Josue snapshot `67c0037` unchanged; rerun the complete real suite; verify the real UI; publish to Victor-authorized `victor/build`. Do not use `scripts/dev_server.py` (fake engine) as the real demo.
+
+Fresh remote inspection at 13:41 found no existing `victor/build`; `origin/jossue/build` is now `67c0037` and `origin/main` is `7fe07bd`. The newer Josue delta changes frontend/docs/dev tooling only, not shared API/models/adapter contracts. It adds per-check unchecked consent, held-offer re-shopping, and a three-seat flat receipt. Its exception requests retain the same exact check-specific wording, one selected check per request. Only integration may merge that snapshot; nobody else should modify `web/`.
+
+The live Uvicorn server uses the REAL `app.main:app`, `MOCK_LLM=1`, and `FOUNDRY_LIVE_ENABLED=0` at `http://127.0.0.1:8010`; it is not the development fake server. Initial static desktop 1440x900 and mobile 390x844 checks showed no horizontal overflow and no fake-engine banner. Final receipt/browser verification must be rerun after the pending merges. A favicon404 is cosmetic, not an engine failure.
 
 ## Runtime and honest limits
 
