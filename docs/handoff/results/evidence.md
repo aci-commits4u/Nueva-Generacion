@@ -78,3 +78,40 @@ A real VI SDK round trip signs and verifies fixture B, passes the extracted four
 - Match server-created exception formatting/value/timestamp and affirmative statements to these filters and the real `can_purchase`; never use receipt assembly as a substitute for checkout enforcement.
 - No authenticated delivery-record interface exists here; merchant-delivery disputes need additional evidence and analyst review. Claim matching is limited demo vocabulary, not a universal dispute classifier.
 - New shared category/constraint metadata and trace attachment must come from integration, not edits to these owned files. No secrets, real payments, or liability guarantees.
+
+## Resumed independent-review fix — October 12, 2026, before 13:41 EDT
+
+Implementation/test fix commit: **`8aebb1d5e1d7f0c813301a9040f8790dfeac2c51`** (`Align receipt consent with checkout grammar and preserve tamper fraud evidence`). Continued HEAD `9745f79` and its saved uncommitted evidence/tests changes; did not discard or rewrite them. This appended handoff is a separate commit. These new commits use the requested footer `Generated with [Devin](https://devin.ai)` and `Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>`; the earlier attribution above is historical, not amended.
+
+### Corrected contracts (supersede the earlier consent/hash/timing descriptions)
+
+- `app/evidence.py:81–109` mirrors **exactly the acceptance grammar** read from `../devin-rules-consent/app/rules_engine.py:_statement_checks` (lines 126–160). No peer file was changed or imported into the implementation. Every semicolon-delimited clause must fully match one of `I accept CHECK_ID: OFFER_VALUE`, `I accept OFFER_VALUE (CHECK_ID) on offer OFFER_LABEL`, or the STOPS-only, non-missing form `I accept OFFER_VALUE on this itinerary`. Optional final period and case-insensitive statement matching follow checkout; structured `accepted_value` and all recorded IDs/hash remain exact and case-sensitive. UI labels use `[A-Za-z0-9_-]+`, at most one label per statement; they are display text, **not proof of hash binding**.
+- Generic acceptance, `I agree to` / `I approve`, AI quotations, appended denials/instructions/OK, wrong-check statements, and partially valid statements are rejected. Contrary to the earlier paragraph, `I accept 3 connections, not nonstop` is **not accepted**. Semicolon acceptance covers only checks actually named; it cannot accept PRICE merely because the STOPS record's statement was valid.
+- `app/evidence.py:112–159` retains exceptions only for an intact **HOLD** with all eleven consistent flight checks, nonempty check metadata, and no mandatory check marked `not_required`. Approval is never exceptable. Existing decision/hash/check/value, aware approval/decision timestamps, and provided purchase-timestamp checks remain enforced. Consent must also satisfy `decision.created_at <= accepted_at <= datetime.now(timezone.utc)`, including when the only purchase field is `purchase_id`. Future acceptance is never evidence of consent; absent purchase timestamps still prevent proving exact purchase chronology.
+- `app/evidence.py:49–74` permits one narrowly scoped integrity record: `result='BLOCK'`, `vi_chain_valid=False`, `merchant_signature_valid=True`, and **empty decision hash**, paired with the caller's verified merchant offer's **nonempty hash** and matching requirement ID. This reports `fraud_path` / `4837`, preserves invalid-chain flags and the actual signed merchant snapshot, and excludes every exception. It does **not** invent a hash for the decision, authorize BLOCK purchase, prove an association cryptographically through the broken L2, or accept arbitrary mismatched nonempty hashes. Every provided purchase ID/link, including its offer hash, must still match the supplied snapshots. A failed merchant signature with no verified offer is outside this special path.
+- Flat `EvidencePacket`, deep copies, narrative non-authority, unsigned exception disclosure, human `final_decision='dispute analyst'`, additive API trace attachment, and advisory responsibility/code limitations are unchanged. Respect Josue's primary `urn:intent-judge:requirements` in integration; no adapter/model/URN edits here.
+
+### Actual red/green proof
+
+Runtime unchanged: `/Users/victor/Nueva-Generacion/.worktrees/victor-rules/.venv/bin/python`; working directory is this evidence worktree. Every command used `MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1`. No network or environment installation.
+
+The saved changes were already green at resume (**119 evidence tests**). First red proof used the current tests against the historical evidence implementation from `9745f79`, loaded **in memory** via `git show` without touching working-tree files: **16 failed / 103 passed**. Added literal quotation, appended purchase-denial, wrong-check, strictly purchase-ID-only future-consent, and special-path binding tests; repeated final red proof:
+
+```text
+../victor-rules/.venv/bin/python -c 'import subprocess, sys, types, pytest; source = subprocess.check_output(["git", "show", "9745f79:app/evidence.py"], text=True); module = types.ModuleType("app.evidence"); exec(compile(source, "9745f79:app/evidence.py", "exec"), module.__dict__); sys.modules["app.evidence"] = module; sys.exit(pytest.main(["-q", "--tb=no", "-p", "no:cacheprovider", "tests/test_evidence.py"]))'
+19 failed, 110 passed in 0.15s (expected red; exit 1)
+
+../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_evidence.py
+129 passed in 0.18s
+
+../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider
+162 passed in 0.24s
+```
+
+`git diff --check` and `git diff --cached --check` passed before the fix commit. The 162 are **129 evidence + 33 existing SDK/AI/conversation tests**, not an integrated application count.
+
+Regression locations: `tests/test_evidence.py:580–631` whole-statement/specific/multi-check grammar; `633–642` now-plus-one-day acceptance with purchase-ID-only input; `645–666` real signed checkout and actually tampered L2 using the SDK; `669–712` strict normal and special-path binding rejection; `715–727` inconsistent checkout metadata rejection. The real SDK tests use genuine signing/verification and untouched merchant payloads; their Decisions are explicitly constructed to match the documented rules shape, **not claimed to invoke a real rules engine in this worktree**. Saved tests that formerly accepted generic consent now require the exact check-specific grammar; the signed-offer test supplies the complete eleven-check contract instead of weakening the validator.
+
+### Integration owner action / limits
+
+Cherry-pick the fix implementation/test commit first, then this separate handoff if desired. This worktree still lacks real product routes/rules assembly: local tests do not establish HTTP purchase409/201, integrated receipt rendering, the twelve-scenario demo, or live Foundry. The user's reported integration **12 scenarios / 187 passing tests** is external context, not a run performed here. Integration must rerun its real suite and B HOLD → purchase409 → exact acceptance → purchase201 → flat Intent Receipt after taking this dependency, plus tamper → BLOCK. Do not fake purchases, traveler consent, or verified payloads to make a BLOCK receipt; retain actual server-stored forensic/purchase records and disclose the broken-chain limitation. No peer-module writes, shared architecture changes, merge, push, main changes, or amendment.
