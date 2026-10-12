@@ -1,5 +1,144 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Intent Judge</title></head>
-<body><h1>Intent Judge</h1><p>Scaffold only. Synthetic demo data.</p></body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Intent Judge</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mark" viewBox="0 0 48 30">
+      <circle cx="15" cy="15" r="15" fill="#EB001B"/>
+      <circle cx="33" cy="15" r="15" fill="#F79E1B"/>
+      <path d="M24 3.2a15 15 0 0 1 0 23.6 15 15 0 0 1 0-23.6z" fill="#FF5F00"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="engine-banner" class="banner" hidden></div>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" aria-hidden="true"><use href="#mark"/></svg>
+    <div>
+      <h1>Intent Judge</h1>
+      <p>Agentic commerce, held to what the cardholder meant</p>
+    </div>
+  </div>
+  <div class="top-right">
+    <span class="built-on">Built on Mastercard Verifiable Intent</span>
+    <button class="pill ghost" id="reset" type="button">Reset demo</button>
+  </div>
+</header>
+
+<nav class="rail" aria-label="Progress">
+  <ol>
+    <li id="rail-say" class="on"><span class="dot"></span>Say it</li>
+    <li id="rail-sign"><span class="dot"></span>Sign it</li>
+    <li id="rail-check"><span class="dot"></span>Check it</li>
+  </ol>
+  <div class="categories" role="group" aria-label="Purchase category">
+    <button class="cat on" type="button" aria-pressed="true">Flights</button>
+    <button class="cat" type="button" disabled title="Same engine, new category: roadmap">Hotels</button>
+    <button class="cat" type="button" disabled title="Same engine, new category: roadmap">Retail</button>
+    <button class="cat" type="button" disabled title="Same engine, new category: roadmap">Subscriptions</button>
+  </div>
+</nav>
+
+<main class="grid">
+  <!-- Say it + Sign it -->
+  <section class="card" aria-labelledby="h-say">
+    <h2 id="h-say">What the cardholder asked for</h2>
+    <label for="request" class="sr">Request</label>
+    <textarea id="request" rows="3">NYC to Florida cheap, Oct 20</textarea>
+    <div class="row">
+      <button class="pill" id="btn-clarify" type="button">Clarify</button>
+      <span id="llm-badge" class="badge muted" hidden></span>
+    </div>
+    <div id="questions" class="questions" hidden></div>
+
+    <form id="req-form" class="req" autocomplete="off" hidden>
+      <div class="f"><label for="f-origin">From</label><input id="f-origin" placeholder="JFK, LGA, EWR"></div>
+      <div class="f"><label for="f-dest">To</label><input id="f-dest" placeholder="MCO"></div>
+      <div class="f"><label for="f-date">Date</label><input id="f-date" type="date"></div>
+      <div class="f two">
+        <div><label for="f-from">Depart after</label><input id="f-from" type="time"></div>
+        <div><label for="f-to">Depart before</label><input id="f-to" type="time"></div>
+      </div>
+      <div class="f"><label for="f-stops">Connections</label>
+        <select id="f-stops"><option value="">Any</option><option value="0">Nonstop only</option><option value="1">Up to 1</option><option value="2">Up to 2</option></select></div>
+      <div class="f"><label for="f-price">Total price, up to ($)</label><input id="f-price" type="number" min="0" step="1"></div>
+      <div class="f two">
+        <div><label for="f-pax">Passengers</label><input id="f-pax" type="number" min="1" value="1"></div>
+        <div class="check"><input id="f-refund" type="checkbox"><label for="f-refund">Refundable required</label></div>
+      </div>
+      <button class="pill primary" id="btn-approve" type="submit">Approve and sign</button>
+    </form>
+
+    <div id="signed" class="signed" hidden>
+      <svg class="mark sm" aria-hidden="true"><use href="#mark"/></svg>
+      <div><strong>Signed into the cardholder's Verifiable Intent mandate</strong>
+      <p id="signed-detail"></p></div>
+    </div>
+  </section>
+
+  <!-- Agent offers -->
+  <section class="card" aria-labelledby="h-offers">
+    <h2 id="h-offers">What the agent found</h2>
+    <p class="hint" id="offers-hint">Approve the requirements first. The agent can't buy until you do.</p>
+    <div id="offers"></div>
+    <details id="more" hidden><summary>More offers</summary><div id="offers-more"></div></details>
+  </section>
+
+  <!-- Check it -->
+  <section class="card verdict-card" aria-labelledby="h-check">
+    <h2 id="h-check">Intent check</h2>
+    <div id="empty" class="empty">Pick an offer. We compare it with what you approved, using the merchant-signed order.</div>
+    <div id="result" hidden>
+      <div class="venn-wrap">
+        <svg id="venn" viewBox="0 0 300 150" role="img" aria-label="Approved requirements compared with the offer"></svg>
+        <div class="legend"><span><i class="sw red"></i>What you approved</span><span><i class="sw yellow"></i>What was offered</span></div>
+      </div>
+      <div id="status" class="status" role="status"></div>
+      <div class="chips" id="chips"></div>
+      <table class="checks"><thead><tr><th>Check</th><th>You approved</th><th>Merchant offer</th><th>Result</th></tr></thead><tbody id="check-rows"></tbody></table>
+      <p id="ai-line" class="ai" hidden></p>
+      <div id="blocked" class="blocked" role="alert" hidden></div>
+      <div class="actions" id="actions"></div>
+      <div id="purchased" class="purchased" hidden></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  Prototype for the LEAD ASPIRE challenge. Synthetic data only. "Intent-checked" is our label: the cardholder's approved requirements matched the merchant-signed offer. It is not a Mastercard certification and carries no liability protection. Mastercard marks belong to Mastercard; no endorsement is implied.
+</footer>
+
+<dialog id="dlg-exception" aria-labelledby="dx-title">
+  <form method="dialog" id="exception-form">
+    <h3 id="dx-title">Accept this exception</h3>
+    <p>You are accepting exactly this, on exactly this offer:</p>
+    <blockquote id="dx-quote"></blockquote>
+    <div class="row end"><button class="pill ghost" value="cancel" type="button" id="dx-cancel">Cancel</button><button class="pill primary" id="dx-ok" type="submit" value="ok">Accept and record</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-dispute" aria-labelledby="dd-title">
+  <form method="dialog" id="dispute-form">
+    <h3 id="dd-title">Dispute this purchase</h3>
+    <label for="dd-claim">What does the cardholder say?</label>
+    <textarea id="dd-claim" rows="2">I didn't want layovers.</textarea>
+    <div class="row end"><button class="pill ghost" type="button" id="dd-cancel">Cancel</button><button class="pill primary" type="submit">Create Intent Receipt</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-receipt" class="receipt-dlg" aria-labelledby="rc-title">
+  <article id="receipt"></article>
+  <div class="row end noprint"><button class="pill ghost" type="button" id="rc-print">Print</button><button class="pill primary" type="button" id="rc-close">Close</button></div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
 </html>
