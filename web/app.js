@@ -115,10 +115,10 @@ function offerCard(o) {
   const s = o.segments, first = s[0], last = s[s.length - 1], stops = s.length - 1;
   const via = stops ? ` via ${s.slice(0, -1).map((x) => x.to_airport).join(", ")}` : "";
   const dev = DEV ? `<div class="dev"><button data-t="l2">Tamper credential</button><button data-t="checkout_sig">Forged merchant</button><button data-t="note">Inject text</button></div>` : "";
-  const held = state.held[o.key], allHeld = heldAll();
+  const held = state.held[o.key];
   const badge = held ? `<span class="badge held-badge">Held: ${esc(held.join(", "))}</span>` : "";
   const pick = held
-    ? (allHeld ? `<button class="pill pick">Review again</button>` : `<button class="pill pick" disabled>Held</button>`)
+    ? `<button class="pill pick">Review again</button>`  // a held offer can always be reopened, e.g. to accept an exception
     : `<button class="pill primary pick" ${state.rid ? "" : "disabled"}>Agent selects this</button>`;
   return `<div class="offer ${state.offerKey === o.key ? "sel" : ""} ${held ? "is-held" : ""}" data-key="${esc(o.key)}">
     <div class="o-top"><span class="route">${esc(first.from_airport)} to ${esc(last.to_airport)}</span><span class="price">${money(o.total_cents)}</span></div>${badge}
@@ -132,7 +132,7 @@ function renderReshopHint() {
   if (!el) { el = document.createElement("p"); el.id = "reshop-hint"; el.className = "reshop-hint"; el.setAttribute("role", "status"); $("offers").insertAdjacentElement("beforebegin", el); }
   const any = Object.keys(state.held).length > 0;
   el.hidden = !any;
-  el.innerHTML = any ? "Nothing was charged. The agent keeps looking for something that matches what you approved." +
+  el.innerHTML = any ? "Nothing was charged. The agent keeps looking for something that matches what you approved. You can also review a held offer again." +
     (heldAll() ? "<strong>No other offers match yet. You can accept an exception on one of the held offers.</strong>" : "") : "";
 }
 function renderOffers() {
@@ -269,7 +269,7 @@ async function buy() {
   const box = $("blocked");
   if (r.status === 409) {
     const u = r.data.uncovered_checks || [];
-    box.textContent = u.length ? `Purchase blocked by Intent Judge: ${u.length} unresolved check${u.length > 1 ? "s" : ""} (${u.join(", ")}). Choose another offer or accept an exception.` : `Purchase blocked by Intent Judge: ${r.data.reason}`;
+    box.textContent = u.length ? `Purchase blocked by Intent Judge: ${u.length} unresolved check${u.length > 1 ? "s" : ""} (${u.join(", ")}). Find another offer or accept an exception.` : `Purchase blocked by Intent Judge: ${r.data.reason}`;
     box.hidden = false; return;
   }
   if (!r.ok) { showError(r.data?.detail || "The purchase could not be made."); return; }
@@ -312,13 +312,14 @@ function seatCards(p) {
   const bad = p.checks.filter((c) => c.status === "fail" || c.status === "missing");
   const covered = bad.every((c) => p.exceptions.some((x) => x.check_id === c.check_id));
   const accepted = p.exceptions.length ? p.exceptions.map((x) => CHECKNAME[x.check_id] || x.check_id).join(", ") : "No changes";
-  const holderHead = p.exceptions.length ? "You accepted a change, and it's on record." : bad.length ? "This order differed from what you approved." : "This order matched what you approved.";
-  const merchHead = !bad.length ? "This order matched what the cardholder approved." : covered ? "The cardholder accepted the differences, on record." : "This order differed from what the cardholder approved.";
+  const unverified = !p.vi_chain_valid || !p.merchant_signature_valid || p.recommended_responsibility === "fraud_path";
+  const holderHead = unverified ? "This order could not be verified." : p.exceptions.length ? "You accepted a change, and it's on record." : bad.length ? "This order differed from what you approved." : "This order matched what you approved.";
+  const merchHead = unverified ? "This order could not be verified, so it belongs on the fraud path." : !bad.length ? "This order matched what the cardholder approved." : covered ? "The cardholder accepted the differences, on record." : "This order differed from what the cardholder approved.";
   const resp = p.recommended_responsibility;
   const card = (cls, seat, head, lines) => `<section class="seat ${cls}"><span class="seat-title">${esc(seat)}</span><h4>${esc(head)}</h4><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></section>`;
   return `<div class="seats">
     ${card("", "Cardholder", holderHead, ["You approved: " + reqLines(p.approved_requirements).slice(0, 2).join("; "), `You were offered: ${route}, ${money(p.merchant_offer.total_cents)}`, "You accepted: " + accepted])}
-    ${card("hero", "Merchant", merchHead, ["You have proof: the approved list, your signed order and any accepted exception are attached.", "Built from the order you already sign. No new integration.", MERCHANT_NOTE[resp] || MERCHANT_NOTE.unclear])}
+    ${card("hero", "Merchant", merchHead, [unverified ? "The failed verification is attached for the analyst." : "You have proof: the approved list, your signed order and any accepted exception are attached.", "Built from the order you already sign. No new integration.", MERCHANT_NOTE[resp] || MERCHANT_NOTE.unclear])}
     ${card("", "Issuer", "Evidence is ready for the dispute analyst.", [`Credential chain: ${p.vi_chain_valid ? "valid" : "invalid"}. Merchant signature: ${p.merchant_signature_valid ? "valid" : "invalid"}.`, `Recommendation, not a decision: ${WHO[resp] || resp}, ${CODE[p.suggested_reason_code] || p.suggested_reason_code}`, "Final decision: dispute analyst."])}
   </div><p class="seats-cap">One transaction, three seats, one shared record.</p>`;
 }
