@@ -46,8 +46,8 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[V]` `foundry_client` **mock** mode complete: extract (demo sentences), explain, evidence templates
 
 ## 5 · T+1:35→1:50 — Wire it and reach the checkpoint
-- [ ] `[J]` Real adapter swapped in behind the same interface; `/api/intent/extract|approve`, `/api/check`, `/api/exceptions`, `/api/purchase`, `/api/disputes`, `/api/scenarios`, `/api/reset`
-- [ ] `[J]` `/api/purchase` is the **only** code path that creates a purchase
+- [x] `[J]` Real adapter swapped in behind the same interface; `/api/intent/extract|approve`, `/api/check`, `/api/exceptions`, `/api/purchase`, `/api/disputes`, `/api/scenarios`, `/api/reset`
+- [x] `[J]` `/api/purchase` is the **only** code path that creates a purchase
 - [ ] `[V]` `evidence.build_packet` + deterministic responsibility table from `docs/07`; always `final_decision: "dispute analyst"`
 - [ ] `[JV]` **G3 CHECKPOINT — one scenario end to end** (curl is fine): Offer B → HOLD → purchase 409 → exception → purchase 201 → dispute → packet
 - [ ] `[JV]` If G3 missed: apply the cut line (UI polish → evidence narrative → vague-request demo). Never cut rules, 409, Offer B HOLD
