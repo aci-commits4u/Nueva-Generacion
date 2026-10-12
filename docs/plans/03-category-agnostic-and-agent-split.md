@@ -1,6 +1,6 @@
 # Plan 3 — Category-agnostic Intent Judge + agent work packages (Jossue's half / Victor's half)
 
-> **Status: DRAFT — pending confirmation by Jossue + Victor.** Supersedes D3 ("airline bookings only") and the "flights only" scope lines in `docs/04`, `docs/13`, `CHECKLIST.md`. AGENTS rules 1–10 are **unchanged** — none of them depended on flights.
+> **Status: direction confirmed by Jossue (Oct 12): category-neutral contract, flights-only build, three-seat flow. The generic engine and category packs below are roadmap. Victor's confirmation not yet recorded.** Supersedes D3 ("airline bookings only") and the "flights only" scope lines in `docs/04`, `docs/13`, `CHECKLIST.md`. AGENTS rules 1–10 are **unchanged** — none of them depended on flights.
 > Written Oct 12, 2026. Trigger: team finding that the product is not limited to flights; flights are only the demo.
 
 > **Update (judging guidance from the team): the pitch must show innovative thinking, be understood by a non-technical listener, appeal broadly, and be pitchable to Mastercard through a Microsoft employee's lens. Judges are not scoring tech stack or build sophistication.**
@@ -51,9 +51,9 @@ The generic evaluator implements exactly `docs/07`'s semantics: BLOCK on invalid
 
 ## 3. Agent work packages
 
-Each package is one agent (a Claude Code session in its own git worktree) that **fully owns** a deliverable: a brief, the files it may touch, tests, and a "done" it can verify alone. Humans merge into their own branch (`jossue/build` / `victor/rules`); gates merge to `main`.
+Each package is one agent (a coding-assistant session in its own git worktree) that **fully owns** a deliverable: a brief, the files it may touch, tests, and a "done" it can verify alone. Humans merge into their own branch (`jossue/build` / `victor/rules`); gates merge to `main`.
 
-Run one: `git worktree add ../ij-<ID> -b <owner>/<id> <owner-branch>` → open Claude Code there → *"Read docs/plans/03-category-agnostic-and-agent-split.md §3 and complete package <ID>. Touch only the files it owns."*
+Run one: `git worktree add ../ij-<ID> -b <owner>/<id> <owner-branch>` → open the coding assistant there → *"Read docs/plans/03-category-agnostic-and-agent-split.md §3 and complete package <ID>. Touch only the files it owns."*
 
 ### C0 — Contract (blocks everything; Jossue's session, ≈20 min)
 - **Owns:** `app/models.py`, `app/packs/base.py` (CheckDef, ops, pack protocol), `app/packs/__init__.py` (registry), update `fixtures_loader.py`

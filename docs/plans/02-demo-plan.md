@@ -1,6 +1,6 @@
 # Plan 2 — Final demo: what the judges see
 
-> **Status: DRAFT — pending confirmation by Jossue + Victor.** Builds on `docs/09-demo-ui.md` and `docs/12-pitch-and-qa.md`; this plan changes the *timing* and adds the *determinism* the original lacks.
+> **Status: confirmed by Jossue (Oct 12); script retimed to 98 s after the re-shop, consent and three-seat changes. Victor's confirmation not yet recorded.** Builds on `docs/09-demo-ui.md` and `docs/12-pitch-and-qa.md`; this plan changes the *timing* and adds the *determinism* the original lacks.
 > Decision IDs (D-x) refer to `docs/plans/01-build-plan.md` §0.
 
 ## 1. The one-sentence demo

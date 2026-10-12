@@ -4,7 +4,7 @@
 
 This folder is the complete project context for building **Intent Judge** at **LEAD ASPIRE (October 12, 2026, NYC)** — a one-day Microsoft Cloud & AI challenge for client **Mastercard**, hosted by LEAD and HOLA (Hispanic & Latinx at Microsoft), with EY partners reviewing strategy.
 
-Drop the contents of this folder into the root of the GitHub repo. IDE agents (GitHub Copilot, Claude Code, Cursor, etc.) read `AGENTS.md` first; it points to everything else.
+Drop the contents of this folder into the root of the GitHub repo. IDE coding assistants (GitHub Copilot, Cursor, and similar) read `AGENTS.md` first; it points to everything else.
 
 ## What we are building (one paragraph)
 
