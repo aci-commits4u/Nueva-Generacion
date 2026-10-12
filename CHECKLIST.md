@@ -35,7 +35,7 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[J]` Parallel: `vi_adapter` **stub** (fixture → offer, flags `True`, logs `STUB`), `store.py`, `main.py` skeleton
 
 ## 4 · T+0:50→1:35 — VI adapter + enforcement
-- [x] `[J]` `issue_credentials`: L1 + L2 with `urn:intent-judge:flight-requirements`, amount range, allowed merchants
+- [x] `[J]` `issue_credentials`: L1 + L2 with `urn:intent-judge:requirements`, amount range, allowed merchants
 - [x] `[J]` `merchant_sign_offer`: flight `checkout_jwt` per `docs/06` schema, ES256 merchant demo key; `offer_hash` = B64U(SHA-256(jwt))
 - [x] `[J]` `verify_and_extract`: `verify_chain` + merchant-signature check; offer parsed **only** from verified payload
 - [x] `[J]` Round-trip test: `verify_and_extract(...).offer == fixture offer`
@@ -55,7 +55,7 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 ## 6 · T+1:50→2:20 — Demo page + live AI
 - [ ] `[J]` `web/` three columns per Plan 2 §3: request/requirements · offers · result; PASS/HOLD/BLOCK = icon + text + color
 - [ ] `[J]` One-click answer chips for the clarify questions; modal quotes the exact exception + hash; 409 message shown in UI
-- [ ] `[J]` Dispute modal → print-friendly one-page evidence packet
+- [ ] `[J]` Dispute modal → print-friendly one-page **Intent Receipt** (the evidence packet)
 - [ ] `[J]` `[Reset demo]` works; fixed demo ids/clock so hashes repeat
 - [ ] `[J]` Footer copy: "intent-checked" only; **no** "verified by Mastercard / certified / liability protected" anywhere (grep UI + docs)
 - [ ] `[V]` `foundry_client` live: AzureOpenAI, JSON mode, `temperature=0`, Pydantic validation, 3 s timeout → mock + `llm_fallback` badge
@@ -76,7 +76,7 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 ## 9 · Official Build Readiness Checklist (all must be true)
 - [ ] **Core experience:** approve → check → hold → exception/cancel → purchase enforcement → dispute packet works end to end
 - [ ] **Discovery alignment:** client's three-layover example is Offer B / scenario 2
-- [ ] **Scope discipline:** flights only, nothing extra
+- [ ] **Scope discipline:** one fully working category (flights); category-neutral by design; nothing extra
 - [ ] **Real functionality:** live vs simulated written down (Plan 2 §5) and matches what actually runs
 - [ ] **AI behavior:** varied inputs tested incl. injection (scenario 11); limits known (extraction can be wrong → traveler approves)
 - [ ] **Error handling:** model timeout → mock; missing field → HOLD; bad signature → BLOCK

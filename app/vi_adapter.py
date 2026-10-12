@@ -48,7 +48,9 @@ from verifiable_intent.verification.chain import verify_chain
 
 from app.models import ApprovedRequirements, FlightOffer, Segment
 
-FLIGHT_CONSTRAINT_TYPE = "urn:intent-judge:flight-requirements"
+# Category-neutral on purpose: the same constraint type carries any category's approved requirements
+# (flights today; hotels, retail, subscriptions are roadmap). The `category` field says which.
+CONSTRAINT_TYPE = "urn:intent-judge:requirements"
 
 # --------------------------------------------------------------------------- demo keys
 @dataclass
@@ -100,7 +102,7 @@ class VerifiedOffer:
 def issue_credentials(req: ApprovedRequirements, acceptable_offers: list[tuple[str, str]] | None = None) -> CredentialBundle:
     """Issue L1 (issuer) + L2 (user-signed mandate carrying the approved requirements).
 
-    The approved requirements travel as the custom constraint ``urn:intent-judge:flight-requirements``,
+    The approved requirements travel as the custom constraint ``urn:intent-judge:requirements`` (with ``category``),
     signed by the user key, so the agent cannot silently drop e.g. "nonstop".
     ``acceptable_offers`` is a list of (offer_id, title); defaults to the fixture offers.
     """
@@ -120,8 +122,9 @@ def issue_credentials(req: ApprovedRequirements, acceptable_offers: list[tuple[s
         ISSUER.private_key,
     )
     flight_req = Constraint(
-        type=FLIGHT_CONSTRAINT_TYPE,
+        type=CONSTRAINT_TYPE,
         extra_fields={
+            "category": req.category,
             "requirement_set_id": req.requirement_set_id,
             "origin_airports": req.origin_airports,
             "destination_airports": req.destination_airports,
@@ -178,7 +181,7 @@ def signed_requirements(bundle: CredentialBundle) -> dict | None:
     for delegate in claims.get("delegate_payload", []):
         if isinstance(delegate, dict) and delegate.get("vct") == "mandate.checkout.open.1":
             for c in delegate.get("constraints", []):
-                if c.get("type") == FLIGHT_CONSTRAINT_TYPE:
+                if c.get("type") == CONSTRAINT_TYPE:
                     return c
     return None
 
@@ -193,7 +196,7 @@ def merchant_sign_offer(offer: FlightOffer, signer: KeyPair | None = None, note:
     """
     now = int(time.time())
     item: dict = {
-        "sku": offer.offer_id, "type": "air_itinerary", "quantity": 1,
+        "sku": offer.offer_id, "type": "air_itinerary", "category": offer.category, "quantity": 1,
         "segments": [
             {"carrier": s.carrier, "flight_number": s.flight_number, "from": s.from_airport, "to": s.to_airport,
              "depart_local": s.depart_local.isoformat(), "arrive_local": s.arrive_local.isoformat()}
@@ -236,7 +239,7 @@ def _offer_from_payload(payload: dict, offer_hash: str) -> FlightOffer:
     item = payload["cart"]["items"][0]
     total = payload["cart"].get("total", {})
     return FlightOffer(
-        offer_id=item["sku"], merchant_id=payload["merchant"]["id"], merchant_name=payload["merchant"]["name"],
+        category=item.get("category", "flight"), offer_id=item["sku"], merchant_id=payload["merchant"]["id"], merchant_name=payload["merchant"]["name"],
         segments=[
             Segment(carrier=s["carrier"], flight_number=s["flight_number"], from_airport=s["from"], to_airport=s["to"],
                     depart_local=s["depart_local"], arrive_local=s["arrive_local"])

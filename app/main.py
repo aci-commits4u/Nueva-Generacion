@@ -148,7 +148,8 @@ def approve(body: ApproveBody) -> dict:
         "requirements": req.model_dump(mode="json"),
         "vi_l2_summary": {
             "mode": "AUTONOMOUS",
-            "constraint": vi.FLIGHT_CONSTRAINT_TYPE,
+            "constraint": vi.CONSTRAINT_TYPE,
+            "category": req.category,
             "signed_by": "traveler (demo key)",
             "approved_at": req.approved_at.isoformat(),
         },
