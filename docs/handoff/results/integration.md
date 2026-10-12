@@ -102,3 +102,45 @@ Four remaining failures (not skipped or replaced with fakes):
 ### Ready for coordinator's next exact authorization
 
 Return now rather than polling. Core A/B purchase demo is ready; receipt and reviewed AI remain pending. DO NOT merge the initial evidence SHA: coordinator review found weak-consent/future-time and invalid-integrity construction bugs, and its owner is correcting them. Await the coordinator-authorized corrected evidence SHA and AI SHA. Then rerun the full real suite with no acceptance skips, preserve the flat packet/additive trace, and let the coordinator browser-verify the real FastAPI server. No live Foundry proof is claimed. All purchases remain simulated and all receipt recommendations remain advisory to a dispute analyst.
+
+## Authorized receipt + latest Josue integration — October 12, 2026, 13:46 EDT
+
+This footer supersedes all pending-evidence and red-suite status above. Continued the SAME clean worktree/branch from coordinator-published `e6c62505341e86aa5d53831b9f816b29d5ee0d47`. Merged exactly the two authorized heads, incrementally with semantic messages and attribution footers:
+
+1. Corrected, independently re-reviewed evidence `3863ee1dee4dd515ca74ee85b263fd0e4d885a13` (includes fix `8aebb1d`); merge commit `dfa2f9ca70f1720b35652c532a0a2775e58d5f27`.
+2. Latest `origin/jossue/build` `67c0037977cf5a81bf2a198208f46f8cb7774606`; whole-tree merge commit `606d5134d82b1fe91debc909941b8a237ddb0159`, with no rebuild or frontend editing.
+3. Owned acceptance additions committed as `7d6691df1b3634748d3bcc26fc14ea4775562da9`. No main/store/model/VI implementation adjustment was needed after these merges. Peer rules, evidence, AI, and conversation implementations remain unpatched by integration.
+
+### Latest snapshot and conflict-free teammate/API ownership
+
+- API integration owns `app/main.py`, `app/store.py`, bounded shared contract integration, `tests/test_enforcement.py`, `tests/test_scenarios.py`, `tests/test_injection.py`, and THIS results file. Coordinate before overlapping API/contract edits. Josue owns `web/`; there were NO web edits, comments, generated assets, or rebuilds in this turn. `TEAM-STATUS.md` remains coordinator-owned and untouched.
+- Latest UI is preserved BYTE FOR BYTE against the exact authorized Josue head: `git diff --exit-code 67c0037977cf5a81bf2a198208f46f8cb7774606 HEAD -- web` is empty, and all three `git ls-tree` blob ids match. `web/app.js` = `0a7a6359f10544e6db3ba1523fc7f28980a98242`; `web/index.html` = `60ffde8ec9826e8caf933a1a969f4871d635d6b0`; `web/styles.css` = `fcec992a129d32be3af21e810da376e7c82faaec`.
+- Latest frontend uses initially unchecked per-check checkboxes (`web/app.js:237-248`) and sequential one-check exception requests with unchanged specific wording (`web/app.js:250-264`). Each POST still receives the complete accumulated `{exceptions}` list. Purchase stays409 until all failed/missing checks on the exact hash are covered; deterministic HOLD is never rewritten to PASS.
+- Backwards-compatible `/api/check` envelope remains EXACTLY `{decision, offer, explanation, vi_errors}`. Approve, exception, and purchase contracts are unchanged. Receipt remains a FLAT EvidencePacket, with additive `conversation_trace` only: null for stateless approval, unsigned application quotes/approval snapshot for conversation-backed approval. The latest 3-seat receipt and reshop code consume this unchanged API; no frontend patch is required.
+
+### Actual green proof: complete suite, zero acceptance skips
+
+Runtime was the existing `../victor-rules/.venv/bin/python` from THIS workdir. Every final test command used `env -u AZURE_OPENAI_API_KEY -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_DEPLOYMENT -u AZURE_FOUNDRY_PROJECT_ENDPOINT -u FOUNDRY_PROJECT_ENDPOINT MOCK_LLM=1`; no install, live model/cloud call, fake server, or replacement server was used.
+
+| Arguments after `python -m pytest` | Actual result |
+| --- | --- |
+| `-q -ra` | **407 passed, 0 failed, 0 skipped, 0 deselected** |
+| `-q --ignore=tests/test_api_wiring.py -ra` | **394 passed, 0 failed, 0 skipped, 0 deselected**; excludes the 13 preserved isolated fake wiring tests |
+| `-q tests/test_enforcement.py tests/test_scenarios.py tests/test_injection.py -ra` | **57 passed, 0 failed, 0 skipped, 0 deselected**, real rules/SDK/core/receipt acceptance |
+| `-q tests/test_rules_engine.py tests/test_purchase_eligibility.py tests/test_scenarios.py tests/test_evidence.py -ra` | **316 passed, 0 failed, 0 skipped, 0 deselected** |
+
+- Initial full suite immediately after the two merges was **406 passed**. The final count adds one owned regression, not a skip or substitute: `tests/test_enforcement.py:178-217` runs STOPS + PRICE + REFUNDABLE sequentially using the latest exact UI wording; each partial consent still gets purchase409 with the remaining uncovered ids; all three permit201 and a flat receipt200 containing all exact recorded acceptances. Recommendation for the recognized disputed preferences is traveler/none; final_decision remains dispute analyst. An initial draft of this new test expected traveler for an unrecognized general question; reviewed evidence correctly returned unclear, so the test claim was corrected to specific preferences. No peer bug or implementation patch was involved.
+- `tests/test_enforcement.py:164-175` now passes the entire original B HOLD ->409 ->specific STOPS acceptance ->201 ->flat receipt200 path. The receipt retains approved nonstop intent and the merchant's actual 3 connections with the exact purchase-time exception.
+- `tests/test_enforcement.py:281-288` proves real L2 and forged-merchant-signature BLOCKs preserve EMPTY decision hashes and reject exceptions/purchase409, with no purchases and nonexistent-dispute404. `tests/test_enforcement.py:346-366` passes the ACTUAL tampered-chain decision plus valid signed merchant offer to the narrow integrity DIAGNOSTIC packet builder. It produces fraud_path/4837/dispute analyst without constructing a Purchase, adding a store entry, changing BLOCK's empty hash, or permitting purchase afterwards. The verified merchant-offer hash remains unchanged/nonempty.
+- `tests/test_enforcement.py:369-385` passes the real conversation quote and exact approved snapshot in the additive flat receipt trace. Injection/deep-copy narrative protection also passes with real rules and SDK.
+- All **12/12** shared fixture scenarios genuinely pass real signed HTTP API acceptance in `tests/test_scenarios.py:9-38`: scenario1 PASS/201; scenario2 HOLD/409; scenario3 PASS/201; scenarios4-11 HOLD/409; scenario12 tamper BLOCK/409.
+
+### Existing real server rehearsal, not just TestClient
+
+The previously running real FastAPI reload server on port8010 was reused; its shell693285 was neither stopped nor replaced. Health returned `rules_engine=loaded`. A separate `httpx.Client` network diagnostic traversed all 12 fixtures over `http://127.0.0.1:8010` with the exact outcomes above. It also passed three sequential check-specific exceptions (partial409/all201/flat receipt200), both actual tamper paths (BLOCK empty hash/exception409/purchase409/dispute404), and separate conversation approval/A purchase/flat quote-trace receipt200. It created only synthetic simulated demo records, did not reset the server, and printed no credentials. This is backend HTTP proof, not a claimed rendered-browser/visual review.
+
+### Publication and remaining coordinator action
+
+User explicitly approved integration/publication. Normal fast-forward push of this green ready HEAD to `origin/victor/build` is authorized; NEVER force or push main. Pre-publication remote check showed victor/build at `e6c62505341e86aa5d53831b9f816b29d5ee0d47`, and main at `5e87cfd0b5ceaa4dc714615f35f2a9fbadac2842`. Exact final SHA and push result are returned separately so this file needs no self-referential amend. Coordinator owns later final coordination documentation.
+
+AI remains PENDING: do NOT merge `089484c` or any unapproved newer head. The owner's mixed-route ambiguity regression is under correction; await a NEW independently reviewed exact coordinator-authorized SHA, then rerun the complete suite with zero acceptance skips and rehearse existing real port8010. No additional backend bug was found in this receipt/UI integration. Live Foundry transport/model behavior, rendered browser/mobile validation, production durability/authentication, actual payments, Mastercard certification, and liability outcomes are NOT claimed. All exceptions remain unsigned application records and receipt recommendations remain advisory to the dispute analyst.
