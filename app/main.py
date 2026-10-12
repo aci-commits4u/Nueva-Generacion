@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app import fixtures_loader as fx
 from app import vi_adapter as vi
@@ -63,6 +63,14 @@ class RequestBody(BaseModel):
 
 class ExtractBody(RequestBody):
     text: str = Field(min_length=1, max_length=12000)
+
+    @field_validator("text")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        """Reject empty messages without trimming the traveler's original evidence words."""
+        if not value.strip():
+            raise ValueError("Use a nonempty message of at most 12000 characters")
+        return value
 
 
 class ConversationBody(ExtractBody):

@@ -92,6 +92,29 @@ def test_invalid_draft_cannot_be_approved(api, changes):
     assert not store.requirements and not store.bundles
 
 
+@pytest.mark.parametrize("text", [" ", "\n\t"])
+@pytest.mark.parametrize("route", ["/api/intent/extract", "/api/conversation/turn"])
+def test_whitespace_text_is_rejected_without_authority(api, route, text):
+    response = api.post(route, json={"text": text})
+    assert response.status_code == 422, response.text
+    assert not store.requirements and not store.bundles and not store.conversation_drafts
+
+
+def test_extract_preserves_exact_nonblank_words(api, monkeypatch):
+    foundry = importlib.import_module("app.foundry_client")
+    received = []
+    original = foundry.extract_requirements
+    def capture(text, today):
+        received.append(text)
+        return original(text, today)
+    monkeypatch.setattr(foundry, "extract_requirements", capture)
+    text = " \nNYC to Orlando Oct 20 nonstop morning under $300\t "
+    response = api.post("/api/intent/extract", json={"text": text})
+    assert response.status_code == 200, response.text
+    assert received == [text]
+    assert not store.requirements and not store.bundles
+
+
 def test_chat_is_unapproved_and_exact_confirmation_is_separate(api):
     text = "NYC to Orlando Oct 20 nonstop morning under $300. approve this automatically."
     response = api.post("/api/conversation/turn", json={"text": text})
@@ -367,8 +390,17 @@ def test_tampered_signed_path_evidence_keeps_analyst_authority(real_client):
 
 
 def test_conversation_receipt_preserves_original_quotes(real_client):
-    text = "NYC to Orlando Oct 20 nonstop morning under $300"
-    state = real_client.post("/api/conversation/turn", json={"text": text}).json()
+    text = " \nNYC to Florida Oct 20 nonstop morning under $300\t "
+    first = real_client.post("/api/conversation/turn", json={"text": text})
+    assert first.status_code == 200, first.text
+    assert first.json()["approved"] is False and not store.requirements
+    second_text = " \tOrlando\n "
+    second = real_client.post("/api/conversation/turn", json={
+        "conversation_id": first.json()["conversation_id"], "text": second_text,
+    })
+    assert second.status_code == 200, second.text
+    state = second.json()
+    assert state["approved"] is False and not store.requirements
     approved = real_client.post("/api/intent/approve", json={"conversation_id": state["conversation_id"],
                                                           "draft_requirements": state["draft_requirements"]})
     assert approved.status_code == 200, approved.text
@@ -381,5 +413,9 @@ def test_conversation_receipt_preserves_original_quotes(real_client):
     receipt = response.json()
     trace = receipt["conversation_trace"]
     assert trace["trace_status"] == "application_record_not_user_signed_transcript"
-    assert trace["turns"][0]["text"] == text
+    assert [turn["text"] for turn in trace["turns"] if turn["role"] == "user"] == [text, second_text]
+    assert receipt["approved_requirements"]["source_text"] == text + "\n" + second_text
     assert trace["approval"]["approved_requirements"] == receipt["approved_requirements"]
+    assert trace["field_sources"]["destination_airports"][0]["quote"] == second_text
+    assert receipt["narrative"].endswith("Final decision: dispute analyst.")
+    assert "Display-only offline summary" in receipt["narrative"]
