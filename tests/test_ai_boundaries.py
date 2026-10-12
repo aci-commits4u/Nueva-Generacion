@@ -231,6 +231,35 @@ def test_one_read_only_tool_call_and_two_responses_at_most(live):
     assert output['synthetic'] and not output['trusted_for_purchase']
     assert followup['tool_choice'] == 'none'
     assert all(call['parallel_tool_calls'] is False and 0 < call['timeout'] <= 4 for call in client.calls)
+    assert all(set(call['extra_body']) == {'agent_reference'} and 'instructions' not in call for call in client.calls)
+    assert client.closed and project.closed and credential.closed
+
+
+def test_direct_chat_uses_model_instructions_and_closes_clients(live):
+    output = SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop', message=SimpleNamespace(content='{"draft":"test"}', refusal=None, tool_calls=None))])
+    client, project, credential = install_external(live, [output])
+    client.chat = SimpleNamespace(completions=client)
+    live.setenv('FOUNDRY_API_MODE', 'chat')
+    live.setenv('FOUNDRY_MODEL_DEPLOYMENT', 'demo-deployment')
+    assert ai._call_foundry({'turns': []}) == '{"draft":"test"}'
+    assert client.calls[0]['model'] == 'demo-deployment'
+    assert client.calls[0]['messages'][0]['role'] == 'system'
+    assert 'Return the requested JSON schema only' in client.calls[0]['messages'][0]['content']
+    assert 'tools' not in client.calls[0] and 'extra_body' not in client.calls[0]
+    assert client.closed and project.closed and credential.closed
+
+
+@pytest.mark.parametrize('finish,content,refusal,tools', [
+    ('length', '{}', None, None), ('stop', '', None, None),
+    ('stop', '{}', 'refused', None), ('stop', '{}', None, [tool('purchase')]),
+])
+def test_direct_chat_invalid_response_visibly_falls_back(live, finish, content, refusal, tools):
+    output = SimpleNamespace(choices=[SimpleNamespace(finish_reason=finish, message=SimpleNamespace(content=content, refusal=refusal, tool_calls=tools))])
+    client, project, credential = install_external(live, [output])
+    client.chat = SimpleNamespace(completions=client)
+    live.setenv('FOUNDRY_API_MODE', 'chat')
+    live.setenv('FOUNDRY_MODEL_DEPLOYMENT', 'demo-deployment')
+    assert ai.extract_requirements(TEXT).llm_fallback
     assert client.closed and project.closed and credential.closed
 
 

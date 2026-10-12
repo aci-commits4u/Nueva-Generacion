@@ -452,8 +452,24 @@ def _call_foundry(payload: dict) -> str:
     deadline = monotonic() + 12.0
     project, credential, client, agent = _open_foundry(deadline)
     try:
+        if os.getenv('FOUNDRY_API_MODE') == 'chat':
+            model = os.getenv('FOUNDRY_MODEL_DEPLOYMENT')
+            if not model:
+                raise FoundryUnavailable('A model deployment is required for direct chat')
+            response = client.chat.completions.create(model=model, messages=[
+                {'role': 'system', 'content': _AGENT_INSTRUCTIONS + '\nDo not call tools in this direct-chat mode. Return the requested JSON schema only.'},
+                {'role': 'user', 'content': json.dumps(payload)},
+            ], max_tokens=2200, timeout=_remaining(deadline))
+            choice = response.choices[0]
+            if choice.finish_reason != 'stop' or getattr(choice.message, 'refusal', None) or getattr(choice.message, 'tool_calls', None):
+                raise FoundryUnavailable('Chat response was incomplete or refused')
+            output = choice.message.content
+            if not isinstance(output, str) or not output.strip() or len(output) > 24000:
+                raise FoundryUnavailable('Missing or excessive model output')
+            _remaining(deadline)
+            return output
         response = client.responses.create(input=[{'role': 'user', 'content': json.dumps(payload)}],
-            extra_body={'agent': agent}, instructions=_AGENT_INSTRUCTIONS, max_output_tokens=2200,
+            extra_body={'agent_reference': agent}, max_output_tokens=2200,
             parallel_tool_calls=False, timeout=_remaining(deadline))
         items = _response_items(response)
         calls = [item for item in items if item.type == 'function_call']
@@ -472,8 +488,8 @@ def _call_foundry(payload: dict) -> str:
             catalog = search_demo_offers(arguments)
             response = client.responses.create(previous_response_id=response.id,
                 input=[{'type': 'function_call_output', 'call_id': calls[0].call_id,
-                        'output': catalog.model_dump_json()}], extra_body={'agent': agent},
-                instructions=_AGENT_INSTRUCTIONS, tool_choice='none', max_output_tokens=2200,
+                        'output': catalog.model_dump_json()}], extra_body={'agent_reference': agent},
+                tool_choice='none', max_output_tokens=2200,
                 parallel_tool_calls=False, timeout=_remaining(deadline))
             if any(item.type == 'function_call' for item in _response_items(response)):
                 raise FoundryUnavailable('Catalog call budget exhausted')

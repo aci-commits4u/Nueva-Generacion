@@ -110,6 +110,22 @@ Existing usable Python: `/Users/victor/Nueva-Generacion/.worktrees/victor-rules/
 MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 /Users/victor/Nueva-Generacion/.worktrees/victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider
 ```
 
-Live Foundry authentication, actual inference/tool execution and latency remain unproven. No authorized live cloud write or model smoke has occurred in this coordination session. Do not claim SDK installation or the existing blank agent proves live integration. Keep offline mode reliable.
+## Authorized live follow-up — supersedes historical offline-only status
+
+Victor subsequently authorized bounded live setup while leaving frontend ownership with Josue. Azure CLI 2.90.0 was installed in its separate uv tool environment and Azure login succeeded. The original `intent-judge-assistant` version1 was confirmed blank with zero tools. Version2 was created with the application's exact instructions and one read-only catalog tool; its definition validated successfully. No credentials were committed.
+
+Actual agent-Responses attempts exposed two issues: obsolete `agent`/separate `instructions` request fields (HTTP400), then HTTP404 `DeploymentNotFound` despite the project listing `gpt-oss-120b`. The transport now uses `agent_reference` and does not override persisted instructions. Native agent-Responses compatibility remains unresolved for this deployment.
+
+The bounded direct Chat Completions mode WORKS with real `gpt-oss-120b` inference. First response id: `19bfe6b870fe4a0a90007fdeeb9d59a7`, measured 1.715 seconds, asking Florida city and travel dates. Actual application extraction then returned validated `llm_fallback=false` in 4.289 seconds. Real HTTP extraction on port8011 also returned `llm_fallback=false`. This mode does not execute catalog tools; it uses the configured deployment directly, with application instructions and private JSON/provenance validation. Explanation and receipt narrative remain deterministic/display-only.
+
+Real HTTP two-turn proof on8011: both turns reported live (no fallback), the completed draft had no unanswered questions, explicit approval200, real signed offer A PASS, simulated purchase201, receipt200 with BOTH original user messages and `final_decision=dispute analyst`. Prompt1: `Get me NYC to Florida cheap next week.` Prompt2: `JFK to MCO on 2026-10-20, nonstop, morning, under $300 USD, 1 passenger. No cabin or refundability preference.` The existing website reaches live inference through Clarify, but still uses stateless form approval; it does not yet provide a multi-turn chat or render the conversation attachment. Josue retains those UI tasks.
+
+Live server is already running on `http://127.0.0.1:8011`; offline backup remains on8010. A teammate needs their OWN Azure CLI login; credentials do not transfer through Git. From the integration directory, the live startup is:
+
+```sh
+MOCK_LLM=0 FOUNDRY_LIVE_ENABLED=1 FOUNDRY_PROJECT_ENDPOINT=https://victor-lead-foundry-20261012.services.ai.azure.com/api/projects/lead-team FOUNDRY_AGENT_VERSION=2 FOUNDRY_MODEL_DEPLOYMENT=gpt-oss-120b FOUNDRY_API_MODE=chat FOUNDRY_CONFIGURE_AGENT=0 ../victor-rules/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8011
+```
+
+Fresh offline regression suite after the transport fix/direct-chat guards: **520 passed**. Guard tests reject incomplete, empty, refused and tool-calling chat responses; clients close and fallback remains visibly flagged. Every PASS/HOLD/BLOCK, approval, exception and responsibility rule is unchanged. Web files remain untouched.
 
 Synthetic keys/offers only; purchases simulated; storage in-memory. Conversation traces and exceptions are unsigned application records, not new VI authorizations. Only deterministic rules decide. Evidence recommendations are advisory; final authority is the dispute analyst. No certification, liability guarantee, delivered-flight proof, or universal-category support is claimed.
