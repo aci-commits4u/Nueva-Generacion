@@ -144,3 +144,49 @@ The previously running real FastAPI reload server on port8010 was reused; its sh
 User explicitly approved integration/publication. Normal fast-forward push of this green ready HEAD to `origin/victor/build` is authorized; NEVER force or push main. Pre-publication remote check showed victor/build at `e6c62505341e86aa5d53831b9f816b29d5ee0d47`, and main at `5e87cfd0b5ceaa4dc714615f35f2a9fbadac2842`. Exact final SHA and push result are returned separately so this file needs no self-referential amend. Coordinator owns later final coordination documentation.
 
 AI remains PENDING: do NOT merge `089484c` or any unapproved newer head. The owner's mixed-route ambiguity regression is under correction; await a NEW independently reviewed exact coordinator-authorized SHA, then rerun the complete suite with zero acceptance skips and rehearse existing real port8010. No additional backend bug was found in this receipt/UI integration. Live Foundry transport/model behavior, rendered browser/mobile validation, production durability/authentication, actual payments, Mastercard certification, and liability outcomes are NOT claimed. All exceptions remain unsigned application records and receipt recommendations remain advisory to the dispute analyst.
+
+## Final authorized AI assembly — October 12, 2026, 13:57 EDT
+
+This appended section supersedes the pending-AI status above. Continued the SAME integration worktree and `devin/api-integration` from clean coordinator documentation HEAD `451904c80382dbc32e6a358554406e3de756056d`, after published checkpoint `82d7a1b22c3b927364bd1320175d038abfcca148`. All four features are now assembled.
+
+- Merged ONLY the exact authorized, independently reviewed AI tip **`b7e89e0418d3845d0db3e8ee4782c568a918bf7c`**, including third-round parser correction **`a3881c3e40e84a3ec536540a6e6e24d749025ca6`**. Attributed semantic no-ff merge commit: **`2955efd37849271db54c8415fc892692d80c9bc3`**. Coordinator-supplied final independent review `cf0c134a` is ADDRESSED/no important breakage; its 13-case scoped proof and 136-case feature proof are historical feature/review results, not substitutes for the fresh integration counts below.
+- Owned API boundary/tests commit: **`42cae2481fda609c32f4e3dedd36bda9c6b2cdb9`**. Only `app/main.py` and `tests/test_enforcement.py` were edited; this integration record is committed separately. No peer implementation, web, manifest, fixtures, coordinator TEAM-STATUS, comments, or other worktree was edited; the authorized merge imports peer files without rewriting them. No history amendment, destructive operation, install, replacement server, main push, cloud call, or SDK authentication occurred.
+
+### Bounded whitespace boundary: actual red/green, not the suspected failure mode
+
+The exact merged public extraction function does NOT raise ValueError for whitespace: `/api/intent/extract` returned200 with an empty unapproved draft for both `" "` and `"\n\t"`. The existing conversation route already returned422. Added API regressions first: **2 failed, 3 passed, 41 deselected** for the blank/exact-nonblank subset. The defect was invalid blank extraction acceptance, NOT an observed500 or secret leak.
+
+The minimal shared request-body validator now rejects whitespace-only input with422 before extraction or conversation. It uses `.strip()` solely to test emptiness and RETURNS THE ORIGINAL nonblank string unchanged. No broad exception handler, model-output authority, or automatic stripping was introduced. Regressions cover both whitespace forms on both routes (four cases), capture the exact original nonblank extraction argument (one case), and strengthen the existing receipt test to two turns including leading/trailing spaces/newlines/tabs. These five new cases explain the count increase beyond the AI merge.
+
+### Fresh full integration proof, no acceptance skips
+
+All commands used THIS workdir and existing `../victor-rules/.venv/bin/python`, `MOCK_LLM=1`, with `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_FOUNDRY_PROJECT_ENDPOINT`, and `FOUNDRY_PROJECT_ENDPOINT` removed by `env -u`. No credential values were printed.
+
+| Arguments after `python -m pytest` | Actual result |
+| --- | --- |
+| `-q -ra` | **515 passed, 0 failed, 0 skipped, 0 deselected** |
+| `-q --ignore=tests/test_api_wiring.py -ra` | **502 passed, 0 failed, 0 skipped, 0 deselected**; excludes 13 preserved isolated fake wiring cases |
+| `-q tests/test_enforcement.py tests/test_scenarios.py tests/test_injection.py -ra` | **62 passed, 0 failed, 0 skipped, 0 deselected**, real signed API acceptance |
+| `-q tests/test_foundry_client.py tests/test_conversation.py tests/test_ai_boundaries.py -ra` | **120 passed, 0 failed, 0 skipped, 0 deselected**, fresh integrated AI/conversation/boundary cases |
+| `-q tests/test_conversation.py -k 'repeated_endpoint_clause or mixed_labeled_ambiguous_route or labeled_ambiguous_route_clears_only or count or budget' -ra` | **15 passed, 24 deselected, zero failures/skips**, supplemental focused parser proof only |
+
+`git diff --check` passed. `git diff --exit-code b7e89e0418d3845d0db3e8ee4782c568a918bf7c HEAD -- app/foundry_client.py app/conversation.py requirements-victor.txt` is EMPTY: reviewed peer code/manifest are exact, not patched by integration.
+
+### Actual existing-server HTTP proof after final AI reload
+
+Reused the SAME real reload server at **http://127.0.0.1:8010**, existing shell693285; it was neither stopped nor replaced, and no API reset was performed. A separate `httpx.Client` diagnostic traversed the network, not TestClient or a fake engine. Health remains `rules_engine=loaded`.
+
+- **12/12 real signed HTTP scenarios passed** with exact expected failed/missing checks: scenario1 PASS/201; scenario2 HOLD/409; scenario3 PASS/201; scenarios4-11 HOLD/409; scenario12 L2 tamper BLOCK/409. Non-BLOCK paths retain valid VI/merchant signatures and empty verification errors.
+- Both L2 and forged-checkout-signature paths independently remain BLOCK with EMPTY decision hashes; purchase and exception override both return409.
+- Latest Josue three-check STOPS/PRICE/REFUNDABLE sequential consent flow passed: initial/partial purchases409, all exact check-specific recorded acceptances permit201, flat receipt200 contains the exact three acceptances and traveler recommendation, and final_decision is dispute analyst. Stateless conversation_trace remains null.
+- Two-turn conversation proof used EXACT original words `" \nNYC to Florida Oct 20 nonstop morning under $300\t "`, then `" \tOrlando\n "`. Both chat responses remain approved=false. Separate exact-draft approval200 creates the server snapshot; A signed check PASS, purchase201, flat receipt200. Receipt user turns retain BOTH strings byte-for-byte, source_text equals their newline join without stripping, destination provenance quotes the second turn exactly, and the approval snapshot equals approved_requirements. Trace status remains `application_record_not_user_signed_transcript`.
+- New AI receipt narrative is populated and display-only: `Display-only offline summary of the synthetic transaction. The authorization chain is valid; the merchant signature is valid. The recorded comparison has 0 failed and 0 missing checks, with 0 recorded exception acceptances. The code-generated responsibility recommendation is unclear; the suggested reason code is none. These records support review, not a liability or dispute-outcome guarantee. Final decision: dispute analyst.` Unsupported general claims stay unclear; narrative does not decide or approve anything.
+- Both blank forms on BOTH network input routes now return422. Existing `/`, `/app.js`, and `/styles.css` return200.
+
+### Latest UI preservation, remaining limits, and publication
+
+Latest authorized Josue **`67c0037977cf5a81bf2a198208f46f8cb7774606`** remains BYTE-FOR-BYTE unchanged (`git diff --exit-code ... HEAD -- web` empty; all three blob ids match the preceding footer). Coordinator's browser proof recorded at `451904c` remains the latest rendered desktop/mobile observation, not a newly performed browser review here. Its frontend-owned follow-ups remain: 38px populated-table mobile overflow, no conversation/trace UI wiring yet, inherited merchant-delivery framing, and favicon404/expected purchase409 console entries. No frontend implementation patch was authorized or made.
+
+Fresh local availability/configuration-presence probe at13:57: **az available=False**; all removed credential/project variables and FOUNDRY_AGENT_VERSION, FOUNDRY_MODEL_DEPLOYMENT, FOUNDRY_CONFIGURE_AGENT, FOUNDRY_LIVE_ENABLED have presence=False. **Live Foundry remains BLOCKED / NOT_TESTED: no Azure CLI authentication, SDK authentication, live inference/tool execution, cloud configuration, or latency measurement.** Installing/importing SDKs is not live proof. Synthetic simulated purchases, in-memory unsigned conversation/exception records, no actual payment/delivery/certification/liability guarantee, and final dispute analyst authority remain unchanged.
+
+Pre-publication `git ls-remote` found `origin/victor/build` at82d7a1b and main at320d206; main is unrelated and untouched. User authorizes ONLY normal incremental fast-forward `HEAD:refs/heads/victor/build` publication after this green assembly. Exact final documentation HEAD and actual push/remote verification are returned separately without self-referential amendments. Parent/coordinator owns final whole-branch review and TEAM-STATUS updates. Refresh the demo after code reload to avoid stale in-memory ids.
