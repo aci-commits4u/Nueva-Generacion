@@ -1,6 +1,6 @@
 # Intent Judge — coordination and conflict-avoidance handoff
 
-Updated October 12, 2026, 13:43 America/New_York. Coordinator-owned file; implementation owners update their own result files, not this file. This is an incremental delivery record, not permission to overwrite another owner's work.
+Final offline MVP delivery: October 12, 2026. Feature work is frozen; only demo-blocking fixes should be considered. Coordinator-owned file; implementation owners update their own result files, not this file. This is an incremental delivery record, not permission to overwrite another owner's work.
 
 ## Read first
 
@@ -33,7 +33,14 @@ Shared models, fixtures and adapter are contracts, not freely editable. Request 
 - `4f80aa9`: signed API enforcement, conversation approval and compatibility preparation.
 - `df1d886`: merged reviewed rules `c802ab2` into the integration branch.
 - `c003f4c`: proved real signed API core flow; receipt remains a missing dependency at this checkpoint.
-- `6d97a3f`: AI/conversation parser, provenance and bounded Foundry transport implementation; review/result finalization pending at this checkpoint.
+- `6d97a3f`: AI/conversation parser, provenance and bounded Foundry transport initial implementation.
+- `8aebb1d` / `3863ee1`: independently reviewed evidence consent, chronology and tamper-diagnostic fixes plus handoff.
+- `dfa2f9c`: merged reviewed evidence; `606d513`: merged latest Josue snapshot `67c0037` unchanged.
+- `82d7a1b`: published green 407-test receipt integration checkpoint.
+- `089484c`, `c7b80c8`, `a3881c3`: incremental reviewed AI count/budget and route-correction fixes; final feature handoff `b7e89e0`.
+- `2955efd`: merged exact reviewed AI tip, assembling all four features.
+- `42cae24`: bounded API whitespace rejection with preserved literal evidence words.
+- **`68e52e3`**: final four-feature code/test/proof checkpoint, published to `origin/victor/build`; all 515 tests pass. Subsequent coordinator documentation commits do not change the tested product code.
 
 Use exact reviewed SHAs, not a moving branch name. Only integration merges peer features into its branch. Review the resulting tree and rerun tests after each merge. Feature worktrees retain their own history; do not delete them during the demo window.
 
@@ -64,7 +71,11 @@ Original prototype freshly verified: 33 passed. Rules feature freshly verified: 
 
 Integration at `c003f4c`: all 12 real signed HTTP scenarios pass; A PASS; B HOLD with THREE connections; purchase409; exact existing UI acceptance; simulated purchase201; tampered L2/forged merchant BLOCK and purchase409. Full suite is NOT green yet: receipt-dependent tests fail because reviewed evidence is not merged. See integration result for exact commands/counts and distinctions from the 13 preserved fake wiring tests.
 
-Current published checkpoint: **`82d7a1b` on `origin/victor/build`**, with reviewed evidence `3863ee1` and Josue `67c0037` integrated. Fresh coordinator rerun: **407 passed, zero failures/skips/deselections**. All 12 real signed HTTP scenarios pass; the full real API enforcement/scenario/injection subset has 57 tests. The full suite includes 13 explicitly isolated fake wiring tests; excluding those gives 394 real-feature tests. Pending only the final reviewed AI refinement merge, final combined verification, and final publication. Do not use `scripts/dev_server.py` (fake engine) as the real demo.
+**All four features are assembled and published to `origin/victor/build` at code checkpoint `68e52e37cfb407c1b32b2a73a31339a1b8fb5387`.** Fresh coordinator verification: **515 passed, zero failures/skips/deselections**. The integration owner separately verified 502 tests excluding the 13 explicitly isolated fake wiring cases, plus 62 real enforcement/scenario/injection cases and all 12 signed HTTP scenarios. Every feature has its own committed result Markdown and separate worktree history. Do not use `scripts/dev_server.py` (fake engine) as the real demo.
+
+Final coordinator browser smoke after the AI merge passed via real HTTP: extraction200 with offline flag -> explicit approval200 -> B HOLD -> purchase409 -> initially unchecked exact STOPS consent200 -> purchase201 -> flat receipt200. Cardholder/Merchant/Issuer seats render, the new display-only offline narrative is populated, and final authority remains `dispute analyst`. Earlier browser proof also confirmed A PASS and both tamper BLOCK/purchase409 paths.
+
+This is a tested OFFLINE demo, not live Foundry proof or a production audit. Victor's final instruction is to stop additional engineering and deliver: no further parser expansion, design changes, cloud setup, or new agent waves are part of this frozen MVP.
 
 Fresh remote inspection at 13:41 found no existing `victor/build`; `origin/jossue/build` is now `67c0037` and `origin/main` is `7fe07bd`. The newer Josue delta changes frontend/docs/dev tooling only, not shared API/models/adapter contracts. It adds per-check unchecked consent, held-offer re-shopping, and a three-seat flat receipt. Its exception requests retain the same exact check-specific wording, one selected check per request. Only integration may merge that snapshot; nobody else should modify `web/`.
 
@@ -77,7 +88,19 @@ The live Uvicorn server uses the REAL `app.main:app`, `MOCK_LLM=1`, and `FOUNDRY
 - Inherited receipt copy such as 'The merchant delivered what it signed' should be read as demo framing, not authenticated delivery proof. The backend has no delivery-evidence contract and deliberately returns `unclear` for unsupported delivery allegations. Josue owns any copy correction; do not claim guaranteed delivery, no production integration burden, liability protection, or a dispute win.
 - Favicon404 and expected purchase409 network entries appear in the browser console. No JavaScript exception was observed during the demonstrated flows. Keep expected refusal errors distinct from application failures.
 
-Screenshots are local verification artifacts under ignored `.worktrees/.playwright-cli/`; not repo changes. After the final AI merge causes development-server reload, refresh/reset the demo to avoid stale in-memory ids.
+Screenshots are local verification artifacts under ignored `.worktrees/.playwright-cli/`; not repo changes. Refresh/reset the demo after a development-server reload to avoid stale in-memory ids. The final browser verification used the frozen four-feature build after reload.
+
+## Run and rehearse now
+
+The working app is in `/Users/victor/Nueva-Generacion/.worktrees/devin-api-integration`, not the preserved root main checkout. The real server is already running at `http://127.0.0.1:8010`. For a restart, stop only that server first, then run from the integration directory:
+
+```sh
+MOCK_LLM=1 FOUNDRY_LIVE_ENABLED=0 ../victor-rules/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010
+```
+
+A teammate should use the published `victor/build` branch, install `requirements-victor.txt` in their own Python 3.12 virtualenv, and keep `MOCK_LLM=1`. No credentials are needed for the offline demo. Do not run or merge over anyone's dirty main checkout.
+
+Two-minute rehearsal: enter `NYC to Orlando Oct 20 nonstop morning under $300`; Clarify; Approve and sign; select B ($280, THREE connections); Buy is refused409; accept only the explicit Connections checkbox; Buy succeeds as a simulation; Dispute -> Intent Receipt. A ($260 nonstop) is the passing alternative. Optional `?dev` exposes actual tamper BLOCK toggles. Neither offer supports a fabricated savings story, and no real money moves.
 
 ## Runtime and honest limits
 
