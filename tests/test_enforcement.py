@@ -175,6 +175,48 @@ def test_b_receipt_after_core_demo(real_client):
     assert "conversation_trace" in receipt
 
 
+def test_latest_ui_sequential_per_check_exceptions_flat_receipt(real_client):
+    data = check(real_client, approve(real_client, max_total_cents=27000, refundable_required=True))
+    decision = data["decision"]
+    bad = [c for c in decision["checks"] if c["status"] in ("fail", "missing")]
+    assert {c["check_id"] for c in bad} == {"STOPS", "PRICE", "REFUNDABLE"}
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
+    assert not store.purchases and not store.exceptions[decision["decision_id"]]
+    accepted = []
+    for index, result in enumerate(bad):
+        statement = f"I accept {result['offer_value']} ({result['check_id']}) on offer {data['offer']['offer_id']}"
+        response = real_client.post("/api/exceptions", json={
+            "decision_id": decision["decision_id"], "check_ids": [result["check_id"]],
+            "traveler_statement": statement,
+        })
+        assert response.status_code == 200, response.text
+        accepted = response.json()["exceptions"]
+        assert [x["check_id"] for x in accepted] == [c["check_id"] for c in bad[:index + 1]]
+        assert accepted[-1]["accepted_value"] == result["offer_value"]
+        assert accepted[-1]["traveler_statement"] == statement
+        assert all(x["offer_hash"] == decision["offer_hash"] for x in accepted)
+        assert store.decisions[decision["decision_id"]].result == "HOLD"
+        if index < len(bad) - 1:
+            refusal = real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+            assert refusal.status_code == 409
+            assert set(refusal.json()["uncovered_checks"]) == {c["check_id"] for c in bad[index + 1:]}
+            assert not store.purchases
+    purchased = real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]})
+    assert purchased.status_code == 201, purchased.text
+    packet = real_client.post("/api/disputes", json={
+        "purchase_id": purchased.json()["purchase_id"],
+        "claim": "I did not want connections, this price, or a non-refundable ticket.",
+    })
+    assert packet.status_code == 200, packet.text
+    receipt = packet.json()
+    assert "packet" not in receipt and receipt["conversation_trace"] is None
+    assert receipt["exceptions"] == accepted
+    assert receipt["merchant_offer"]["offer_hash"] == decision["offer_hash"]
+    assert receipt["approved_requirements"]["max_total_cents"] == 27000
+    assert receipt["recommended_responsibility"] == "traveler"
+    assert receipt["suggested_reason_code"] == "none" and receipt["final_decision"] == "dispute analyst"
+
+
 def test_actual_frontend_generated_exception_wording(real_client):
     data = check(real_client, approve(real_client))
     decision = data["decision"]
@@ -318,6 +360,9 @@ def test_tampered_signed_path_evidence_keeps_analyst_authority(real_client):
     )
     assert packet.recommended_responsibility == "fraud_path"
     assert packet.suggested_reason_code == "4837" and packet.final_decision == "dispute analyst"
+    assert packet.merchant_offer.offer_hash == store.offers[decision["decision_id"]].offer_hash
+    assert store.decisions[decision["decision_id"]].offer_hash == ""
+    assert real_client.post("/api/purchase", json={"decision_id": decision["decision_id"]}).status_code == 409
     assert not store.purchases
 
 
