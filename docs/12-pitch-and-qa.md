@@ -20,6 +20,9 @@ Rules: start immediately; say "three layovers" consistently; no "um, so MasterCa
 | What if the AI is wrong? | It can't approve. The traveler approves the requirement list, code decides, missing data holds, analysts decide disputes. | Victor |
 | Why not just add rules to VI? | We do — our approved requirements *are* a VI constraint. The missing step was turning "nonstop, morning" into explicit, traveler-approved fields. | Victor |
 | Who pays under your design? | Evidence decides; we recommend based on what was approved and any recorded exception; analysts decide. | Barbara |
+| Who loses the money if the buyer cancels? | Today, the merchant, even when the agent made the mistake. With Intent Judge a mismatched order is held, so nothing is charged. If it's disputed, the merchant has proof of what the cardholder approved, and responsibility follows the evidence, not the easiest party to charge back. For a small business that is the difference between a bad week and a closed shop. | Alex |
+| Do you change who is liable? | No. We produce evidence and a recommendation; the analyst decides. Shifting liability needs Mastercard network rules, so that's a pilot question. | Barbara |
+| Why does Mastercard need this? | In agentic commerce software picks the payment rail. Cards win if they are the rail that can prove what the person meant. Intent Judge makes that trust visible and agent-native. | Ryan |
 | Why would merchants adopt? | Zero integration, and evidence against "I didn't want that" disputes; 93% want agent providers to carry losses — we show who acted outside approval. | Alex |
 | What about Amex's protection? | Amex absorbs losses in a closed network; on an open network Mastercard competes with prevention and evidence. | Alex |
 | Is "intent-checked" a guarantee? | No. It means approved requirements matched the merchant-signed offer. Liability protection would need Mastercard network rules — that's a pilot question. | Barbara |
@@ -35,3 +38,25 @@ Rules: start immediately; say "three layovers" consistently; no "um, so MasterCa
 - **Microsoft lens:** Microsoft is where agents are born (Copilot, Copilot Checkout, Edge, Windows) and a trusted-AI platform (Foundry); Mastercard is the network and the VI standard. Intent Judge is the handshake between them: Copilot checks intent, then Agent Pay moves the money. Mastercard gets fewer "not as described" disputes, an evidence layer, and merchants opening catalogs to agents (only 28% do today); Microsoft gets trusted agent commerce.
 - **Ask:** pilot with one issuer + one travel merchant, Copilot Checkout as the channel *(proposed, not announced)*; measure dispute rate and false-hold rate.
 - **Tech mentions:** one line only (Foundry for clarify/explain; Entra + Key Vault are why it is trustworthy in production). No tech-stack slide.
+
+## Money and relevance (agreed Oct 12)
+**Headline for the problem-to-solution turn:** *Make the card the safest way for an AI agent to pay.*
+
+**Merchant money, in one breath:** "When an agent buys the wrong thing, the merchant eats the dispute: about $128 a chargeback, plus the goods. A small business can't. We hold the wrong order before anything is charged, and if it's disputed, the merchant has the proof." (Persona is illustrative. Say so.)
+
+**Why this keeps Mastercard relevant (hypotheses, say "we believe"):**
+1. *Trust is the moat.* Other rails don't give you dispute rights and evidence. Intent Judge makes that edge agent-native: the payment rail that can prove what you meant.
+2. *Distribution.* It reaches agents where they're born: Copilot and Copilot Checkout (proposed pilot channel, not announced).
+3. *Standard ownership.* Register category constraints in the open Verifiable Intent spec so agents adopt Mastercard's format.
+4. *A network service.* Intent assurance for issuers and merchants, as a pilot question.
+
+**Slide wording rule:** Mastercard is not scoring backend detail. No API, JWT, endpoint or "409" on slides. Say "the payment never leaves the card." Technical answers stay in the Q&A pocket.
+
+## Adoption playbook slide: what each role does
+| Agent developer (e.g. Copilot Checkout) | Product manager | Merchant |
+|---|---|---|
+| 1. Ask the person to approve a short requirement list before shopping | 1. Pick the few requirements that matter per category (flights: stops, departure time, refundable) | 1. Keep signing the order (Verifiable Intent already requires it) |
+| 2. Send the merchant-signed order to the check before paying | 2. Design the held moment: what the person sees and when an exception is allowed | 2. Publish the details people care about (refundable, stops) so more orders pass |
+| 3. Pay on PASS; show the held screen on HOLD | 3. Track two numbers in the pilot: dispute rate on checked vs unchecked orders, and false-hold rate | 3. Use the Intent Receipt when a dispute arrives |
+
+Footer line for Mastercard: register category constraints in the Verifiable Intent spec; offer intent assurance to issuers.
