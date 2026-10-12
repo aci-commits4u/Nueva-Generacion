@@ -91,7 +91,13 @@ class DisputeBody(BaseModel):
 # --------------------------------------------------------------------------- routes
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok"}
+    """`rules_engine` tells the UI whether decisions are real: loaded | fake (dev stand-in) | missing."""
+    try:
+        mod = importlib.import_module("app.rules_engine")
+        engine = "loaded" if getattr(mod, "__file__", None) else "fake"
+    except ModuleNotFoundError:
+        engine = "missing"
+    return {"status": "ok", "rules_engine": engine}
 
 
 @app.get("/api/scenarios")

@@ -53,11 +53,11 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[JV]` If G3 missed: apply the cut line (UI polish → evidence narrative → vague-request demo). Never cut rules, 409, Offer B HOLD
 
 ## 6 · T+1:50→2:20 — Demo page + live AI
-- [ ] `[J]` `web/` three columns per Plan 2 §3: request/requirements · offers · result; PASS/HOLD/BLOCK = icon + text + color
-- [ ] `[J]` One-click answer chips for the clarify questions; modal quotes the exact exception + hash; 409 message shown in UI
+- [x] `[J]` `web/` three columns per Plan 2 §3: request/requirements · offers · result; PASS/HOLD/BLOCK = icon + text + color (verified in a headless browser against the FAKE dev engine only: `scripts/dev_server.py`)
+- [x] `[J]` One-click answer chips for the clarify questions; modal quotes the exact exception + hash; 409 message shown in UI (fake engine only; re-verify after Victor's merge)
 - [ ] `[J]` Dispute modal → print-friendly one-page **Intent Receipt** (the evidence packet)
 - [ ] `[J]` `[Reset demo]` works; fixed demo ids/clock so hashes repeat
-- [ ] `[J]` Footer copy: "intent-checked" only; **no** "verified by Mastercard / certified / liability protected" anywhere (grep UI + docs)
+- [x] `[J]` Footer copy: "intent-checked" only; **no** "verified by Mastercard / certified / liability protected" anywhere (grep of `app/` and `web/` clean; docs still to grep)
 - [ ] `[V]` `foundry_client` live: AzureOpenAI, JSON mode, `temperature=0`, Pydantic validation, 3 s timeout → mock + `llm_fallback` badge
 - [ ] `[V]` `tests/test_injection.py`: injection in traveler text and in a merchant field → rules result unchanged; extract adds/removes nothing
 - [ ] `[V]` "Florida cheap Oct 20" in live mode returns the 2 questions
