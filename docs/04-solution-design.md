@@ -29,6 +29,23 @@ Pitch line: **"The AI never approves anything. It helps the traveler say what th
 - More rules in VI alone: can't capture natural language ("nonstop, morning") without a step that structures it — that's our Clarify/Approve stage, and we then *do* express it as a VI constraint.
 - Absorb losses like Amex: too costly on an open network; we compete with evidence and prevention.
 
+## Who bears the loss when an order goes wrong (the merchant-cash-flow question)
+Raised in Discovery: if a buyer cancels or disputes, who loses the money? A merchant that relies on those funds, such as a small business owner, can lose the business. Today, when an AI agent buys the wrong thing, the merchant usually carries the dispute (US average **$128 per chargeback**, excluding the lost goods; travel averages **$120**) even though it did nothing wrong. Source: Mastercard, see `03-research-and-data.md`.
+
+| Situation | Today (agent buys the wrong thing) | With Intent Judge |
+|---|---|---|
+| Agent is about to buy something the cardholder didn't approve | Merchant holds inventory, then absorbs the dispute (fee + goods) | **HOLD: nothing is charged.** The merchant never carries the order |
+| Cardholder saw the mismatch and accepted it | Same dispute risk | The exception is recorded for that exact offer; informed consent is on the Intent Receipt. Recommendation: cardholder |
+| Merchant's signed offer contradicts what it delivered | Murky | Recommendation: merchant. We say so; that fairness is why a bank would trust the receipt |
+| Forged or tampered credential | Fraud path | BLOCK, fraud path, reason code 4837 |
+| Normal cancellation within the merchant's own policy | Ordinary refund | Out of scope, unchanged |
+
+Three levers: **prevention** (a held order is never charged), **evidence** (the Intent Receipt shows what was approved, what the merchant signed, and any accepted exception), **fair attribution** (responsibility follows the signed evidence, not whoever is easiest to charge back).
+
+**Illustrative persona (label it as illustrative on any slide):** a small travel business with thin margins, for whom a handful of disputes a month is real money.
+
+**What we do not claim:** we don't move money, guarantee payment, speed up settlement, or change who is liable. Those would need Mastercard network rules. They are pilot questions, not features.
+
 ## Scope
 **In:** flights as the demo category on a category-neutral design (`category` field + category-neutral VI constraint); synthetic data; clarify/extract; approve; deterministic check; explain; exceptions; purchase enforcement; evidence packet; 12-case test set; demo page; offline mock mode.
 **Out:** live payments; real Mastercard/merchant/cardholder data; live dispute systems (Mastercom/Ethoca); automated liability decisions; additional categories beyond flights (roadmap: hotels, retail, subscriptions); agent registration (Agent Pay covers it); production deployment.
