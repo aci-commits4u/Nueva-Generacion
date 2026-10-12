@@ -82,3 +82,52 @@ def test_block_cannot_suggest_accepting_exception(ai):
     decision = Decision(decision_id='d', requirement_set_id='r', offer_hash='h', result='BLOCK', vi_chain_valid=False, merchant_signature_valid=True,
         created_at=datetime.now(timezone.utc), checks=[])
     assert ai.explain(decision, base_requirements()).suggested_next_step == 'choose_another'
+
+
+@pytest.mark.parametrize('text', ['I do not want nonstop', "I don't need nonstop", 'not nonstop', 'nonstop is not required'])
+def test_negated_nonstop_is_not_a_nonstop_requirement(ai, text):
+    assert ai.extract_requirements(text).draft_requirements['max_stops'] is None
+
+
+@pytest.mark.parametrize('text', ['0 passengers', '21 travelers', '999 people', 'up to 999 connections'])
+def test_invalid_counts_stay_reviewable_not_server_error(ai, text):
+    result = ai.extract_requirements(text)
+    assert result.llm_fallback
+    assert 'clarif' in result.notes.lower() or 'review' in result.notes.lower()
+    assert result.draft_requirements['passengers'] == 1
+    assert result.draft_requirements['max_stops'] is None
+
+
+def test_refund_and_cabin_negations_are_not_positive_preferences(ai):
+    result = ai.extract_requirements('I do not need refundable and I do not want business class')
+    assert result.draft_requirements['refundable_required'] is None
+    assert result.draft_requirements['cabin'] is None
+
+
+def test_arrival_deadline_is_extracted(ai):
+    assert ai.extract_requirements('arrive by 18:00').draft_requirements['arrive_by'] == '18:00'
+
+
+def test_explicit_route_labels_override_word_order(ai):
+    result = ai.extract_requirements('To Orlando from JFK on Oct 20 under $300', '2026-10-12')
+    assert result.draft_requirements['origin_airports'] == ['JFK']
+    assert result.draft_requirements['destination_airports'] == ['MCO']
+
+
+@pytest.mark.parametrize('text', ['$' + '9' * 11000, '9' * 11000, '9' * 11000 + ' passengers', 'up to ' + '9' * 11000 + ' stops'])
+def test_excessive_numeric_input_is_safe_offline(ai, text):
+    result = ai.extract_requirements(text)
+    assert result.llm_fallback
+    assert result.draft_requirements['max_total_cents'] is None
+    assert result.draft_requirements['max_stops'] is None
+    assert result.draft_requirements['passengers'] == 1
+
+
+def test_missing_approval_never_suggests_an_exception(ai):
+    decision = Decision(decision_id='d', requirement_set_id='r', offer_hash='h', result='HOLD', vi_chain_valid=True,
+        merchant_signature_valid=True, created_at=datetime.now(timezone.utc), checks=[
+            CheckResult(check_id='APPROVAL', requirement='explicit approval', offer_value='missing',
+                        status='missing', message='Explicit approval is required.')])
+    assert ai.explain(decision, base_requirements()).suggested_next_step == 'none'
+    decision.checks = []
+    assert ai.explain(decision, base_requirements(approved_by_traveler=False)).suggested_next_step == 'none'
