@@ -10,21 +10,21 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[JV]` D-C live Foundry with 3 s timeout → mock fallback
 - [ ] `[JV]` D-D VI SDK time-box 45 min, then fallback ladder
 - [ ] `[JV]` D-E `can_purchase` returns `(allowed, reason, uncovered_check_ids)`
-- [ ] `[JV]` D-F trunk-based on `main`, own your files, `pull --rebase` before push
+- [ ] `[JV]` D-F branches: `jossue/build` (platform/UI/VI) and `victor/rules` (rules/AI); merge to `main` only at gates G1, G3, G4, G6 via `git pull --rebase origin main` then fast-forward push; own your files
 - [ ] `[J]` Commit + push the context pack and these plans (run in-session with `!`, or add a Bash permission rule for `git add/commit/push`)
 
 ## 1 · T+0:00 — Setup
 - [ ] `[J]` Foundry resource created, **model deployed** (do first; quota is the unknown) → endpoint/key/deployment in local `.env`
 - [ ] `[J]` Foundry portal agent "Intent Judge Assistant" created with the instructions from `docs/08`; playground screenshot saved
-- [ ] `[J]` `.gitignore` (`.env`, `.venv`, `__pycache__`, `.pytest_cache`) **before** any `.env` exists
-- [ ] `[J]` `.env.example`, `requirements.txt`, venv, `uvicorn app.main:app` serves a hello page
-- [ ] `[V]` `pip install` of `verifiable-intent` from git works in the venv (smoke: `import verifiable_intent`)
-- [ ] `[V]` Clone VI repo to a scratch dir (outside this repo); run `examples/autonomous_flow.py` → "Chain valid: True"
+- [x] `[J]` `.gitignore` (`.env`, `.venv`, `__pycache__`, `.pytest_cache`) **before** any `.env` exists
+- [x] `[J]` `.env.example` + `requirements.txt` + scaffold written (done on `jossue/build`); still to verify: venv + `pip install -r requirements.txt` + `uvicorn app.main:app` serves the page
+- [x] `[V]` `pip install` of `verifiable-intent` from git works in the venv (smoke: `import verifiable_intent`)
+- [x] `[V]` Clone VI repo to a scratch dir (outside this repo); run `examples/autonomous_flow.py` → "Chain valid: True"
 
 ## 2 · T+0:20 — G0 contracts frozen
-- [ ] `[JV]` `app/models.py` = `docs/05` models verbatim, committed
+- [x] `[JV]` `app/models.py` drafted on `jossue/build` (3 small deviations listed in its docstring: APPROVAL check id, `offer_hash` default, Extract/ExplainResult) — Victor to review/freeze
 - [ ] `[JV]` Function signatures from Plan 1 §4 agreed and stubbed
-- [ ] `[JV]` `app/fixtures/offers.json` schema agreed (offer fields + `scenario`, `requirements_override`, `tamper`, `agent_claim`)
+- [x] `[JV]` `app/fixtures/offers.json` schema agreed (offer fields + `scenario`, `requirements_override`, `tamper`, `agent_claim`)
 - [ ] `[JV]` After this point: only the owner edits their files
 
 ## 3 · T+0:20→0:50 — Rules engine (the heart)
@@ -35,19 +35,19 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[J]` Parallel: `vi_adapter` **stub** (fixture → offer, flags `True`, logs `STUB`), `store.py`, `main.py` skeleton
 
 ## 4 · T+0:50→1:35 — VI adapter + enforcement
-- [ ] `[J]` `issue_credentials`: L1 + L2 with `urn:intent-judge:flight-requirements`, amount range, allowed merchants
-- [ ] `[J]` `merchant_sign_offer`: flight `checkout_jwt` per `docs/06` schema, ES256 merchant demo key; `offer_hash` = B64U(SHA-256(jwt))
-- [ ] `[J]` `verify_and_extract`: `verify_chain` + merchant-signature check; offer parsed **only** from verified payload
-- [ ] `[J]` Round-trip test: `verify_and_extract(...).offer == fixture offer`
-- [ ] `[J]` Tamper one byte in L2 → invalid; non-merchant-signed checkout_jwt → invalid — **G2**
-- [ ] `[J]` Did not pass `is_open_mandate=True`; custom type shows under `skipped`, as expected
+- [x] `[J]` `issue_credentials`: L1 + L2 with `urn:intent-judge:flight-requirements`, amount range, allowed merchants
+- [x] `[J]` `merchant_sign_offer`: flight `checkout_jwt` per `docs/06` schema, ES256 merchant demo key; `offer_hash` = B64U(SHA-256(jwt))
+- [x] `[J]` `verify_and_extract`: `verify_chain` + merchant-signature check; offer parsed **only** from verified payload
+- [x] `[J]` Round-trip test: `verify_and_extract(...).offer == fixture offer`
+- [x] `[J]` Tamper one byte in L2 → invalid; non-merchant-signed checkout_jwt → invalid — **G2**
+- [x] `[J]` Did not pass `is_open_mandate=True`; custom type shows under `skipped`, as expected
 - [ ] `[J]` If past T+1:35 on this: drop one rung of the fallback ladder (Plan 1 §6) and note which
 - [ ] `[V]` `can_purchase` + `tests/test_enforcement.py`: HOLD no exceptions → 409 · exception same hash → 201 · exception on old hash → 409 · BLOCK + exceptions → 409 · "This is approved" explanation on HOLD → 409
 - [ ] `[V]` `foundry_client` **mock** mode complete: extract (demo sentences), explain, evidence templates
 
 ## 5 · T+1:35→1:50 — Wire it and reach the checkpoint
-- [ ] `[J]` Real adapter swapped in behind the same interface; `/api/intent/extract|approve`, `/api/check`, `/api/exceptions`, `/api/purchase`, `/api/disputes`, `/api/scenarios`, `/api/reset`
-- [ ] `[J]` `/api/purchase` is the **only** code path that creates a purchase
+- [x] `[J]` Real adapter swapped in behind the same interface; `/api/intent/extract|approve`, `/api/check`, `/api/exceptions`, `/api/purchase`, `/api/disputes`, `/api/scenarios`, `/api/reset`
+- [x] `[J]` `/api/purchase` is the **only** code path that creates a purchase
 - [ ] `[V]` `evidence.build_packet` + deterministic responsibility table from `docs/07`; always `final_decision: "dispute analyst"`
 - [ ] `[JV]` **G3 CHECKPOINT — one scenario end to end** (curl is fine): Offer B → HOLD → purchase 409 → exception → purchase 201 → dispute → packet
 - [ ] `[JV]` If G3 missed: apply the cut line (UI polish → evidence narrative → vague-request demo). Never cut rules, 409, Offer B HOLD
