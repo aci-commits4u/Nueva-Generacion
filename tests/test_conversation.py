@@ -208,6 +208,31 @@ def test_labeled_ambiguous_route_clears_only_affected_field(conversations, text,
     assert not state['approved']
 
 
+@pytest.mark.parametrize('text', [
+    'Actually NYC or Boston to Orlando or Tampa',
+    'Actually Orlando or Tampa from NYC or Boston',
+])
+def test_mixed_labeled_ambiguous_route_clears_both_endpoints(conversations, text):
+    state = conversations.turn(None, 'NYC to Orlando Oct 20 nonstop morning under $300', '2026-10-12')
+    before = state['draft_requirements'].copy()
+    sources = state['field_sources'].copy()
+    state = conversations.turn(state['conversation_id'], text, '2026-10-12')
+    route_fields = {'origin_airports', 'destination_airports'}
+    for field in route_fields:
+        assert state['draft_requirements'][field] is None
+        source = state['field_sources'][field][0]
+        assert source['quote'] == text
+        assert source['interpretation'] is None
+        assert source['turn_id'] == state['turns'][-2]['turn_id']
+    assert any('leaving from' in question.lower() for question in state['questions'])
+    assert any('destination' in question.lower() for question in state['questions'])
+    for key in before.keys() - route_fields:
+        assert state['draft_requirements'][key] == before[key]
+        assert state['field_sources'].get(key) == sources.get(key)
+    assert not state['approved']
+    assert state['llm_fallback']
+
+
 @pytest.mark.parametrize('text', ['', ' ', 'x' * 12001])
 def test_empty_and_excessive_chat_messages_are_rejected(conversations, text):
     with pytest.raises(ValueError, match='nonempty'):

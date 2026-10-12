@@ -160,10 +160,13 @@ def _offline_draft(text: str, today: date, current: dict) -> tuple[dict, str, se
         put(field, _LOCATIONS[loc.group(1)])
     elif len(locations) > 1:
         labeled_fields = set()
-        for loc in locations:
+        for index, loc in enumerate(locations):
             label = re.search(r'\b(from|to)\s*$', text[:loc.start()])
             if label:
-                labeled_fields.add('origin_airports' if label.group(1) == 'from' else 'destination_airports')
+                field = 'origin_airports' if label.group(1) == 'from' else 'destination_airports'
+                if not labeled_fields and index >= 2 and re.search(r'\bor\b', text[locations[0].end():locations[index - 1].start()]):
+                    labeled_fields.add('destination_airports' if field == 'origin_airports' else 'origin_airports')
+                labeled_fields.add(field)
         for field in labeled_fields or ('origin_airports', 'destination_airports'):
             put(field, None)
         notes.append('Conflicting airports need clarification.')
