@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-from app.models import ApprovedRequirements, Decision, EvidencePacket, ExceptionAcceptance, FlightOffer
+from app.models import ApprovedRequirements, CheckResult, Decision, EvidencePacket, ExceptionAcceptance, FlightOffer
 
 
 _ABSENT = object()
@@ -34,12 +34,6 @@ _PREFERENCE_CLAIM = re.compile(
     r"\bi (?:wanted|required|requested|asked for|approved|expected|(?:did not|didn't) want)\b",
     re.IGNORECASE,
 )
-_CONSENT = re.compile(r"\b(?:i (?:explicitly )?accept|i agree to|i approve)\b\s+\S", re.IGNORECASE)
-_NEGATION = re.compile(
-    r"\b(?:i (?:do not|don't|never|cannot|can't) (?:accept|agree|approve)|"
-    r"i (?:decline|reject)|i am not (?:accepting|agreeing|approving))\b",
-    re.IGNORECASE,
-)
 
 
 def _record_value(record: Any, key: str) -> Any:
@@ -58,7 +52,12 @@ def _validate_records(purchase: Any, decision: Decision, req: ApprovedRequiremen
     _required_id(decision.decision_id, "decision_id")
     _required_id(req.requirement_set_id, "requirement_set_id")
     _required_id(offer.offer_hash, "offer_hash")
-    if decision.requirement_set_id != req.requirement_set_id or decision.offer_hash != offer.offer_hash:
+    unbound_integrity_block = (
+        decision.result == "BLOCK" and decision.vi_chain_valid is False
+        and decision.merchant_signature_valid is True and decision.offer_hash == ""
+    )
+    if (decision.requirement_set_id != req.requirement_set_id
+            or (decision.offer_hash != offer.offer_hash and not unbound_integrity_block)):
         raise ValueError("Decision must identify these requirements and this signed offer hash")
     for key, expected in (
         ("decision_id", decision.decision_id),
@@ -79,13 +78,56 @@ def _aware_timestamp(value: Any) -> bool:
     return isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
 
 
+def _statement_checks(statement: str, checks: list[CheckResult]) -> set[str]:
+    """Match the checkout consent grammar completely, with check-specific clauses."""
+    if not isinstance(statement, str) or not statement.strip():
+        return set()
+    covered: set[str] = set()
+    offer_labels: set[str] = set()
+    for raw_clause in statement.split(";"):
+        clause = raw_clause.strip()
+        matched = False
+        for check in checks:
+            value, check_id = re.escape(check.offer_value), re.escape(check.check_id)
+            if re.fullmatch(rf"I accept {check_id}: {value}\.?", clause, re.IGNORECASE):
+                matched = True
+            elif (check.check_id == "STOPS" and check.status != "missing"
+                  and re.fullmatch(rf"I accept {value} on this itinerary\.?", clause, re.IGNORECASE)):
+                matched = True
+            else:
+                ui_match = re.fullmatch(
+                    rf"I accept {value} \({check_id}\) on offer ([A-Za-z0-9_-]+)\.?", clause, re.IGNORECASE,
+                )
+                if ui_match:
+                    matched = True
+                    offer_labels.add(ui_match.group(1))
+            if matched:
+                covered.add(check.check_id)
+                break
+        if not matched:
+            return set()
+    return covered if len(offer_labels) <= 1 else set()
+
+
 def _matching_exceptions(
     purchase: Any, decision: Decision, req: ApprovedRequirements, exceptions: list[ExceptionAcceptance],
 ) -> list[ExceptionAcceptance]:
     """Consent must match literal stored values and precede a recorded purchase."""
-    if not decision.vi_chain_valid or not decision.merchant_signature_valid or decision.result == "BLOCK":
+    if (decision.vi_chain_valid is not True or decision.merchant_signature_valid is not True
+            or decision.result != "HOLD"):
+        return []
+    check_ids = set(_CLAIM_CHECKS) - {"APPROVAL"}
+    mandatory = {"ORIGIN", "DESTINATION", "DATE", "PRICE", "CURRENCY", "PASSENGERS"}
+    if (len(decision.checks) != len(check_ids) or {check.check_id for check in decision.checks} != check_ids
+            or any(not all(isinstance(value, str) and value.strip()
+                           for value in (check.requirement, check.offer_value, check.message))
+                   or check.status not in {"pass", "fail", "missing", "not_required"}
+                   or (check.check_id in mandatory and check.status == "not_required")
+                   for check in decision.checks)):
         return []
     checks = {check.check_id: check for check in decision.checks}
+    bad_checks = [check for check in decision.checks if check.status in {"fail", "missing"}]
+    now = datetime.now(timezone.utc)
     matched = []
     for exception in exceptions:
         check = checks.get(exception.check_id)
@@ -93,11 +135,9 @@ def _matching_exceptions(
             check is None or check.check_id == "APPROVAL" or check.status not in {"fail", "missing"}
             or exception.decision_id != decision.decision_id or exception.offer_hash != decision.offer_hash
             or exception.accepted_value != check.offer_value
-            or not isinstance(exception.traveler_statement, str)
-            or not _CONSENT.search(exception.traveler_statement)
-            or _NEGATION.search(exception.traveler_statement)
+            or check.check_id not in _statement_checks(exception.traveler_statement, bad_checks)
             or not _aware_timestamp(exception.accepted_at) or not _aware_timestamp(decision.created_at)
-            or exception.accepted_at < decision.created_at
+            or not decision.created_at <= exception.accepted_at <= now
             or not req.approved_by_traveler or not _aware_timestamp(req.approved_at)
             or exception.accepted_at < req.approved_at
         ):

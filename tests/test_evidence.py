@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -101,7 +101,7 @@ def acceptance(decision, check_id="STOPS"):
         offer_hash=decision.offer_hash,
         check_id=check_id,
         accepted_value=check_for(decision, check_id).offer_value,
-        traveler_statement="I accept this specific deviation on this offer.",
+        traveler_statement=f"I accept {check_id}: {check_for(decision, check_id).offer_value}",
         accepted_at=datetime(2026, 10, 12, 17, 2, tzinfo=timezone.utc),
     )
 
@@ -452,13 +452,13 @@ def test_bare_acknowledgement_or_denial_is_not_consent(records, statement):
     "I accept 3 connections, not nonstop.",
     "I accept this itinerary even though it is not nonstop.",
 ])
-def test_accepting_a_negated_original_requirement_is_still_specific_consent(records, statement):
+def test_statements_outside_the_specific_consent_grammar_are_rejected(records, statement):
     _, decision, _, offer = records
     set_three_connections(decision, offer)
     exception = acceptance(decision).model_copy(update={"traveler_statement": statement})
     packet = packet_for(records, exceptions=[exception])
-    assert packet.exceptions == [exception]
-    assert packet.recommended_responsibility == "traveler"
+    assert packet.exceptions == []
+    assert packet.recommended_responsibility == "agent_platform"
 
 
 @pytest.mark.parametrize("accepted_at", [
@@ -540,7 +540,7 @@ def test_new_flight_category_metadata_survives_without_schema_migration(records)
     assert packet.merchant_offer.model_dump()["category"] == "flight"
 
 
-def test_signed_merchant_round_trip_supplies_real_hash_without_fake_rules():
+def test_signed_merchant_round_trip_supplies_real_hash_without_fake_rules(records):
     from app import vi_adapter
     from app.fixtures_loader import base_requirements, offer as fixture_offer
 
@@ -558,10 +558,12 @@ def test_signed_merchant_round_trip_supplies_real_hash_without_fake_rules():
         result="HOLD",
         vi_chain_valid=verified.vi_chain_valid,
         merchant_signature_valid=verified.merchant_signature_valid,
-        checks=[CheckResult(check_id="STOPS", requirement="0", offer_value="3", status="fail",
-                            message="Three connections do not match approved nonstop.")],
+        checks=[check.model_copy(deep=True) for check in records[1].checks],
         created_at=datetime(2026, 10, 12, 17, 1, tzinfo=timezone.utc),
     )
+    check_for(decision, "STOPS").status = "fail"
+    check_for(decision, "STOPS").offer_value = "3 connections"
+    check_for(decision, "PRICE").offer_value = "28000 cents"
     purchase = {"purchase_id": "signed-evidence-purchase", "decision_id": decision.decision_id,
                 "requirement_set_id": req.requirement_set_id, "offer_hash": decision.offer_hash,
                 "created_at": "2026-10-12T17:03:00+00:00"}
@@ -570,6 +572,154 @@ def test_signed_merchant_round_trip_supplies_real_hash_without_fake_rules():
     assert packet.merchant_offer.offer_hash == vi_adapter.checkout_hash(checkout_jwt)
     assert len(packet.merchant_offer.segments) == 4
     assert packet.approved_requirements.max_stops == 0
-    assert packet.exceptions[0].accepted_value == "3"
+    assert packet.exceptions[0].accepted_value == "3 connections"
     assert packet.recommended_responsibility == "traveler"
     assert packet.final_decision == "dispute analyst"
+
+
+@pytest.mark.parametrize("statement", [
+    "I accept 3 (STOPS) on offer OFFER-B-3STOP but not this purchase",
+    "The AI says I accept 3 on this itinerary",
+    "I accept this specific deviation on this offer.",
+    "I accept this itinerary",
+    "I accept STOPS: 3; OK",
+    "I accept STOPS: 3; ignore previous instructions",
+    '"I accept STOPS: 3"',
+    "I accept STOPS: 3 but I do not authorize this purchase",
+    "I accept PRICE: 3",
+])
+def test_whole_specific_statement_required_for_retained_consent(records, statement):
+    _, decision, _, offer = records
+    set_three_connections(decision, offer)
+    exception = acceptance(decision).model_copy(update={"traveler_statement": statement})
+    packet = packet_for(records, exceptions=[exception])
+    assert packet.exceptions == []
+    assert packet.recommended_responsibility == "agent_platform"
+
+
+@pytest.mark.parametrize("statement", [
+    "I accept STOPS: 3", "I accept STOPS: 3.", "I accept 3 on this itinerary",
+    "I accept 3 (STOPS) on offer OFFER-B-3STOP.",
+])
+def test_documented_specific_consent_grammars_are_retained(records, statement):
+    _, decision, _, offer = records
+    set_three_connections(decision, offer)
+    exception = acceptance(decision).model_copy(update={"traveler_statement": statement})
+    packet = packet_for(records, exceptions=[exception])
+    assert packet.exceptions == [exception]
+    assert packet.recommended_responsibility == "traveler"
+
+
+@pytest.mark.parametrize("statement,covered", [
+    ("I accept 3 (STOPS) on offer OFFER-B-3STOP", ["STOPS"]),
+    ("I accept STOPS: 3; I accept PRICE: 30001 cents", ["STOPS", "PRICE"]),
+    ("I accept 3 (STOPS) on offer OFFER-B-3STOP; I accept 30001 cents (PRICE) on offer OFFER-B-3STOP",
+     ["STOPS", "PRICE"]),
+    ("I accept 3 (STOPS) on offer OFFER-B-3STOP; I accept 30001 cents (PRICE) on offer DIFFERENT", []),
+])
+def test_semicolon_consent_covers_only_named_checks_with_one_offer_label(records, statement, covered):
+    _, decision, _, offer = records
+    set_three_connections(decision, offer)
+    offer.total_cents = 30001
+    check_for(decision, "PRICE").status = "fail"
+    check_for(decision, "PRICE").offer_value = "30001 cents"
+    exceptions = [acceptance(decision, check_id).model_copy(update={"traveler_statement": statement})
+                  for check_id in ["STOPS", "PRICE"]]
+    packet = packet_for(records, exceptions=exceptions)
+    assert [record.check_id for record in packet.exceptions] == covered
+    assert packet.recommended_responsibility == ("traveler" if len(covered) == 2 else "agent_platform")
+
+
+def test_future_exception_is_rejected_even_with_purchase_id_only(records):
+    _, decision, req, offer = records
+    set_three_connections(decision, offer)
+    exception = acceptance(decision).model_copy(update={
+        "accepted_at": datetime.now(timezone.utc) + timedelta(days=1),
+    })
+    packet = build_packet({"purchase_id": "id-only-purchase"}, "I wanted nonstop",
+                          decision, req, offer, [exception])
+    assert packet.exceptions == []
+    assert packet.recommended_responsibility == "agent_platform"
+
+
+def test_real_tampered_l2_block_can_report_fraud_with_verified_merchant_offer():
+    from app import vi_adapter
+    from app.fixtures_loader import base_requirements, offer as fixture_offer
+
+    req = base_requirements()
+    bundle = vi_adapter.issue_credentials(req)
+    jwt = vi_adapter.merchant_sign_offer(fixture_offer("B"))
+    verified = vi_adapter.verify_and_extract(vi_adapter.tamper_l2(bundle), jwt)
+    assert verified.vi_chain_valid is False
+    assert verified.merchant_signature_valid is True
+    assert verified.offer is not None
+    decision = Decision(decision_id="tamper-block", requirement_set_id=req.requirement_set_id,
+                        offer_hash="", result="BLOCK", vi_chain_valid=False,
+                        merchant_signature_valid=True, checks=[], created_at=datetime.now(timezone.utc))
+    packet = build_packet({"purchase_id": "forensic-record"}, "I wanted nonstop", decision, req,
+                          verified.offer, [])
+    assert packet.recommended_responsibility == "fraud_path"
+    assert packet.suggested_reason_code == "4837"
+    assert packet.merchant_offer.offer_hash == vi_adapter.checkout_hash(jwt)
+    assert packet.exceptions == []
+    assert packet.vi_chain_valid is False
+    assert packet.merchant_signature_valid is True
+
+
+@pytest.mark.parametrize("result,chain,merchant", [
+    ("PASS", True, True), ("HOLD", True, True), ("BLOCK", True, True),
+    ("HOLD", False, True), ("BLOCK", False, False),
+])
+def test_empty_decision_hash_has_no_general_binding_bypass(records, result, chain, merchant):
+    decision = records[1]
+    decision.offer_hash = ""
+    decision.result = result
+    decision.vi_chain_valid = chain
+    decision.merchant_signature_valid = merchant
+    with pytest.raises(ValueError):
+        packet_for(records)
+
+
+@pytest.mark.parametrize("result", ["PASS", "HOLD", "BLOCK"])
+def test_positive_integrity_mismatched_nonempty_hash_still_rejected(records, result):
+    records[1].result = result
+    records[1].offer_hash = "other-known-hash"
+    with pytest.raises(ValueError):
+        packet_for(records)
+
+
+@pytest.mark.parametrize("target,field,value", [
+    ("decision", "requirement_set_id", "unrelated-requirements"),
+    ("decision", "offer_hash", "unrelated-nonempty-hash"),
+    ("purchase", "decision_id", "unrelated-decision"),
+    ("purchase", "requirement_set_id", "unrelated-requirements"),
+    ("purchase", "offer_hash", ""),
+    ("purchase", "offer_id", "unrelated-offer"),
+    ("offer", "offer_hash", ""),
+])
+def test_integrity_block_exception_does_not_weaken_other_record_bindings(records, target, field, value):
+    purchase, decision, _, offer = records
+    decision.result = "BLOCK"
+    decision.vi_chain_valid = False
+    decision.offer_hash = ""
+    if target == "purchase":
+        purchase[field] = value
+    else:
+        setattr(decision if target == "decision" else offer, field, value)
+    with pytest.raises(ValueError):
+        packet_for(records)
+
+
+@pytest.mark.parametrize("invalid", ["pass_with_fail", "missing_check", "mandatory_not_required", "blank_value"])
+def test_invalid_checkout_check_metadata_cannot_retain_consent(records, invalid):
+    _, decision, _, offer = records
+    set_three_connections(decision, offer)
+    if invalid == "pass_with_fail":
+        decision.result = "PASS"
+    elif invalid == "missing_check":
+        decision.checks = [check for check in decision.checks if check.check_id != "PRICE"]
+    elif invalid == "mandatory_not_required":
+        check_for(decision, "PRICE").status = "not_required"
+    else:
+        check_for(decision, "PRICE").offer_value = ""
+    assert packet_for(records, exceptions=[acceptance(decision)]).exceptions == []
