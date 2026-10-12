@@ -33,6 +33,7 @@ requirements.txt         # fastapi, uvicorn[standard], pydantic>=2, openai, pyth
 ```python
 class ApprovedRequirements(BaseModel):
     requirement_set_id: str
+    category: str = "flight"               # demo category; contract is category-neutral (Plan 3)
     origin_airports: list[str]            # e.g. ["JFK","LGA","EWR"]  (required)
     destination_airports: list[str]       # e.g. ["MCO","TPA"]         (required)
     depart_date: date                     # required
@@ -113,7 +114,7 @@ class EvidencePacket(BaseModel):
 ## Sequence (happy-path HOLD demo)
 ```
 Traveler text → /intent/extract (LLM) → questions → traveler answers → /intent/approve
-  → VI L1 (issuer) + L2 (user signs constraints incl. urn:intent-judge:flight-requirements)
+  → VI L1 (issuer) + L2 (user signs constraints incl. urn:intent-judge:requirements)
 Agent picks offer → merchant signs checkout_jwt (itinerary) → agent builds L3a/L3b
   → /check: verify_chain + merchant signature → extract offer from signed payload
   → rules_engine.evaluate → HOLD (STOPS fail) → LLM explains → UI shows hold
