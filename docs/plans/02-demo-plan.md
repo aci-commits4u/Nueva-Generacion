@@ -11,16 +11,23 @@ Pitch line to land: **"The AI never approves anything. It helps the traveler say
 
 ## 2. Timing fix (the original script doesn't fit)
 
-`docs/12` gives the demo **1:40** (2:10–3:50). `docs/09` scripts **2:00**. Proposed 100-second cut:
+`docs/12` gives the demo **1:40** (2:10–3:50). `docs/09` scripts **2:00**. Proposed 98-second cut (total 1:38, under the 1:40 cap):
 
-| Clock | What happens on screen | Say (Victor narrates, Jossue drives) | What it proves |
-|---|---|---|---|
-| 0:00–0:10 | Page loads with vague request prefilled: *"NYC to Florida cheap, Oct 20"* | "Alex asks an AI agent to book a flight." | Real input from Discovery |
-| 0:10–0:35 | **Clarify** → 2 questions appear with one-click answer chips (*MCO* · *nonstop required*) → requirement card fills → **Approve** → "Signed into your Verifiable Intent mandate" | "The AI asks what's missing. Alex approves the exact list — it's signed into Mastercard's mandate, so the agent can't quietly drop *nonstop*." | Clarify stage (EY's question); AI = understand only |
-| 0:35–0:45 | Agent selects **Offer A** (nonstop, $260) → badges ✓ ✓ → **PASS** | "Most travelers never see us." | No friction on matches |
-| 0:45–1:15 | Agent selects **Offer B** (JFK→PHL→ATL→CLT→MCO, $280) → VI chain ✓, merchant sig ✓, **STOPS ✗ → HOLD** → message: *"You asked for nonstop. This itinerary has 3 connections."* → click **Buy** → red **409** | "Authorized, signed, under budget — and not what Alex meant. The AI worded that sentence; it didn't make the call. And look: nothing was charged. The payment never leaves the card, so the merchant never carries an order nobody wanted." | The client's exact example; enforcement; **merchant protected (nothing charged)** |
-| 1:15–1:35 | **Accept this exception** (modal quotes *"I accept 3 connections on offer B, this exact offer"*) → Buy succeeds → **Dispute this** → **Intent Receipt** (the evidence packet): approved list · merchant-signed offer · rule results · **recorded exception** · *recommended: traveler (informed consent)* · **Final decision: dispute analyst** | "Exceptions are specific, tied to this exact offer. If it's disputed, the analyst gets evidence, and the merchant gets proof instead of just a loss." | Evidence + human decides |
-| 1:35–1:40 | Flash the results table: **12/12 scenarios pass** | "Twelve scenarios, including tampering and prompt injection." | Tested, not staged |
+| Clock | Secs | What happens on screen | Say (Victor narrates, Jossue drives) | What it proves |
+|---|---|---|---|---|
+| 0:00–0:15 | 15 | Page loads with vague request prefilled: *"NYC to Florida cheap, Oct 20"* → **Clarify** → 2 questions with one-click chips (*MCO* · *nonstop required*) → requirement card fills → **Approve** | "Alex asks an AI agent to book a flight. The AI asks what's missing. Alex approves the exact list, and it's signed into Mastercard's mandate, so the agent can't quietly drop *nonstop*." | Clarify stage (EY's question); AI = understand only |
+| 0:15–0:23 | 8 | Agent selects **Offer A** (nonstop, $260) → checks pass → **PASS**, order goes through with zero extra taps | "A matching order goes through with zero extra taps, like tap-to-pay. Most travelers never see us." | Seamless on matches; adoption needs no new habit |
+| 0:23–0:40 | 17 | Agent selects **Offer B** (JFK→PHL→ATL→CLT→MCO, $280) → signature checks ✓, **STOPS ✗ → HOLD** → *"You asked for nonstop. This itinerary has 3 connections."* → **Buy** is refused | "Signed, under budget, and not what Alex meant. The AI worded that sentence; it didn't make the call. Nothing was charged. The payment never leaves the card, so the merchant never carries an order nobody wanted." | The client's exact example; enforcement; merchant protected |
+| 0:40–0:46 | 6 | Click **Find another offer** → offer B is marked **Held** with its failed check (STOPS); approved requirements stay; funds strip still says *Nothing was charged*; the agent keeps looking | "Alex can send the agent back out. The requirements stay, B is marked held, and nothing is charged." | Re-shop is a real step, not a reset |
+| 0:46–1:00 | 14 | Open the Held offer B → per-check box reads *"I accept 3 connections (Connections) on this exact offer"* → tick it → **Buy** now succeeds | "Alex decides this one is worth it. Each exception is one specific check, tied to this exact offer." | Exceptions are specific (AGENTS rule 6) |
+| 1:00–1:08 | 8 | **Dispute this** → Intent Receipt opens | "Later, Alex disputes it. The analyst gets one page." | Evidence exists before the argument |
+| 1:08–1:24 | 16 | **Three seat cards** side by side: Cardholder · **Merchant (highlighted, the hero card)** · Issuer, each with a headline and three lines; scroll cue to *Full receipt* below. Caption: *"One transaction, three seats, one shared record."* | "One transaction, three seats. The merchant sees proof of what the cardholder approved instead of just a loss. The cardholder sees what was agreed. The issuer sees the evidence, and the analyst decides." | Merchant is the commercial heart; recommendation only, analyst decides |
+| 1:24–1:30 | 6 | Flash the results table: **12/12 scenarios pass** | "Twelve scenarios, including tampering and prompt injection." | Tested, not staged |
+| 1:30–1:38 | 8 | Back to the highlighted merchant card | **Closing line:** "We believe checked orders mean fewer disputes, so merchants want the badge, so agents prefer the checked rail, so more cardholders trust agents." | Adoption flywheel (hypothesis, a pilot question) |
+
+Total: 15 + 8 + 17 + 6 + 14 + 8 + 16 + 6 + 8 = **98 s (1:38)**.
+
+**Find another offer beat:** it is its own 6-second beat (0:40–0:46). It does not replace another beat. The exception beat was shortened to make room, and the "Accept exception" modal is replaced by the per-check checkbox.
 
 **Moved to the Q&A pocket (ready, not scripted):** dispute on a PASS purchase ("I wanted nonstop" when never approved → `traveler`); **Tamper toggle** → BLOCK + `fraud_path`/4837; scenario 9 (summary omitted *nonstop*) and 10 (agent misdescribes offer).
 
@@ -51,6 +58,11 @@ Pitch line to land: **"The AI never approves anything. It helps the traveler say
 │ Not a Mastercard certification.                                                           │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Added since this wireframe:**
+- **Held-offer badge.** After **Find another offer**, the offer card for B shows a **Held** badge with its failed check (STOPS: 3 connections). Approved requirements stay in column 1. Nothing is charged.
+- **Per-check consent.** In column 3, each failing or missing check gets its own checkbox sentence (for example *"I accept 3 connections (Connections) on this exact offer"*). **Buy** stays refused until every failing or missing check has one.
+- **Three-seat Intent Receipt.** The receipt opens with three cards side by side: Cardholder, **Merchant (hero card, highlighted)**, Issuer. Each has a headline and three lines. The detailed receipt sits below under **Full receipt**. Caption: *"One transaction, three seats, one shared record."*
 
 Design rules for a projector: large type, high contrast, status always **icon + text + color** (never color alone), no Mastercard logos or brand marks, mobile stacks columns. AI text is always labelled "AI-generated explanation". A small badge appears only when running on fallback: `offline mode — templated explanation`.
 
