@@ -5,11 +5,12 @@ Chat text and AI responses cannot call it or change a previously confirmed snaps
 """
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from app.foundry_client import DraftRequirements, extract_requirements, questions_for
+from app.foundry_client import DraftRequirements, _extract_context, questions_for
 from app.models import ApprovedRequirements
 
 
@@ -34,18 +35,21 @@ class ConversationStore:
             'turn_id': str(uuid4()), 'role': 'user', 'text': text,
             'created_at': datetime.now(timezone.utc).isoformat(),
         }
-        extracted = extract_requirements(text, today)
+        extracted, sources = _extract_context(text, today, deepcopy(state['draft_requirements']), deepcopy(state['turns']) + [turn])
         state['turns'].append(turn)
         for field, value in extracted.draft_requirements.items():
             # Defaults have no supporting words. Do not overwrite an explicit passenger count.
-            if value is None or (field == 'passengers' and value == 1 and not any(word in text.lower() for word in ('traveler', 'passenger', 'people'))):
+            if field not in sources:
                 continue
-            state['draft_requirements'][field] = value
-            state['field_sources'][field] = [{
-                'turn_id': turn['turn_id'], 'quote': text,
-                'interpretation': deepcopy(value),
-            }]
-        state['questions'] = questions_for(state['draft_requirements'])
+            state['draft_requirements'][field] = deepcopy(value)
+            state['field_sources'][field] = deepcopy(sources[field])
+        state['questions'] = extracted.questions
+        for source in state['field_sources'].get('passengers', []):
+            count = re.search(r'\b(\d+)\s+(?:passengers?|travelers?|people)\b', source['quote'], re.IGNORECASE)
+            if count and (len(count.group(1)) > 2 or not 1 <= int(count.group(1)) <= 20):
+                question = "How many travelers (1 to 20) should I use? Reply with, for example, '2 travelers'."
+                if not any('travelers' in item for item in state['questions']):
+                    state['questions'] = (state['questions'] + [question])[:2]
         state['notes'] = extracted.notes
         state['llm_fallback'] = extracted.llm_fallback
         state['approved'] = False
@@ -65,7 +69,7 @@ class ConversationStore:
         reviewed = DraftRequirements.model_validate(fields).fields()
         if reviewed != state['draft_requirements']:
             raise ValueError('Approved requirements must match the reviewed draft')
-        if questions_for(reviewed):
+        if questions_for(reviewed) or state['questions']:
             raise ValueError('Resolve required draft fields before approval')
         if req.requirement_set_id in self._approvals:
             raise ValueError('This requirement id already has an immutable approval snapshot')
