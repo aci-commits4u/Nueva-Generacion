@@ -159,7 +159,12 @@ def _offline_draft(text: str, today: date, current: dict) -> tuple[dict, str, se
             field = 'origin_airports' if loc.group(1) in ('nyc', 'new york') else 'destination_airports'
         put(field, _LOCATIONS[loc.group(1)])
     elif len(locations) > 1:
-        for field in ('origin_airports', 'destination_airports'):
+        labeled_fields = set()
+        for loc in locations:
+            label = re.search(r'\b(from|to)\s*$', text[:loc.start()])
+            if label:
+                labeled_fields.add('origin_airports' if label.group(1) == 'from' else 'destination_airports')
+        for field in labeled_fields or ('origin_airports', 'destination_airports'):
             put(field, None)
         notes.append('Conflicting airports need clarification.')
     for label, field in (('from', 'origin_airports'), ('to', 'destination_airports')):
@@ -192,7 +197,7 @@ def _offline_draft(text: str, today: date, current: dict) -> tuple[dict, str, se
             return 0
         return int(Decimal(amount.replace(',', '')) * 100)
 
-    amounts = set(cents(amount) for amount in re.findall(r'(?:\$\s*|(?:under|below|up to|budget(?: of)?|maximum(?: of)?)\s+)(\d(?:[\d,]*\d)?(?:\.\d{1,2})?)(?!\d|\.\d)', text))
+    amounts = set(cents(amount) for amount in re.findall(r'(?:\$\s*|(?:under|below|up to|budget(?: of)?|maximum(?: of)?)\s+)(\d(?:[\d,]*\d)?(?:\.\d{1,2})?)(?!\d|,\d|\.\d|\s*(?:stops?|connections?|passengers?|travelers?|people)\b)', text))
     if not amounts and current.get('max_total_cents') is None and re.fullmatch(r'\d+(?:\.\d{1,2})?', text.strip()):
         amounts.add(cents(text.strip()))
     if amounts or re.search(r'\b(?:no budget|no price limit|no budget preference)\b', text):

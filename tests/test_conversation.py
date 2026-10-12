@@ -170,6 +170,44 @@ def test_unreviewed_seconds_cannot_be_truncated_to_match_draft(conversations):
         conversations.record_approval(state['conversation_id'], req)
 
 
+@pytest.mark.parametrize('text,field,expected', [
+    ('Actually up to 2 stops', 'max_stops', 2),
+    ('Actually up to 999 connections', 'max_stops', None),
+    ('Actually up to 2 passengers', 'passengers', 2),
+    ('Actually up to 2 travelers', 'passengers', 2),
+    ('Actually up to 2 people', 'passengers', 2),
+])
+def test_count_corrections_preserve_budget_currency_and_sources(conversations, text, field, expected):
+    state = conversations.turn(None, 'NYC to Orlando Oct 20 nonstop morning under $300', '2026-10-12')
+    before = state['draft_requirements'].copy()
+    sources = state['field_sources'].copy()
+    state = conversations.turn(state['conversation_id'], text, '2026-10-12')
+    assert state['draft_requirements'][field] == expected
+    assert state['field_sources'][field][0]['quote'] == text
+    for key in before.keys() - {field}:
+        assert state['draft_requirements'][key] == before[key]
+        assert state['field_sources'].get(key) == sources.get(key)
+    assert not state['approved']
+
+
+@pytest.mark.parametrize('text,field,question', [
+    ('Actually to Orlando or Tampa', 'destination_airports', 'destination'),
+    ('Actually from NYC or Boston', 'origin_airports', 'leaving from'),
+])
+def test_labeled_ambiguous_route_clears_only_affected_field(conversations, text, field, question):
+    state = conversations.turn(None, 'NYC to Orlando Oct 20 nonstop morning under $300', '2026-10-12')
+    before = state['draft_requirements'].copy()
+    sources = state['field_sources'].copy()
+    state = conversations.turn(state['conversation_id'], text, '2026-10-12')
+    assert state['draft_requirements'][field] is None
+    assert state['field_sources'][field][0]['quote'] == text
+    assert any(question in value.lower() for value in state['questions'])
+    for key in before.keys() - {field}:
+        assert state['draft_requirements'][key] == before[key]
+        assert state['field_sources'].get(key) == sources.get(key)
+    assert not state['approved']
+
+
 @pytest.mark.parametrize('text', ['', ' ', 'x' * 12001])
 def test_empty_and_excessive_chat_messages_are_rejected(conversations, text):
     with pytest.raises(ValueError, match='nonempty'):
