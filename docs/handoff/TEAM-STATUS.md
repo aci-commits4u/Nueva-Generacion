@@ -126,6 +126,8 @@ Live server is already running on `http://127.0.0.1:8011`; offline backup remain
 MOCK_LLM=0 FOUNDRY_LIVE_ENABLED=1 FOUNDRY_PROJECT_ENDPOINT=https://victor-lead-foundry-20261012.services.ai.azure.com/api/projects/lead-team FOUNDRY_AGENT_VERSION=2 FOUNDRY_MODEL_DEPLOYMENT=gpt-oss-120b FOUNDRY_API_MODE=chat FOUNDRY_CONFIGURE_AGENT=0 ../victor-rules/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8011
 ```
 
+Rendered-browser proof: the real website on8011 submitted `Get me NYC to Florida cheap next week.` through its Clarify button, received HTTP200 with `llm_fallback=false`, and displayed model questions. A separate complete-prompt browser request did fall back; strict validation/timeouts remain possible and the offline badge must not be hidden. This is proven live capability, not a guarantee that every request succeeds without fallback.
+
 Fresh offline regression suite after the transport fix/direct-chat guards: **520 passed**. Guard tests reject incomplete, empty, refused and tool-calling chat responses; clients close and fallback remains visibly flagged. Every PASS/HOLD/BLOCK, approval, exception and responsibility rule is unchanged. Web files remain untouched.
 
 Synthetic keys/offers only; purchases simulated; storage in-memory. Conversation traces and exceptions are unsigned application records, not new VI authorizations. Only deterministic rules decide. Evidence recommendations are advisory; final authority is the dispute analyst. No certification, liability guarantee, delivered-flight proof, or universal-category support is claimed.
