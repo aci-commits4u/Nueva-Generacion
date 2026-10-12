@@ -2,8 +2,9 @@
 checked before Victor's modules are merged. The web page shows a red "DEV FAKE ENGINE" banner.
 Never use for the real demo: run `uvicorn app.main:app` once the real modules exist.
 
-    .venv/bin/python scripts/dev_server.py        # http://localhost:8001/?dev=1
+    .venv/bin/python scripts/dev_server.py        # http://localhost:8001/?dev=1  (PORT=8011 to change)
 """
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -32,4 +33,4 @@ sys.modules["app.foundry_client"] = fake_foundry
 
 if __name__ == "__main__":
     from app.main import app
-    uvicorn.run(app, port=8001)
+    uvicorn.run(app, port=int(os.getenv("PORT", "8001")))
