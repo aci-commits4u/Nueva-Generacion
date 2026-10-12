@@ -4,7 +4,7 @@
 
 const DEV = new URLSearchParams(location.search).has("dev");
 const $ = (id) => document.getElementById(id);
-const state = { rid: null, offers: [], offerKey: null, decision: null, offer: null, purchase: null, d: 46 };
+const state = { rid: null, offers: [], offerKey: null, decision: null, offer: null, purchase: null, d: 46, held: {}, exceptions: [] };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (c) => (c == null ? "not stated" : "$" + (c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -115,17 +115,32 @@ function offerCard(o) {
   const s = o.segments, first = s[0], last = s[s.length - 1], stops = s.length - 1;
   const via = stops ? ` via ${s.slice(0, -1).map((x) => x.to_airport).join(", ")}` : "";
   const dev = DEV ? `<div class="dev"><button data-t="l2">Tamper credential</button><button data-t="checkout_sig">Forged merchant</button><button data-t="note">Inject text</button></div>` : "";
-  return `<div class="offer ${state.offerKey === o.key ? "sel" : ""}" data-key="${esc(o.key)}">
-    <div class="o-top"><span class="route">${esc(first.from_airport)} to ${esc(last.to_airport)}</span><span class="price">${money(o.total_cents)}</span></div>
+  const held = state.held[o.key];
+  const badge = held ? `<span class="badge held-badge">Held: ${esc(held.join(", "))}</span>` : "";
+  const pick = held
+    ? `<button class="pill pick">Review again</button>`  // a held offer can always be reopened, e.g. to accept an exception
+    : `<button class="pill primary pick" ${state.rid ? "" : "disabled"}>Agent selects this</button>`;
+  return `<div class="offer ${state.offerKey === o.key ? "sel" : ""} ${held ? "is-held" : ""}" data-key="${esc(o.key)}">
+    <div class="o-top"><span class="route">${esc(first.from_airport)} to ${esc(last.to_airport)}</span><span class="price">${money(o.total_cents)}</span></div>${badge}
     <div class="meta">${esc(o.merchant_name)}, ${clock(first.depart_local)} to ${clock(last.arrive_local)}, ${stops ? stops + " connection" + (stops > 1 ? "s" : "") + esc(via) : "nonstop"}</div>
     <div class="sig">Order signed by the merchant</div>
-    <button class="pill primary pick" ${state.rid ? "" : "disabled"}>Agent selects this</button>${dev}</div>`;
+    ${pick}${dev}</div>`;
+}
+const heldAll = () => state.offers.length > 0 && state.offers.every((o) => state.held[o.key]);
+function renderReshopHint() {
+  let el = $("reshop-hint");
+  if (!el) { el = document.createElement("p"); el.id = "reshop-hint"; el.className = "reshop-hint"; el.setAttribute("role", "status"); $("offers").insertAdjacentElement("beforebegin", el); }
+  const any = Object.keys(state.held).length > 0;
+  el.hidden = !any;
+  el.innerHTML = any ? "Nothing was charged. The agent keeps looking for something that matches what you approved. You can also review a held offer again." +
+    (heldAll() ? "<strong>No other offers match yet. You can accept an exception on one of the held offers.</strong>" : "") : "";
 }
 function renderOffers() {
   const main = state.offers.filter((o) => ["A", "B"].includes(o.key)), rest = state.offers.filter((o) => !["A", "B"].includes(o.key));
   $("offers").innerHTML = main.map(offerCard).join("");
   $("offers-more").innerHTML = rest.map(offerCard).join("");
   $("more").hidden = !rest.length;
+  renderReshopHint();
 }
 document.addEventListener("click", (e) => {
   const card = e.target.closest?.(".offer"); if (!card) return;
@@ -137,7 +152,7 @@ document.addEventListener("click", (e) => {
 /* ---------- Check it ---------- */
 async function check(key, extra = {}) {
   if (!state.rid) return;
-  state.offerKey = key; state.purchase = null; renderOffers();
+  state.offerKey = key; state.purchase = null; delete state.held[key]; renderOffers();
   const r = await api("/api/check", { requirement_set_id: state.rid, offer_id: key, ...extra });
   if (!r.ok) { showError(r.data?.detail || "The check could not run."); return; }
   state.decision = r.data.decision; state.offer = r.data.offer; state.exceptions = []; state.explain = r.data.explanation;
@@ -179,7 +194,7 @@ function renderResult() {
   $("blocked").hidden = true; $("purchased").hidden = true;
   renderFunds();
   const a = [];
-  if (d.result !== "PASS") a.push(`<button class="pill ghost" id="a-other">Choose another offer</button>`);
+  if (d.result !== "PASS") a.push(`<button class="pill ghost" id="a-other">Find another offer</button>`);
   if (d.result === "HOLD") a.push(`<button class="pill" id="a-exc">Accept an exception</button>`);
   a.push(`<button class="pill primary" id="a-buy">Buy</button>`);
   $("actions").innerHTML = a.join(""); $("actions").hidden = false;
@@ -204,27 +219,48 @@ function renderFunds() {
 }
 
 $("actions").addEventListener("click", async (e) => {
-  if (e.target.id === "a-other") { $("result").hidden = true; $("empty").hidden = false; state.offerKey = null; renderOffers(); }
+  if (e.target.id === "a-other") {
+    const d = state.decision, key = state.offerKey;
+    if (d && key) {
+      const names = d.checks.filter((c) => ["fail", "missing"].includes(c.status)).map((c) => CHECKNAME[c.check_id] || c.check_id);
+      state.held[key] = d.result === "BLOCK" ? ["Blocked order"] : (names.length ? names : ["Not a match"]);
+    }
+    $("result").hidden = true; $("empty").hidden = false; state.offerKey = null; state.decision = null; state.offer = null; state.exceptions = [];
+    renderOffers();
+    $("offers").scrollIntoView?.({ block: "nearest" });
+  }
   if (e.target.id === "a-exc") openException();
   if (e.target.id === "a-buy") buy();
 });
 
 /* ---------- Exceptions ---------- */
 function openException() {
-  const bad = state.decision.checks.filter((c) => ["fail", "missing"].includes(c.status));
+  const accepted = new Set(state.exceptions.map((x) => x.check_id));
+  const bad = state.decision.checks.filter((c) => ["fail", "missing"].includes(c.status) && !accepted.has(c.check_id));
   const hash = state.decision.offer_hash.slice(0, 6);
-  $("dx-quote").innerHTML = bad.map((c) => `I accept <strong>${esc(c.offer_value)}</strong> (${esc(CHECKNAME[c.check_id] || c.check_id)}) on offer ${esc(state.offer.offer_id)}, reference ${esc(hash)}.`).join("<br>");
+  $("dx-rows").innerHTML = bad.map((c, i) => `<label class="consent-row" for="dx-c${i}"><input type="checkbox" id="dx-c${i}" data-check="${esc(c.check_id)}">` +
+    `<span>I accept <strong>${esc(c.offer_value)}</strong> (${esc(CHECKNAME[c.check_id] || c.check_id)}) on this exact offer.</span></label>`).join("");
+  $("dx-foot").textContent = `Offer ${state.offer.offer_id}, reference ${hash}`;
+  $("dx-ok").disabled = true;
   $("dlg-exception").showModal();
+  $("dx-rows").querySelector("input")?.focus();
 }
+$("dx-rows").addEventListener("change", () => { $("dx-ok").disabled = !$("dx-rows").querySelector("input:checked"); });
 $("dx-cancel").addEventListener("click", () => $("dlg-exception").close());
 $("exception-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const bad = state.decision.checks.filter((c) => ["fail", "missing"].includes(c.status));
-  const statement = bad.map((c) => `I accept ${c.offer_value} (${c.check_id}) on offer ${state.offer.offer_id}`).join("; ");
-  const r = await api("/api/exceptions", { decision_id: state.decision.decision_id, check_ids: bad.map((c) => c.check_id), traveler_statement: statement });
+  const ids = [...$("dx-rows").querySelectorAll("input:checked")].map((x) => x.dataset.check);
+  if (!ids.length) return;
+  const byId = Object.fromEntries(state.decision.checks.map((c) => [c.check_id, c]));
+  let latest = null;
+  for (const id of ids) {
+    const statement = `I accept ${byId[id].offer_value} (${id}) on offer ${state.offer.offer_id}`;
+    const r = await api("/api/exceptions", { decision_id: state.decision.decision_id, check_ids: [id], traveler_statement: statement });
+    if (!r.ok) { $("dlg-exception").close(); showError(r.data?.detail || "That exception can't be accepted."); if (latest) { state.exceptions = latest; renderResult(); } return; }
+    latest = r.data.exceptions;
+  }
   $("dlg-exception").close();
-  if (!r.ok) { showError(r.data?.detail || "That exception can't be accepted."); return; }
-  state.exceptions = r.data.exceptions; renderResult();
+  state.exceptions = latest; renderResult();
 });
 
 /* ---------- Purchase (backend enforces) ---------- */
@@ -233,7 +269,7 @@ async function buy() {
   const box = $("blocked");
   if (r.status === 409) {
     const u = r.data.uncovered_checks || [];
-    box.textContent = u.length ? `Purchase blocked by Intent Judge: ${u.length} unresolved check${u.length > 1 ? "s" : ""} (${u.join(", ")}). Choose another offer or accept an exception.` : `Purchase blocked by Intent Judge: ${r.data.reason}`;
+    box.textContent = u.length ? `Purchase blocked by Intent Judge: ${u.length} unresolved check${u.length > 1 ? "s" : ""} (${u.join(", ")}). Find another offer or accept an exception.` : `Purchase blocked by Intent Judge: ${r.data.reason}`;
     box.hidden = false; return;
   }
   if (!r.ok) { showError(r.data?.detail || "The purchase could not be made."); return; }
@@ -254,7 +290,11 @@ $("dispute-form").addEventListener("submit", async (e) => {
   renderReceipt(r.data); $("dlg-receipt").showModal(); $("dlg-receipt").scrollTop = 0;
 });
 $("rc-close").addEventListener("click", () => $("dlg-receipt").close());
-$("rc-print").addEventListener("click", () => window.print());
+$("rc-print").addEventListener("click", () => {
+  const fr = document.querySelector("#receipt .full-receipt");
+  if (fr) fr.open = true;
+  window.print();
+});
 
 const MERCHANT_NOTE = {
   traveler: "The merchant delivered what it signed, and the cardholder's approved requirements and any accepted exception are on record. The evidence supports the merchant.",
@@ -266,6 +306,24 @@ const MERCHANT_NOTE = {
 const WHO = { traveler: "Cardholder", agent_platform: "Agent platform", merchant: "Merchant", fraud_path: "Fraud path", unclear: "Unclear" };
 const CODE = { "4853": "4853, cardholder dispute (not as described)", "4837": "4837, no cardholder authorization", none: "No chargeback reason code suggested" };
 
+function seatCards(p) {
+  const s = p.merchant_offer.segments, stops = s.length - 1;
+  const route = s.length ? `${s[0].from_airport} to ${s[s.length - 1].to_airport}, ${stops ? stops + " connection" + (stops > 1 ? "s" : "") : "nonstop"}` : "no verified itinerary";
+  const bad = p.checks.filter((c) => c.status === "fail" || c.status === "missing");
+  const covered = bad.every((c) => p.exceptions.some((x) => x.check_id === c.check_id));
+  const accepted = p.exceptions.length ? p.exceptions.map((x) => CHECKNAME[x.check_id] || x.check_id).join(", ") : "No changes";
+  const unverified = !p.vi_chain_valid || !p.merchant_signature_valid || p.recommended_responsibility === "fraud_path";
+  const holderHead = unverified ? "This order could not be verified." : p.exceptions.length ? "You accepted a change, and it's on record." : bad.length ? "This order differed from what you approved." : "This order matched what you approved.";
+  const merchHead = unverified ? "This order could not be verified, so it belongs on the fraud path." : !bad.length ? "This order matched what the cardholder approved." : covered ? "The cardholder accepted the differences, on record." : "This order differed from what the cardholder approved.";
+  const resp = p.recommended_responsibility;
+  const card = (cls, seat, head, lines) => `<section class="seat ${cls}"><span class="seat-title">${esc(seat)}</span><h4>${esc(head)}</h4><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></section>`;
+  return `<div class="seats">
+    ${card("", "Cardholder", holderHead, ["You approved: " + reqLines(p.approved_requirements).slice(0, 2).join("; "), `You were offered: ${route}, ${money(p.merchant_offer.total_cents)}`, "You accepted: " + accepted])}
+    ${card("hero", "Merchant", merchHead, [unverified ? "The failed verification is attached for the analyst." : "You have proof: the approved list, your signed order and any accepted exception are attached.", "Built from the order you already sign. No new integration.", MERCHANT_NOTE[resp] || MERCHANT_NOTE.unclear])}
+    ${card("", "Issuer", "Evidence is ready for the dispute analyst.", [`Credential chain: ${p.vi_chain_valid ? "valid" : "invalid"}. Merchant signature: ${p.merchant_signature_valid ? "valid" : "invalid"}.`, `Recommendation, not a decision: ${WHO[resp] || resp}, ${CODE[p.suggested_reason_code] || p.suggested_reason_code}`, "Final decision: dispute analyst."])}
+  </div><p class="seats-cap">One transaction, three seats, one shared record.</p>`;
+}
+
 function renderReceipt(p) {
   const req = p.approved_requirements, off = p.merchant_offer, s = off.segments;
   const route = s.length ? `${s[0].from_airport} to ${s[s.length - 1].to_airport}, ${s.length - 1 ? s.length - 1 + " connection(s)" : "nonstop"}, departs ${clock(s[0].depart_local)}` : "No verified itinerary";
@@ -273,6 +331,8 @@ function renderReceipt(p) {
   const ex = p.exceptions.length ? p.exceptions.map((x) => `<dt>${esc(CHECKNAME[x.check_id] || x.check_id)}</dt><dd>${esc(x.traveler_statement)} (${esc(new Date(x.accepted_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}, offer ${esc(x.offer_hash.slice(0, 6))})</dd>`).join("") : `<dt>None</dt><dd>No exceptions were recorded.</dd>`;
   $("receipt").innerHTML = `
     <div class="rhead"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><div><h3 id="rc-title">Intent Receipt</h3><span>Order ${esc(p.purchase_id)} &middot; Prepared for the issuer's dispute analyst</span></div></div>
+    ${seatCards(p)}
+    <details class="full-receipt" open><summary>Full receipt</summary>
     <h4>Cardholder's claim</h4><p>${esc(p.dispute_claim)}</p>
     <h4>Verifiable Intent chain</h4><dl><dt>Credential chain</dt><dd>${p.vi_chain_valid ? "Valid" : "Invalid"}</dd><dt>Merchant signature</dt><dd>${p.merchant_signature_valid ? "Valid" : "Invalid"}</dd></dl>
     <h4>What the cardholder approved</h4><p>${reqLines(req).map(esc).join("<br>")}</p>
@@ -282,6 +342,7 @@ function renderReceipt(p) {
     <h4>Recommendation (not a decision)</h4><dl><dt>Responsibility</dt><dd>${esc(WHO[p.recommended_responsibility] || p.recommended_responsibility)}</dd><dt>Reason code</dt><dd>${esc(CODE[p.suggested_reason_code] || p.suggested_reason_code)}</dd><dt>Why</dt><dd>${esc(p.rationale)}</dd></dl>
     <h4>What this means for the merchant</h4><p>${esc(MERCHANT_NOTE[p.recommended_responsibility] || MERCHANT_NOTE.unclear)}</p>
     ${p.narrative ? `<h4>Summary</h4><p>${esc(p.narrative)}</p>` : ""}
+    </details>
     <div class="final">Final decision: <em>${esc(p.final_decision)}</em>. This receipt is evidence, not a ruling. It is not a Mastercard certification.</div>`;
 }
 
@@ -318,7 +379,7 @@ async function refreshBanner() {
 }
 $("reset").addEventListener("click", async () => {
   await api("/api/reset", {});
-  Object.assign(state, { rid: null, offerKey: null, decision: null, offer: null, purchase: null, d: 46 });
+  Object.assign(state, { rid: null, offerKey: null, decision: null, offer: null, purchase: null, d: 46, held: {}, exceptions: [] });
   $("req-form").hidden = true; $("questions").hidden = true; $("signed").hidden = true; $("llm-badge").hidden = true;
   $("result").hidden = true; $("empty").hidden = false; $("offers-hint").hidden = false;
   $("request").value = "NYC to Florida cheap, Oct 20";

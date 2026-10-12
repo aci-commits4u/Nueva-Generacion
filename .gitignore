@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 demo-backup/*.mp4
+.claude/worktrees/
