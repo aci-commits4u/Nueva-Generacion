@@ -1,0 +1,19 @@
+# Glossary
+- **Agentic commerce** — AI agents shopping/paying on a person's behalf.
+- **Agent Pay** — Mastercard program for registered, verified agents using Agentic Tokens.
+- **Verifiable Intent (VI)** — Mastercard + Google open spec (Mar 2026): SD-JWT chain proving what a user authorized an agent to do.
+- **SD-JWT** — Selective-Disclosure JSON Web Token; each party sees only needed claims.
+- **L1 / L2 / L3** — VI layers: issuer credential / user mandate / agent fulfillment (L3a payment, L3b checkout).
+- **Immediate vs Autonomous mode** — user confirms final cart vs user sets constraints and agent acts.
+- **Mandate** — signed claim of purchase intent (checkout mandate, payment mandate).
+- **Constraint** — machine-checkable limit in an L2 mandate (amount range, allowed merchants…); custom types allowed.
+- **prompt_summary** — optional human-readable intent summary in VI; informational only.
+- **checkout_jwt** — merchant-signed representation of the checkout; its hash = `checkout_hash` = L3a `transaction_id`.
+- **AP2** — Google's Agent Payments Protocol (IntentMandate, CartMandate).
+- **Chargeback** — card dispute reversing a payment; merchant bears cost. Mastercard reason codes: **4837** no cardholder authorization; **4853** cardholder dispute (not as described); **4841** cancelled recurring.
+- **Issuer / acquirer** — cardholder's bank / merchant's bank.
+- **OTA** — online travel agency.
+- **PASS / HOLD / BLOCK** — our decisions: matches / needs traveler action / invalid credential or signature.
+- **Exception** — traveler's recorded acceptance of a specific failed/missing check for a specific offer.
+- **Intent-checked** — our label: approved requirements matched the merchant-signed offer at purchase time. Not a Mastercard certification.
+- **Foundry** — Azure AI Foundry, Microsoft's platform for models and agents.
