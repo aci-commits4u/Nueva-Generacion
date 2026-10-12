@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+openai
+python-dotenv
+pytest
+httpx
+verifiable-intent @ git+https://github.com/agent-intent/verifiable-intent.git
