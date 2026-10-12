@@ -95,4 +95,9 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] Anything that failed is fixed or cut
 - [ ] Full pitch run #2 timed
 - [ ] Q&A pocket rehearsed: live-vs-simulated answer, "what if the AI is wrong", tamper → BLOCK
+- [ ] `[J]` Re-shop step: "Find another offer" keeps approved requirements, marks the held offer "Held" with its failed check, charges nothing
+- [ ] `[J]` Per-check consent: one checkbox sentence per failing/missing check; Buy refuses until each has an exception tied to the exact offer
+- [ ] `[J]` Three-seat Intent Receipt (Cardholder, Merchant hero, Issuer) above "Full receipt", with the caption
+- [ ] `[JV]` Flywheel + tap-to-pay + can't-force-merchants lines rehearsed (flywheel and network service said as "we believe")
+- [ ] `[JV]` Re-verify all UI against Victor's real engine after merge
 - [ ] Laptop: charged, notifications off, zoom ~125%, page reset, video on desktop and phone
