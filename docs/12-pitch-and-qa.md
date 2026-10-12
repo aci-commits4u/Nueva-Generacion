@@ -28,6 +28,8 @@ Rules: start immediately; say "three layovers" consistently; no "um, so MasterCa
 | Is "intent-checked" a guarantee? | No. It means approved requirements matched the merchant-signed offer. Liability protection would need Mastercard network rules — that's a pilot question. | Barbara |
 | What's live vs mocked? | Live: VI credential creation/verification, merchant signatures, rules engine, enforcement, Foundry explanations. Simulated: the shopping agent's choice, merchant, payment. | Jossue |
 | Where's Microsoft? | Foundry agent (clarify/explain), built with GitHub Copilot; Copilot Checkout is the natural pilot channel (it plans Agent Pay integration). | Jossue |
+| How do you get mass adoption without forcing merchants? | Merchants already sign the order under Verifiable Intent, so they need no new work. Agent developers add one check before paying. A matching order goes through with zero extra taps, like tap-to-pay, so nobody learns a new habit. We believe merchants then ask for the badge because checked orders mean fewer disputes. That is a pilot question. | Alex |
+| What does each party get? | One transaction, three seats. Cardholder: the exact list they approved and a held order instead of a surprise charge. Merchant: proof of what the cardholder approved, so a dispute is not just a loss. Issuer: one shared record for the analyst, who decides. All recommendations, not rulings. | Ryan |
 | What would make you wrong? | If travelers find holds annoying or most disputes are buyer's remorse. Pilot measures false-hold rate and dispute outcomes. | Barbara |
 
 ## Positioning (agreed Oct 12): innovative, simple, Microsoft lens
@@ -36,6 +38,10 @@ Rules: start immediately; say "three layovers" consistently; no "um, so MasterCa
 - **The artifact:** the **Intent Receipt** — one page the traveler, merchant and bank can all read: what you approved, what was offered, what we found, who decided. Close the demo on it.
 - **Breadth, honestly:** one slide shows the same three steps for flights, hotels, subscriptions, each with its typical "not as described" dispute. Say: flights are built; the others are the roadmap (same engine, new category).
 - **Microsoft lens:** Microsoft is where agents are born (Copilot, Copilot Checkout, Edge, Windows) and a trusted-AI platform (Foundry); Mastercard is the network and the VI standard. Intent Judge is the handshake between them: Copilot checks intent, then Agent Pay moves the money. Mastercard gets fewer "not as described" disputes, an evidence layer, and merchants opening catalogs to agents (only 28% do today); Microsoft gets trusted agent commerce.
+- **Adoption flywheel (hypothesis, say "we believe"):** "Checked orders mean fewer disputes, so merchants want the badge, so agents prefer the checked rail, so more cardholders trust agents." A pilot question, not a fact.
+- **Tap-to-pay seamlessness:** Mastercard told us it wants seamless operations and "can only tell them to use this new method, they can't force them." So a matching order goes through with zero extra taps; the person only sees us when something does not match.
+- **You can't force merchants:** merchants already sign the order under Verifiable Intent, so adoption needs no new work from them. Agent developers add one check before paying.
+- **Merchant as the commercial heart (hypothesis):** we believe services sold to merchants carry Mastercard's biggest margins, and the Mastercard rep said "refunds cause issues for the merchant." That is why the merchant is the hero seat of the Intent Receipt. A network service for merchants is a pilot question.
 - **Ask:** pilot with one issuer + one travel merchant, Copilot Checkout as the channel *(proposed, not announced)*; measure dispute rate and false-hold rate.
 - **Tech mentions:** one line only (Foundry for clarify/explain; Entra + Key Vault are why it is trustworthy in production). No tech-stack slide.
 
@@ -43,6 +49,12 @@ Rules: start immediately; say "three layovers" consistently; no "um, so MasterCa
 **Headline for the problem-to-solution turn:** *Make the card the safest way for an AI agent to pay.*
 
 **Merchant money, in one breath:** "When an agent buys the wrong thing, the merchant eats the dispute: about $128 a chargeback, plus the goods. A small business can't. We hold the wrong order before anything is charged, and if it's disputed, the merchant has the proof." (Persona is illustrative. Say so.)
+
+**Flywheel (we believe; a pilot question):** "Checked orders mean fewer disputes, so merchants want the badge, so agents prefer the checked rail, so more cardholders trust agents."
+
+**Adoption without force:** a matching order goes through with zero extra taps, like tap-to-pay. Merchants already sign the order under Verifiable Intent, so they do no new work; agent developers add one check before paying. Mastercard "can only tell them to use this new method, they can't force them", so the design needs no forcing.
+
+**Merchant as commercial heart (hypothesis):** we believe a service sold to merchants is where Mastercard's margins are biggest, and "refunds cause issues for the merchant." The Intent Receipt puts the merchant seat first among equals: Cardholder, Merchant, Issuer.
 
 **Why this keeps Mastercard relevant (hypotheses, say "we believe"):**
 1. *Trust is the moat.* Other rails don't give you dispute rights and evidence. Intent Judge makes that edge agent-native: the payment rail that can prove what you meant.
