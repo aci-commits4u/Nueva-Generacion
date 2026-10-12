@@ -7,9 +7,9 @@
    - Badges: `Mastercard VI chain: valid` · `Merchant signature: valid` · Result `PASS` (green) / `HOLD` (amber) / `BLOCK` (red).
    - Per-check table: check · you approved · merchant offer · status.
    - Traveler message (from LLM; label "explanation, AI-generated").
-   - On HOLD: buttons **Choose another flight** and **Accept this exception** (opens a confirm modal quoting the exact change: "I accept 3 connections on offer B (hash …a1f3)").
+   - On HOLD: buttons **Choose another flight** and **Accept this exception** (opens a confirm modal quoting the exact change: "I accept 3 connections on offer B (this exact offer)").
    - **Buy** button: calls `/api/purchase`; show the 409 message if blocked ("Purchase blocked by Intent Judge: 1 unresolved check (STOPS)").
-   - After purchase: **Dispute this** → evidence packet modal (one page; print-friendly).
+   - After purchase: **Dispute this** → **Intent Receipt** modal (the evidence packet; one page; print-friendly).
 - Footer: "Synthetic demo data. 'Intent-checked' means your approved requirements matched the merchant-signed offer. Not a Mastercard certification."
 - Optional dev toggle: "Show raw credentials" (collapsible, truncated JWTs; never keys).
 
@@ -21,7 +21,7 @@ Plain, high-contrast, large type (projector). Green/amber/red with icons + text 
 2. **Clarify (20s):** type a vague variant first ("NYC to Florida cheap Oct 20") → 2 questions appear ("Which Florida airports?", "Is nonstop required?"). Answer; requirements card fills. **Approve.** "These approved requirements are signed into Mastercard's Verifiable Intent mandate. The agent can't quietly drop 'nonstop.'"
 3. **Offer A (15s):** agent selects nonstop $260 → all checks pass → **PASS**. "Most travelers never see us."
 4. **Offer B — the client's example (30s):** agent selects $280 with 3 connections → Mastercard chain ✓, merchant signature ✓, **STOPS ✗ → HOLD**. Message: "You asked for nonstop. This itinerary has 3 connections." Click **Buy** anyway → **409 blocked**. "Code enforces this, not the AI."
-5. **Exception & dispute (30s):** Accept exception (modal quotes exact change) → Buy succeeds → **Dispute this** → evidence packet: approved requirements, merchant offer, rule results, *recorded exception* → recommended: traveler (informed consent), final decision: analyst. Then show the alternate: dispute on a PASS purchase where traveler never asked nonstop → recommended: traveler, dispute likely invalid.
+5. **Exception & dispute (30s):** Accept exception (modal quotes exact change) → Buy succeeds → **Dispute this** → **Intent Receipt**: approved requirements, merchant offer, rule results, *recorded exception* → recommended: traveler (informed consent), final decision: analyst. Then show the alternate: dispute on a PASS purchase where traveler never asked nonstop → recommended: traveler, dispute likely invalid.
 6. **Close (15s):** flash test results table (12/12). "The AI never approves anything. It helps the traveler say what they mean, and code holds the agent to it."
 
 ## Backup

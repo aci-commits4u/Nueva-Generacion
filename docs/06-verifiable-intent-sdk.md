@@ -41,8 +41,9 @@ Modes: **Immediate** (2 layers; user confirms final cart) vs **Autonomous** (3 l
 ```python
 from verifiable_intent import Constraint
 flight_req = Constraint(
-    type="urn:intent-judge:flight-requirements",
+    type="urn:intent-judge:requirements",
     extra_fields={
+        "category": approved.category,  # "flight" for the demo; the constraint type is category-neutral
         "requirement_set_id": approved.requirement_set_id,
         "origin_airports": approved.origin_airports,
         "destination_airports": approved.destination_airports,
