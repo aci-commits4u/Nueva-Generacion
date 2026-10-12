@@ -120,6 +120,11 @@ details summary { cursor: pointer; color: var(--ink-2); margin: 6px 0 12px; }
 .status.HOLD { background: var(--hold-bg); color: var(--hold); }
 .status.BLOCK { background: var(--block-bg); color: var(--block); }
 .status .ico { width: 26px; height: 26px; flex: none; }
+.funds { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--line); font-weight: 500; }
+.funds::before { content: ""; width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--ink-2); }
+.funds.safe { border-color: var(--pass); color: var(--pass); } .funds.safe::before { background: var(--pass); }
+.funds.charged { border-color: var(--ink); } .funds.charged::before { background: var(--orange); }
+.funds small { display: block; font-weight: 400; color: var(--ink-2); }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .chip { font-size: .8rem; padding: 3px 10px; border-radius: 999px; background: #ece7e0; color: var(--ink); }
 .chip.bad { background: var(--block-bg); color: var(--block); }

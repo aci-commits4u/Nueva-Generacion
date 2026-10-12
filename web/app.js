@@ -177,11 +177,30 @@ function renderResult() {
   $("ai-line").hidden = !msg;
   if (msg) $("ai-line").innerHTML = `${esc(msg)}<span>AI-generated explanation${state.explain?.llm_fallback ? ", offline mode" : ""}. It explains the result; it does not decide it.</span>`;
   $("blocked").hidden = true; $("purchased").hidden = true;
+  renderFunds();
   const a = [];
   if (d.result !== "PASS") a.push(`<button class="pill ghost" id="a-other">Choose another offer</button>`);
   if (d.result === "HOLD") a.push(`<button class="pill" id="a-exc">Accept an exception</button>`);
   a.push(`<button class="pill primary" id="a-buy">Buy</button>`);
   $("actions").innerHTML = a.join(""); $("actions").hidden = false;
+}
+
+/* Where the money is. Derived from the backend's result; this page never moves or decides anything. */
+function renderFunds() {
+  const el = $("funds"), d = state.decision;
+  if (!d) { el.hidden = true; return; }
+  let cls = "safe", html;
+  if (state.purchase) {
+    cls = "charged";
+    html = state.exceptions.length
+      ? "Charged, with the cardholder's recorded exception.<small>The merchant has the cardholder's informed consent on file.</small>"
+      : "Charged. The order matches what the cardholder approved.<small>The merchant delivers exactly what the cardholder asked for.</small>";
+  } else if (d.result === "PASS") {
+    html = "Not charged yet.<small>If the agent buys, the order matches what the cardholder approved.</small>";
+  } else {
+    html = "Nothing was charged.<small>The merchant keeps its inventory and avoids a dispute over an order nobody wanted.</small>";
+  }
+  el.className = "funds " + cls; el.innerHTML = `<div>${html}</div>`; el.hidden = false;
 }
 
 $("actions").addEventListener("click", async (e) => {
@@ -219,7 +238,7 @@ async function buy() {
   }
   if (!r.ok) { showError(r.data?.detail || "The purchase could not be made."); return; }
   box.hidden = true; state.purchase = r.data.purchase_id;
-  $("actions").hidden = true;
+  $("actions").hidden = true; renderFunds();
   const p = $("purchased"); p.hidden = false;
   p.innerHTML = `<span>Purchased. Order ${esc(r.data.purchase_id)}</span><button class="pill" id="a-dispute">Dispute this</button>`;
 }
@@ -237,6 +256,13 @@ $("dispute-form").addEventListener("submit", async (e) => {
 $("rc-close").addEventListener("click", () => $("dlg-receipt").close());
 $("rc-print").addEventListener("click", () => window.print());
 
+const MERCHANT_NOTE = {
+  traveler: "The merchant delivered what it signed, and the cardholder's approved requirements and any accepted exception are on record. The evidence supports the merchant.",
+  merchant: "The merchant's signed offer contradicts what was delivered. Responsibility may rest with the merchant.",
+  agent_platform: "The order did not follow what the cardholder approved. Responsibility may rest with the agent platform, not the merchant.",
+  fraud_path: "The credential or the merchant signature failed verification. This belongs on the fraud path, not in an ordinary dispute.",
+  unclear: "There is not enough evidence to say who is responsible. The analyst decides.",
+};
 const WHO = { traveler: "Cardholder", agent_platform: "Agent platform", merchant: "Merchant", fraud_path: "Fraud path", unclear: "Unclear" };
 const CODE = { "4853": "4853, cardholder dispute (not as described)", "4837": "4837, no cardholder authorization", none: "No chargeback reason code suggested" };
 
@@ -254,6 +280,7 @@ function renderReceipt(p) {
     <h4>Checks</h4><dl>${rows}</dl>
     <h4>Exceptions the cardholder accepted</h4><dl>${ex}</dl>
     <h4>Recommendation (not a decision)</h4><dl><dt>Responsibility</dt><dd>${esc(WHO[p.recommended_responsibility] || p.recommended_responsibility)}</dd><dt>Reason code</dt><dd>${esc(CODE[p.suggested_reason_code] || p.suggested_reason_code)}</dd><dt>Why</dt><dd>${esc(p.rationale)}</dd></dl>
+    <h4>What this means for the merchant</h4><p>${esc(MERCHANT_NOTE[p.recommended_responsibility] || MERCHANT_NOTE.unclear)}</p>
     ${p.narrative ? `<h4>Summary</h4><p>${esc(p.narrative)}</p>` : ""}
     <div class="final">Final decision: <em>${esc(p.final_decision)}</em>. This receipt is evidence, not a ruling. It is not a Mastercard certification.</div>`;
 }

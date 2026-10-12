@@ -7,7 +7,7 @@
    - Badges: `Mastercard VI chain: valid` · `Merchant signature: valid` · Result `PASS` (green) / `HOLD` (amber) / `BLOCK` (red).
    - Per-check table: check · you approved · merchant offer · status.
    - Traveler message (from LLM; label "explanation, AI-generated").
-   - On HOLD: buttons **Choose another flight** and **Accept this exception** (opens a confirm modal quoting the exact change: "I accept 3 connections on offer B (hash …a1f3)").
+   - On HOLD: buttons **Choose another flight** and **Accept this exception** (opens a confirm modal quoting the exact change: "I accept 3 connections on offer B (this exact offer)").
    - **Buy** button: calls `/api/purchase`; show the 409 message if blocked ("Purchase blocked by Intent Judge: 1 unresolved check (STOPS)").
    - After purchase: **Dispute this** → **Intent Receipt** modal (the evidence packet; one page; print-friendly).
 - Footer: "Synthetic demo data. 'Intent-checked' means your approved requirements matched the merchant-signed offer. Not a Mastercard certification."

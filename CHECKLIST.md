@@ -56,7 +56,9 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [x] `[J]` `web/` three columns per Plan 2 §3: request/requirements · offers · result; PASS/HOLD/BLOCK = icon + text + color (verified in a headless browser against the FAKE dev engine only: `scripts/dev_server.py`)
 - [x] `[J]` One-click answer chips for the clarify questions; modal quotes the exact exception + hash; 409 message shown in UI (fake engine only; re-verify after Victor's merge)
 - [ ] `[J]` Dispute modal → print-friendly one-page **Intent Receipt** (the evidence packet)
-- [ ] `[J]` `[Reset demo]` works; fixed demo ids/clock so hashes repeat
+- [x] `[J]` Funds strip shows "Nothing was charged" on HOLD/BLOCK, "Charged" after purchase (with/without exception) (verified against the FAKE dev engine; re-verify after Victor merges)
+- [x] `[J]` Intent Receipt includes "What this means for the merchant" (a recommendation, never a ruling)
+- [ ] `[J]` `[Reset demo]` works; narration never quotes a specific offer reference (it changes on every check)
 - [x] `[J]` Footer copy: "intent-checked" only; **no** "verified by Mastercard / certified / liability protected" anywhere (grep of `app/` and `web/` clean; docs still to grep)
 - [ ] `[V]` `foundry_client` live: AzureOpenAI, JSON mode, `temperature=0`, Pydantic validation, 3 s timeout → mock + `llm_fallback` badge
 - [ ] `[V]` `tests/test_injection.py`: injection in traveler text and in a merchant field → rules result unchanged; extract adds/removes nothing
@@ -87,6 +89,8 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] **Concern → solution:** traceability table (`docs/04`) in the deck
 
 ## 10 · Rehearsal (with the whole team)
+- [ ] Adoption playbook slide (agent developer / product manager / merchant) drafted with Alex + Ryan; no API/JWT/backend words on any slide
+- [ ] "Who loses the money?" and "Why does Mastercard need this?" answers rehearsed in one breath each
 - [ ] Full pitch run #1 timed ≤ 5:00, demo ≤ 1:40
 - [ ] Anything that failed is fixed or cut
 - [ ] Full pitch run #2 timed
