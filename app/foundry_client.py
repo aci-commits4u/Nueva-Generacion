@@ -164,7 +164,11 @@ def _offline_draft(text: str, today: date, current: dict) -> tuple[dict, str, se
             label = re.search(r'\b(from|to)\s*$', text[:loc.start()])
             if label:
                 field = 'origin_airports' if label.group(1) == 'from' else 'destination_airports'
-                if not labeled_fields and index >= 2 and re.search(r'\bor\b', text[locations[0].end():locations[index - 1].start()]):
+                if (
+                    not labeled_fields and index >= 2
+                    and re.search(r'\bor\b', text[locations[0].end():locations[index - 1].start()])
+                    and re.fullmatch(r'\s*,?\s*(?:from|to)\s*', text[locations[index - 1].end():loc.start()])
+                ):
                     labeled_fields.add('destination_airports' if field == 'origin_airports' else 'origin_airports')
                 labeled_fields.add(field)
         for field in labeled_fields or ('origin_airports', 'destination_airports'):

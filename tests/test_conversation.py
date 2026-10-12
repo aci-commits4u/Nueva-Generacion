@@ -208,9 +208,34 @@ def test_labeled_ambiguous_route_clears_only_affected_field(conversations, text,
     assert not state['approved']
 
 
+@pytest.mark.parametrize('text,field,question', [
+    ('Actually Orlando or Tampa, I want to fly to Tampa', 'destination_airports', 'destination'),
+    ('Actually NYC or Boston, I want a flight from Boston', 'origin_airports', 'leaving from'),
+])
+def test_repeated_endpoint_clause_preserves_opposite_endpoint_and_sources(conversations, text, field, question):
+    state = conversations.turn(None, 'NYC to Orlando Oct 20 nonstop morning under $300', '2026-10-12')
+    before = state['draft_requirements'].copy()
+    sources = state['field_sources'].copy()
+    state = conversations.turn(state['conversation_id'], text, '2026-10-12')
+    for key in before.keys() - {field}:
+        assert state['draft_requirements'][key] == before[key]
+        assert state['field_sources'].get(key) == sources.get(key)
+    assert state['draft_requirements'][field] is None
+    source = state['field_sources'][field][0]
+    assert source['quote'] == text
+    assert source['interpretation'] is None
+    assert source['turn_id'] == state['turns'][-2]['turn_id']
+    assert len(state['questions']) == 1
+    assert question in state['questions'][0].lower()
+    assert not state['approved']
+    assert state['llm_fallback']
+
+
 @pytest.mark.parametrize('text', [
     'Actually NYC or Boston to Orlando or Tampa',
     'Actually Orlando or Tampa from NYC or Boston',
+    'Actually NYC or Boston, to Orlando or Tampa',
+    'Actually Orlando or Tampa, from NYC or Boston',
 ])
 def test_mixed_labeled_ambiguous_route_clears_both_endpoints(conversations, text):
     state = conversations.turn(None, 'NYC to Orlando Oct 20 nonstop morning under $300', '2026-10-12')
