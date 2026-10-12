@@ -254,7 +254,11 @@ $("dispute-form").addEventListener("submit", async (e) => {
   renderReceipt(r.data); $("dlg-receipt").showModal(); $("dlg-receipt").scrollTop = 0;
 });
 $("rc-close").addEventListener("click", () => $("dlg-receipt").close());
-$("rc-print").addEventListener("click", () => window.print());
+$("rc-print").addEventListener("click", () => {
+  const fr = document.querySelector("#receipt .full-receipt");
+  if (fr) fr.open = true;
+  window.print();
+});
 
 const MERCHANT_NOTE = {
   traveler: "The merchant delivered what it signed, and the cardholder's approved requirements and any accepted exception are on record. The evidence supports the merchant.",
@@ -266,6 +270,23 @@ const MERCHANT_NOTE = {
 const WHO = { traveler: "Cardholder", agent_platform: "Agent platform", merchant: "Merchant", fraud_path: "Fraud path", unclear: "Unclear" };
 const CODE = { "4853": "4853, cardholder dispute (not as described)", "4837": "4837, no cardholder authorization", none: "No chargeback reason code suggested" };
 
+function seatCards(p) {
+  const s = p.merchant_offer.segments, stops = s.length - 1;
+  const route = s.length ? `${s[0].from_airport} to ${s[s.length - 1].to_airport}, ${stops ? stops + " connection" + (stops > 1 ? "s" : "") : "nonstop"}` : "no verified itinerary";
+  const bad = p.checks.filter((c) => c.status === "fail" || c.status === "missing");
+  const covered = bad.every((c) => p.exceptions.some((x) => x.check_id === c.check_id));
+  const accepted = p.exceptions.length ? p.exceptions.map((x) => CHECKNAME[x.check_id] || x.check_id).join(", ") : "No changes";
+  const holderHead = p.exceptions.length ? "You accepted a change, and it's on record." : bad.length ? "This order differed from what you approved." : "This order matched what you approved.";
+  const merchHead = !bad.length ? "This order matched what the cardholder approved." : covered ? "The cardholder accepted the differences, on record." : "This order differed from what the cardholder approved.";
+  const resp = p.recommended_responsibility;
+  const card = (cls, seat, head, lines) => `<section class="seat ${cls}"><span class="seat-title">${esc(seat)}</span><h4>${esc(head)}</h4><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></section>`;
+  return `<div class="seats">
+    ${card("", "Cardholder", holderHead, ["You approved: " + reqLines(p.approved_requirements).slice(0, 2).join("; "), `You were offered: ${route}, ${money(p.merchant_offer.total_cents)}`, "You accepted: " + accepted])}
+    ${card("hero", "Merchant", merchHead, ["You have proof: the approved list, your signed order and any accepted exception are attached.", "Built from the order you already sign. No new integration.", MERCHANT_NOTE[resp] || MERCHANT_NOTE.unclear])}
+    ${card("", "Issuer", "Evidence is ready for the dispute analyst.", [`Credential chain: ${p.vi_chain_valid ? "valid" : "invalid"}. Merchant signature: ${p.merchant_signature_valid ? "valid" : "invalid"}.`, `Recommendation, not a decision: ${WHO[resp] || resp}, ${CODE[p.suggested_reason_code] || p.suggested_reason_code}`, "Final decision: dispute analyst."])}
+  </div><p class="seats-cap">One transaction, three seats, one shared record.</p>`;
+}
+
 function renderReceipt(p) {
   const req = p.approved_requirements, off = p.merchant_offer, s = off.segments;
   const route = s.length ? `${s[0].from_airport} to ${s[s.length - 1].to_airport}, ${s.length - 1 ? s.length - 1 + " connection(s)" : "nonstop"}, departs ${clock(s[0].depart_local)}` : "No verified itinerary";
@@ -273,6 +294,8 @@ function renderReceipt(p) {
   const ex = p.exceptions.length ? p.exceptions.map((x) => `<dt>${esc(CHECKNAME[x.check_id] || x.check_id)}</dt><dd>${esc(x.traveler_statement)} (${esc(new Date(x.accepted_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}, offer ${esc(x.offer_hash.slice(0, 6))})</dd>`).join("") : `<dt>None</dt><dd>No exceptions were recorded.</dd>`;
   $("receipt").innerHTML = `
     <div class="rhead"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><div><h3 id="rc-title">Intent Receipt</h3><span>Order ${esc(p.purchase_id)} &middot; Prepared for the issuer's dispute analyst</span></div></div>
+    ${seatCards(p)}
+    <details class="full-receipt" open><summary>Full receipt</summary>
     <h4>Cardholder's claim</h4><p>${esc(p.dispute_claim)}</p>
     <h4>Verifiable Intent chain</h4><dl><dt>Credential chain</dt><dd>${p.vi_chain_valid ? "Valid" : "Invalid"}</dd><dt>Merchant signature</dt><dd>${p.merchant_signature_valid ? "Valid" : "Invalid"}</dd></dl>
     <h4>What the cardholder approved</h4><p>${reqLines(req).map(esc).join("<br>")}</p>
@@ -282,6 +305,7 @@ function renderReceipt(p) {
     <h4>Recommendation (not a decision)</h4><dl><dt>Responsibility</dt><dd>${esc(WHO[p.recommended_responsibility] || p.recommended_responsibility)}</dd><dt>Reason code</dt><dd>${esc(CODE[p.suggested_reason_code] || p.suggested_reason_code)}</dd><dt>Why</dt><dd>${esc(p.rationale)}</dd></dl>
     <h4>What this means for the merchant</h4><p>${esc(MERCHANT_NOTE[p.recommended_responsibility] || MERCHANT_NOTE.unclear)}</p>
     ${p.narrative ? `<h4>Summary</h4><p>${esc(p.narrative)}</p>` : ""}
+    </details>
     <div class="final">Final decision: <em>${esc(p.final_decision)}</em>. This receipt is evidence, not a ruling. It is not a Mastercard certification.</div>`;
 }
 
