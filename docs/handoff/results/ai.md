@@ -110,3 +110,68 @@ Other commands: git status/branch/base/diff inspection, clock checks, SDK signat
 This worktree does not contain the other workers' real rules/evidence/routes, so its suite is **not** proof of the assembled app's 12 scenarios or purchase enforcement. Assemble Josue's current code with the real workers, preserve the flat check/receipt contracts, and verify B -> HOLD -> purchase 409 -> exact offer-specific acceptance -> purchase 201 -> receipt, plus tamper -> BLOCK. A bare OK must never be sufficient exception consent.
 
 In-memory conversation traces are neither durable audit logs nor user-signed transcripts; exceptions are not new signed VI credentials. The parser is conservative demo vocabulary, not general NLP. One traveler, USD for dollar amounts, and the morning interval are visible review defaults/interpretations, not evidence of unstated preferences. Keep the offline badge visible. No live Foundry, production service, certification, liability protection, or universal-category claim is justified by these results.
+
+## Review corrections — current delivery supersedes historical status above
+
+Updated October 12, 2026 at 13:45 EDT. **This appended section is authoritative for current commit scope and test totals.** All earlier sections are preserved as historical records: their initial implementation-only/report-only statements and 123-test final total do not describe this continuation. Stable public contracts and the integration/live limitations above are unchanged.
+
+**Current status: DONE_WITH_CONCERNS; offline suite 132 passed. Live SDK status remains BLOCKED / NOT_TESTED, no SDK authentication or inference attempted, latency not measured.** Ready for final scoped review; this statement does not claim that final review has already passed.
+
+### Correction round 1 — two original review bugs addressed
+
+Implementation commit **`089484c15329598b01ba10a523e32fb328b0edf1`** (13:40 EDT) changed only `app/foundry_client.py` and `tests/test_conversation.py`:
+
+- Counts in `up to 2 stops`, excessive `up to 999 connections`, and `up to 2 passengers/travelers/people` no longer become dollar limits or partial-digit prices. Only the affected count field changes; the prior budget, currency, other fields, and their source quotes remain intact. Current money exclusion is at `app/foundry_client.py:203`; five regression cases are at `tests/test_conversation.py:173-190`.
+- A solely labeled ambiguous `Actually to Orlando or Tampa` correction clears only destination; `Actually from NYC or Boston` clears only origin. The opposite endpoint and unrelated source records are preserved (`tests/test_conversation.py:193-208`).
+- Seven cases were added to the original 123-test suite. The supplied previous-round result was **130 passed**; no elapsed time or new rerun on that historical SHA is claimed here. Scoped review `cf0c134a` confirmed both original bugs ADDRESSED, but identified the new mixed-label P2 below. That review finding superseded treating the first correction as complete.
+- The task was interrupted after this code/tests commit and before its report update; both correction rounds are now recorded here without amending historical commits.
+
+### Correction round 2 — bounded mixed-label P2 fix
+
+Implementation commit **`c7b80c8cf77fa34cb20ab5c144e139e1f7ddf67e`** changes only `app/foundry_client.py` and `tests/test_conversation.py`, directly after `089484c15329598b01ba10a523e32fb328b0edf1`.
+
+Starting from the complete `NYC to Orlando Oct 20 nonstop morning under $300` draft:
+
+- `Actually NYC or Boston to Orlando or Tampa` now clears **both** origin and destination, rather than incorrectly retaining NYC.
+- The reverse `Actually Orlando or Tampa from NYC or Boston` also clears **both**, rather than retaining Orlando.
+- The bounded label rule recognizes an explicit `from`/`to` after at least two leading unlabeled airport mentions connected by `or` as also identifying the other ambiguous endpoint (`app/foundry_client.py:161-172`). It does not rewrite the general parser or change single-label-only behavior.
+- Two regressions verify both null endpoints, replacement sources citing the exact correction user turn with null interpretations, both route questions, unchanged values and source records for every unrelated field (including budget, stops and currency), `approved=False`, and offline fallback (`tests/test_conversation.py:211-233`). The original single-`to` and single-`from` regressions remain green.
+
+### Actual red/green and committed-code proof
+
+All commands ran from `/Users/victor/Nueva-Generacion/.worktrees/devin-ai-conversation` using the existing `../victor-rules/.venv/bin/python`. No environment installation or live service call occurred. Bytecode and pytest cache writes were disabled.
+
+```sh
+MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 ../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_conversation.py -k 'mixed_labeled_ambiguous_route or labeled_ambiguous_route_clears_only'
+# RED: new tests on 089484c code, before parser change:
+# 2 failed, 2 passed, 31 deselected in 0.10s; exit 1.
+# Forward failure retained ['JFK', 'LGA', 'EWR']; reverse retained ['MCO'].
+# GREEN: after bounded parser change:
+# 4 passed, 31 deselected in 0.08s; exit 0.
+
+MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 ../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider
+# Precommit full run started 2026-10-12 13:45:13 EDT:
+# 132 passed in 0.65s; exit 0.
+# Fresh full rerun on committed c7b80c8cf77fa34cb20ab5c144e139e1f7ddf67e,
+# started 2026-10-12 13:45:28 EDT:
+# 132 passed in 0.62s; exit 0.
+
+MOCK_LLM=1 PYTHONDONTWRITEBYTECODE=1 ../victor-rules/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_conversation.py -k 'count_corrections_preserve or labeled_ambiguous_route'
+# Both review rounds together: 9 passed, 26 deselected in 0.08s; exit 0.
+
+git diff --check
+# Passed before code/tests commit.
+git diff --cached --check
+# Passed for code/tests staging; only the two owned paths were staged.
+```
+
+The current full total is **116 AI/conversation/boundary cases plus 16 unchanged VI adapter cases**. This is feature-worktree proof, not proof of assembled rules/API purchase enforcement or all 12 integrated scenarios.
+
+A fresh safe local availability/configuration-presence probe printed `az available: False` and presence=False for FOUNDRY_LIVE_ENABLED, FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_AGENT_VERSION, FOUNDRY_MODEL_DEPLOYMENT and FOUNDRY_CONFIGURE_AGENT. No credential values were printed, and no SDK authentication was attempted. Live fallback and latency remain unobserved/not measured; the prior live blocker has not been resolved.
+
+### Commit and integration handoff
+
+- Incremental code/tests commit: `c7b80c8cf77fa34cb20ab5c144e139e1f7ddf67e`; its parent is `089484c15329598b01ba10a523e32fb328b0edf1`. This report is committed separately afterward. Both new commits use the requested `Generated with [Devin](https://devin.ai)` and `158243242+devin-ai-integration[bot]@users.noreply.github.com` footer; no history was amended.
+- Continuation writes are restricted to `app/foundry_client.py`, `tests/test_conversation.py`, and this report. No comments, public/shared contracts, adapter, peer implementation, frontend, other worktree, or runtime environment were changed.
+- Other commands: git status/HEAD/branch/log inspection, owned-file diff checks, local clock/availability checks, and scoped git add/commit. No fetch, merge, push, Azure call, cloud configuration, or payment was performed.
+- Integration alone assembles and publishes the approved tree to `victor/build`. This worker did **not** push this feature to that branch or to main. Preserve both review fixes when assembling; rerun the integrated enforcement/scenario suite and final scoped review before publication.
