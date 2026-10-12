@@ -1,6 +1,8 @@
 """Shared contract between rules_engine (Victor) and vi_adapter/main (Jossue).
 
 Taken from docs/05-architecture.md. Changes from the doc (flag to Victor before freeze):
+  * `category` (default "flight") on ApprovedRequirements and FlightOffer: the product is
+    category-neutral, flights are the demo (Plan 3, "C0-lite"). Class names are unchanged on purpose.
   * CheckResult.check_id also allows "APPROVAL" (docs/07 step 2 emits it).
   * FlightOffer.offer_hash defaults to "" so rules tests can build offers from fixtures
     without VI; vi_adapter always sets it from the signed checkout_jwt.
@@ -22,6 +24,7 @@ class TimeWindow(BaseModel):
 
 class ApprovedRequirements(BaseModel):
     requirement_set_id: str
+    category: str = "flight"  # flights are the demo category; the contract is category-neutral (Plan 3)
     origin_airports: list[str]
     destination_airports: list[str]
     depart_date: date
@@ -50,6 +53,7 @@ class Segment(BaseModel):
 class FlightOffer(BaseModel):
     """Extracted ONLY from the verified merchant-signed checkout_jwt."""
 
+    category: str = "flight"
     offer_id: str
     merchant_id: str
     merchant_name: str
