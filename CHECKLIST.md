@@ -10,14 +10,14 @@ Tick a box only when it's *verified* (test run, screen seen), not when it's writ
 - [ ] `[JV]` D-C live Foundry with 3 s timeout → mock fallback
 - [ ] `[JV]` D-D VI SDK time-box 45 min, then fallback ladder
 - [ ] `[JV]` D-E `can_purchase` returns `(allowed, reason, uncovered_check_ids)`
-- [ ] `[JV]` D-F trunk-based on `main`, own your files, `pull --rebase` before push
+- [ ] `[JV]` D-F branches: `jossue/build` (platform/UI/VI) and `victor/rules` (rules/AI); merge to `main` only at gates G1, G3, G4, G6 via `git pull --rebase origin main` then fast-forward push; own your files
 - [ ] `[J]` Commit + push the context pack and these plans (run in-session with `!`, or add a Bash permission rule for `git add/commit/push`)
 
 ## 1 · T+0:00 — Setup
 - [ ] `[J]` Foundry resource created, **model deployed** (do first; quota is the unknown) → endpoint/key/deployment in local `.env`
 - [ ] `[J]` Foundry portal agent "Intent Judge Assistant" created with the instructions from `docs/08`; playground screenshot saved
-- [ ] `[J]` `.gitignore` (`.env`, `.venv`, `__pycache__`, `.pytest_cache`) **before** any `.env` exists
-- [ ] `[J]` `.env.example`, `requirements.txt`, venv, `uvicorn app.main:app` serves a hello page
+- [x] `[J]` `.gitignore` (`.env`, `.venv`, `__pycache__`, `.pytest_cache`) **before** any `.env` exists
+- [ ] `[J]` `.env.example` + `requirements.txt` + scaffold written (done on `jossue/build`); still to verify: venv + `pip install -r requirements.txt` + `uvicorn app.main:app` serves the page
 - [ ] `[V]` `pip install` of `verifiable-intent` from git works in the venv (smoke: `import verifiable_intent`)
 - [ ] `[V]` Clone VI repo to a scratch dir (outside this repo); run `examples/autonomous_flow.py` → "Chain valid: True"
 
