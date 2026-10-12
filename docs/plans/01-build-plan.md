@@ -1,6 +1,6 @@
 # Plan 1 — Build plan: how we build, with what, who owns what
 
-> **Status: DRAFT — pending confirmation by Jossue + Victor.** Nothing is implemented yet.
+> **Status: confirmed by Jossue (Oct 12); Victor's confirmation not yet recorded.** Jossue's track is built through the demo UI. Victor's modules (rules engine, evidence, LLM client) are not merged yet.
 > Source of truth for rules stays `AGENTS.md`; detailed specs stay in `docs/05`–`docs/08`. This plan only decides *order, split, interfaces, and fallbacks* for **two builders**.
 > Written Oct 12, 2026 at 11:45 AM ET (T = 0).
 
@@ -41,7 +41,7 @@ Non-negotiables are the 10 rules in `AGENTS.md`. The ones that shape the code: o
 | Frontend | `web/index.html` + `app.js` + `styles.css`, vanilla JS, served by FastAPI | No build step; nothing to break on stage |
 | Tests | pytest + httpx `TestClient` | 12 scenarios + enforcement + injection |
 | Persistence | In-memory dicts (`store.py`) + a `POST /api/reset` | Demo is rerunnable in one click |
-| Dev tooling | Claude Code (reads `AGENTS.md`/`CLAUDE.md`), Copilot Free | Student Pack approval can take hours; don't wait for it |
+| Dev tooling | Coding assistants (read `AGENTS.md`), GitHub Copilot Free | Student Pack approval can take hours; don't wait for it |
 | Secrets | `.env` (gitignored), `.env.example` committed | **The repo has no `.gitignore` yet — first commit adds it** |
 
 ## 3. Ownership split (two builders)
