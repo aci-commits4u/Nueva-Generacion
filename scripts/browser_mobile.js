@@ -1,7 +1,7 @@
 async page => {
  await page.setViewportSize({width:390,height:844});
  await page.goto(new URL(page.url()).origin+'/?domain=hotel');
- await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
+ await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();
  await page.locator('[data-domain="hotel"]').click();
  await page.getByText('Interpretation settings',{exact:true}).click();
  await page.getByLabel('AI availability').selectOption('offline');

@@ -16,3 +16,4 @@
 
 #footer-about{display:none}@media(max-width:850px){#footer-about{display:block}}
 .walkthrough-top>div{display:flex;align-items:center;gap:18px}@media(max-width:520px){.walkthrough-top:has(#return-demo){flex-wrap:wrap}.walkthrough-top>div{gap:16px}.walkthrough-top #return-demo{font-size:11px}}
+.resume-link{display:inline-block;margin-top:16px;font-size:13px;min-height:44px;padding:10px 0;text-underline-offset:4px}

@@ -10,7 +10,7 @@ Open the [public product](https://intent-judge-perfected.vercel.app). Start with
 
 **Try the working demo** opens live Foundry intake. Choose Flights, Hotels, or General, then write a request or use an example. The conversational assistant asks the next useful question; the intent panel shows the captured requirements and source quotations. Choose **Review requirements**, explicitly review the rules, then approve. Compare the two synthetic offers and their deterministic checks. **Simulate purchase** creates a demo receipt. **Download evidence** exports the signed record. No real booking or payment is created.
 
-**What happens here?** gives plain-language instructions at each demo step. **How it works** replays the tutorial, and **Back to your demo** returns to the current draft. Root opens the overview; explicit `?intent=...` URLs resume saved drafts/receipts in the same browser session. **Quality** explains measured model evaluations and the daily live canary.
+**What happens here?** gives plain-language instructions at each demo step. **How it works** replays the tutorial, and **Back to your demo** returns to the current draft. Local review corrections stay intact when opening tutorial or Quality. Root opens the overview with an explicit **Resume your latest demo** link when a saved intent exists; explicit `?intent=...` URLs resume saved drafts/receipts in the same browser session. **Quality** explains measured model evaluations and the daily live canary.
 
 Offline mode stays an explicit emergency choice under Interpretation settings. It is never an automatic replacement for Foundry. The tutorial is a local teaching aid, not a model fallback or a live verification result.
 

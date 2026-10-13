@@ -24,12 +24,12 @@
 ### Task 1: Explain and guide
 **Files:** web/index.html, web/app.js, web/views/overview.js, web/views/walkthrough.js, web/styles.css, web/fonts/, .stitch/DESIGN.md, scripts/browser_product.js.
 **Interfaces:** Consumes existing api(), conversationMarkup(), stage 1–6 renderers. Produces stage 0 overview, stage 7 walkthrough, startDemo(domain), renderWalkthrough(step); existing stages keep identical API payloads.
-- [ ] Write browser_product.js: overview heading, all 5 tutorial steps, previous/replay, zero POST requests during tutorial, final CTA opens intake, no horizontal overflow at 390/1280, quality deep link, explicit existing intent resume.
-- [ ] Run against current app. Expected: FAIL missing overview heading.
-- [ ] Generate and inspect separate hero and walkthrough references; implement modules/navigation/styles faithful to references.
-- [ ] Run browser_product.js and existing browser_mobile.js adapted for navigation. Expected: PASS tutorial + real offline approval/check/purchase/evidence flow.
-- [ ] Run MOCK_LLM=1 .venv/bin/pytest -q and JS syntax checks. Expected: all tests pass.
-- [ ] Commit source, tests, design record.
+- [x] Write browser_product.js: overview heading, all 5 tutorial steps, previous/replay, zero POST requests during tutorial, final CTA opens intake, no horizontal overflow at 390/1280, quality deep link, explicit existing intent resume.
+- [x] Run against current app. Expected: FAIL missing overview heading.
+- [x] Generate and inspect separate hero and walkthrough references; implement modules/navigation/styles faithful to references.
+- [x] Run browser_product.js and existing browser_mobile.js adapted for navigation. Expected: PASS tutorial + real offline approval/check/purchase/evidence flow.
+- [x] Run MOCK_LLM=1 .venv/bin/pytest -q and JS syntax checks. Expected: all tests pass.
+- [x] Commit source, tests, design record.
 
 ### Task 2: Review and release
 **Files:** docs/16-product-walkthrough.md, DESIGN.md, docs/implementation-status.md, README.md.

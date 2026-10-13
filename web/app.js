@@ -6,7 +6,7 @@ import {walkthroughMarkup} from './views/walkthrough.js';
 const $ = s => document.querySelector(s);
 const escapeHTML = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtMoney = cents => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
-const state = {domain:'flight',stage:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live'};
+const state = {domain:'flight',stage:0,navigation:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live'};
 const samples = {
  flight:'Book me a nonstop flight from EWR to MCO on 2026-11-12 under $300.',
  hotel:'Find a hotel in Orlando from 2026-11-12 to 2026-11-14 under $300 with breakfast and free cancellation.',
@@ -14,8 +14,8 @@ const samples = {
 };
 function notice(message=''){ $('#notice').hidden=!message;$('#notice').textContent=message; if(message)$('#notice').scrollIntoView({behavior:'smooth',block:'nearest'});}
 async function busy(button,fn,label='Working…'){
- const old=button.textContent;button.disabled=true;button.textContent=label;notice();
- try{await fn();}catch(e){notice(e.message);}finally{button.disabled=false;button.textContent=old;}
+ const old=button.textContent,navigation=state.navigation;button.disabled=true;button.textContent=label;notice();
+ try{await fn();}catch(e){if(navigation===state.navigation)notice(e.message);}finally{button.disabled=false;button.textContent=old;}
 }
 function routeForStage(stage){
  if(stage===0)return '/';
@@ -23,8 +23,14 @@ function routeForStage(stage){
  if(stage===6)return '/?view=quality';
  return stage===1?'/?domain='+state.domain:'/?intent='+encodeURIComponent(state.draft.id);
 }
-function transition(stage){state.stage=stage;notice();render();window.scrollTo({top:0,behavior:'instant'});history.replaceState(null,'',routeForStage(stage));$('#workspace').focus({preventScroll:true});}
-function startDemo(domain=state.domain){state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';transition(1);}
+function transition(stage){if(stage===6||stage===7)captureEdits();state.navigation++;state.stage=stage;notice();render();window.scrollTo({top:0,behavior:'instant'});history.replaceState(null,'',routeForStage(stage));$('#workspace').focus({preventScroll:true});}
+function captureEdits(){
+ if(state.stage===1&&$('#request-text'))state.message=$('#request-text').value;
+ if(state.stage===2&&state.draft&&$('#clarify-text'))state.clarifyEdit={id:state.draft.id,revision:state.draft.revision,value:$('#clarify-text').value};
+ if(state.stage===3&&state.draft&&$('#review-form'))state.reviewEdits={id:state.draft.id,revision:state.draft.revision,controls:[...$('#review-form').querySelectorAll('input,select,textarea')].map(el=>({value:el.value,checked:el.checked}))};
+}
+function currentRequest(navigation,intentId=null){return state.navigation===navigation&&(!intentId||state.draft?.id===intentId);}
+function startDemo(domain=state.domain){state.reviewEdits=null;state.clarifyEdit=null;state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';transition(1);}
 function showWalkthrough(){if(state.stage>=1&&state.stage<=5)state.returnStage=state.stage;state.walkthroughStep=0;transition(7);}
 const stepHelp={
  1:['Start with your words','Choose a profile, describe what matters, and send your request. Foundry proposes a draft and checks for missed requirements. Try an example if you want a starting point. Nothing is approved yet.'],
@@ -46,7 +52,7 @@ function render(){
  $('#context-title').textContent=state.domain[0].toUpperCase()+state.domain.slice(1)+' request';
  $('#mode-status').textContent=state.draft?.mode==='offline'?'Explicit offline mode':state.draft?'Live Foundry':'Synthetic commerce demo';
  $('#workspace').className=state.stage===2?'conversation-canvas':'';
- if(state.stage===0)$('#workspace').innerHTML=overviewMarkup();else if(state.stage===7)renderWalkthrough();else if(state.stage===1)renderIntake();else if(state.stage===2)renderConversation();else if(state.stage===3)renderReview();else if(state.stage===4)renderOffers();else if(state.stage===5)renderReceipt();else renderQuality();
+ if(state.stage===0)$('#workspace').innerHTML=overviewMarkup(state.latestIntent?'/?intent='+encodeURIComponent(state.latestIntent):null);else if(state.stage===7)renderWalkthrough();else if(state.stage===1)renderIntake();else if(state.stage===2)renderConversation();else if(state.stage===3)renderReview();else if(state.stage===4)renderOffers();else if(state.stage===5)renderReceipt();else renderQuality();
  document.querySelectorAll('[data-walkthrough]').forEach(b=>b.onclick=showWalkthrough);
  document.querySelectorAll('[data-start-demo]').forEach(b=>b.onclick=()=>startDemo());
  renderSummary();
@@ -69,12 +75,13 @@ function renderIntake(){
  $('#sample-standard').onclick=()=>{$('#request-text').value=samples[state.domain];$('#request-text').focus();};
  $('#sample-ambiguous').onclick=()=>{$('#request-text').value=state.domain==='flight'?'I need a nonstop flight to Florida under $300.':samples[state.domain];$('#request-text').focus();};
  $('#ai-mode').onchange=e=>state.mode=e.target.value;
- $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{state.draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});transition(2);},'Interpreting and checking coverage…');};
+ $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation;const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
 }
 function renderConversation(){
  const d=state.draft;$('#workspace').innerHTML=conversationMarkup(d,escapeHTML);
+ if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
  $('#review-now').onclick=()=>transition(3);
- const send=text=>busy($('#clarify-form button'),async()=>{state.draft=await api(`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});render();},'…');
+ const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;const draft=await api(`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'…');
  $('#clarify-form').onsubmit=e=>{e.preventDefault();send($('#clarify-text').value);};
  document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>send(b.dataset.reply));
 }
@@ -94,9 +101,11 @@ function fieldMarkup(key,spec){
 function renderReview(){
  const d=state.draft,p=state.profiles[d.domain];
  $('#workspace').innerHTML=`<section><div class="section-head"><span class="eyebrow">02 / YOUR APPROVAL IS THE SOURCE OF TRUTH</span><h1 class="page-title">These are the rules you authorize.</h1><p>Review what the ${d.mode==='live'?'AI':'emergency parser'} captured. Answer what is missing. Nothing is approved until you confirm.</p></div><div class="review-layout"><aside class="request-summary"><span class="eyebrow">YOUR ORIGINAL REQUEST</span><blockquote>“${escapeHTML(d.message)}”</blockquote><span class="small">${d.mode==='live'?`Live Foundry · ${escapeHTML(d.model)}`:'Emergency offline parser — limited phrase support'}</span><p>${escapeHTML(d.explanation)}</p><p>A blank optional field means unresolved. “No preference” is a choice you make.</p>${d.unsupported.length?`<div class="unsupported"><b>Not yet enforceable</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p>Keep these in your approval to hold checkout, or specifically remove a condition in the review below.</p></div>`:''}</aside><form id="review-form"><div class="flagged-review">${d.unsupported.length?`<h3>Resolve the flagged conditions</h3><p class="small">Keep each condition to hold checkout, or explicitly remove it as a separate requirement. Your removal is recorded alongside the original request.</p>${d.unsupported.map((x,i)=>`<label class="consent"><input type="checkbox" data-remove-condition="${i}"><span>I remove “${escapeHTML(x)}” as a separate purchasing requirement. The fields I review below express what I authorize.</span></label>`).join('')}`:''}</div><div class="fields">${Object.entries(p.fields).map(([k,f])=>fieldMarkup(k,f)).join('')}</div><div class="field"><label for="missed-requirements">Any other requirement we missed?</label><textarea id="missed-requirements" name="missed_requirements" maxlength="2000" placeholder="One additional requirement per line"></textarea><small>Correct a supported field above, or record an additional condition here. Additional conditions stay in your approval and hold checkout until an evaluator supports them.</small></div><div class="review-actions"><button type="button" class="text-button" id="no-preference">No preference for unanswered optional details ↗</button><label class="consent"><input type="checkbox" id="review-confirm" required><span>I reviewed my original request and every requirement above, including each explicit no preference. These are the rules I authorize for this demo.</span></label><button class="primary" type="submit">Approve these requirements <span aria-hidden="true">→</span></button><p class="small">${d.unsupported.length?'Unsupported conditions remain held after approval.':'Your approved requirements will be signed into a Verifiable Intent mandate.'}</p></div></form></div></section>`;
+ if(state.reviewEdits?.id===d.id&&state.reviewEdits.revision===d.revision)[...$('#review-form').querySelectorAll('input,select,textarea')].forEach((el,i)=>{const saved=state.reviewEdits.controls[i];if(saved){el.value=saved.value;if(el.type==='checkbox')el.checked=saved.checked;}});
  document.querySelectorAll('[data-no-preference]').forEach(box=>{box.onchange=()=>{const input=$('#field-'+box.dataset.noPreference);input.disabled=box.checked;if(input.type==='time')$('#'+input.id+'-end').disabled=box.checked;};box.onchange();});
  $('#no-preference').onclick=()=>{document.querySelectorAll('[data-no-preference]').forEach(box=>{const input=$('#field-'+box.dataset.noPreference);if(!input.value){box.checked=true;box.onchange();}});};
  $('#review-form').onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
+   const navigation=state.navigation;
    const fields={};
    for(const [k,f] of Object.entries(p.fields)){
     const input=$('#field-'+k),pref=$(`[data-no-preference="${k}"]`);
@@ -108,10 +117,14 @@ function renderReview(){
     else if(f.type==='window'){const end=$('#field-'+k+'-end').value;if(!end)throw new Error('Choose both ends of the local departure window.');fields[k]=[input.value,end];}
     else fields[k]=input.value.trim();
    }
-   state.draft=await api(`/api/intents/${d.id}/answers`,{revision:d.revision,fields,removed_unsupported:d.unsupported.filter((x,i)=>$(`[data-remove-condition="${i}"]`)?.checked),unsupported:[...new Set([...d.unsupported.filter((x,i)=>!$(`[data-remove-condition="${i}"]`)?.checked),...$('#missed-requirements').value.split('\n').map(x=>x.trim()).filter(Boolean)])],confirmation:true});
-   const approved=await api(`/api/intents/${d.id}/approve`,{revision:state.draft.revision,digest:state.draft.digest,confirmation:true});state.offers=approved.offers;state.draft.approved=approved.approved;
-   await Promise.all(state.offers.map(async o=>{state.decisions[o.id]=await api('/api/check',{intent_id:d.id,offer_id:o.id});}));
-   transition(4);
+   const reviewed=await api(`/api/intents/${d.id}/answers`,{revision:d.revision,fields,removed_unsupported:d.unsupported.filter((x,i)=>$(`[data-remove-condition="${i}"]`)?.checked),unsupported:[...new Set([...d.unsupported.filter((x,i)=>!$(`[data-remove-condition="${i}"]`)?.checked),...$('#missed-requirements').value.split('\n').map(x=>x.trim()).filter(Boolean)])],confirmation:true});
+   if(!currentRequest(navigation,d.id))return;
+   state.draft=reviewed;state.reviewEdits=null;
+   const approved=await api(`/api/intents/${d.id}/approve`,{revision:reviewed.revision,digest:reviewed.digest,confirmation:true});
+   if(!currentRequest(navigation,d.id))return;
+   const decisions=await Promise.all(approved.offers.map(async o=>[o.id,await api('/api/check',{intent_id:d.id,offer_id:o.id})]));
+   if(!currentRequest(navigation,d.id))return;
+   state.offers=approved.offers;state.draft.approved=approved.approved;state.decisions=Object.fromEntries(decisions);transition(4);
  },'Signing your approved requirements…');};
 }
 function displayValue(check,value){
@@ -131,12 +144,12 @@ function renderOffers(){
  return `<article class="offer"><span class="eyebrow">${i===0?'THE FIRST OFFER':'THE LOWER-PRICE OPTION'}</span><div class="status ${d.status==='PASS'?'':d.status==='BLOCK'?'block':'hold'}">${d.status==='PASS'?'✓ Intent-checked':accepted?'! Differences accepted':d.status==='BLOCK'?'× Blocked':'! On hold'}</div><div class="route">${escapeHTML(route)}</div><p class="facts-summary">${domain==='flight'?`${escapeHTML(f.departure_local)} departure · ${f.duration_minutes} minutes total`:escapeHTML(f.title)}</p><div class="price">${fmtMoney(f.total_cents)}</div><p class="facts-summary">${escapeHTML(human)}</p><div class="check-list">${business.map(checkMarkup).join('')}</div><div class="offer-controls">${d.status==='PASS'||accepted?`<button class="primary" data-purchase="${o.id}">Simulate purchase →</button>`:`<button class="secondary" data-review="${o.id}" ${d.status==='BLOCK'?'disabled':''}>Review ${business.filter(c=>c.status!=='pass').length===1?'this difference':'the differences'} →</button><button class="text-button" data-test-gate="${o.id}">Demonstrate the purchase gate ↗</button>`}</div><p class="vi-note"><b>${d.native_vi_passed?'VI chain + native rules pass':'VI native policy needs attention'}.</b> ${d.status==='PASS'?'Approved domain requirements also match.':'Our domain checks explain why checkout is held.'}</p><button class="text-button" data-explain="${o.id}">${state.draft.mode==='live'?'Ask Foundry to explain':'Explain the checks'} ↗</button><div class="ai-explanation" id="explanation-${o.id}" hidden></div><details><summary>View signature & verification record</summary><p class="hash">Offer hash: ${escapeHTML(o.offer_hash)}</p><p class="small">${d.ledger.map(l=>escapeHTML(l.type)+' — '+escapeHTML(l.status)).join('<br>')}</p><p class="small">${f.segments?f.segments.map(s=>escapeHTML(s.origin)+' → '+escapeHTML(s.destination)).join('<br>'):''}</p><p class="small">Every purchase rechecks the signature, expiry, approval, native rules, and specific exceptions.</p></details></article>`;
  }).join('')}</div><p class="comparison-foot">Merchant-signed offers <span class="dot">·</span> Exact offer-bound consent <span class="dot">·</span> Evidence you can download. This is a configurable synthetic demonstration, not live inventory.</p></section>`;
  document.querySelectorAll('[data-purchase]').forEach(b=>b.onclick=()=>busy(b,()=>purchase(b.dataset.purchase),'Confirming demo booking…'));
- document.querySelectorAll('[data-explain]').forEach(b=>b.onclick=()=>busy(b,async()=>{const d=state.decisions[b.dataset.explain],n=await api(`/api/decisions/${d.id}/explain`,{});const target=$('#explanation-'+b.dataset.explain);target.hidden=false;target.innerHTML=`<span class="eyebrow">${n.mode==='live'?'FOUNDRY EXPLANATION':'DETERMINISTIC EXPLANATION'}</span><p>${escapeHTML(n.text)}</p><p class="small">Explanation only. The rules engine decides; you authorize exceptions.</p>`;},'Explaining the checks…'));
+ document.querySelectorAll('[data-explain]').forEach(b=>b.onclick=()=>busy(b,async()=>{const navigation=state.navigation,d=state.decisions[b.dataset.explain],n=await api(`/api/decisions/${d.id}/explain`,{});if(!currentRequest(navigation))return;const target=$('#explanation-'+b.dataset.explain);target.hidden=false;target.innerHTML=`<span class="eyebrow">${n.mode==='live'?'FOUNDRY EXPLANATION':'DETERMINISTIC EXPLANATION'}</span><p>${escapeHTML(n.text)}</p><p class="small">Explanation only. The rules engine decides; you authorize exceptions.</p>`;},'Explaining the checks…'));
  document.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>openExceptions(b.dataset.review));
  document.querySelectorAll('[data-test-gate]').forEach(b=>b.onclick=()=>busy(b,async()=>{
-  const d=state.decisions[b.dataset.testGate];
+  const navigation=state.navigation,d=state.decisions[b.dataset.testGate];
   try{await api('/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});throw new Error('The server allowed the purchase; review the current requirements.');}
-  catch(e){notice('Purchase gate result: '+e.message);}
+  catch(e){if(currentRequest(navigation))notice('Purchase gate result: '+e.message);}
  },'Asking the backend…'));
 }
 function openExceptions(offerId){
@@ -149,19 +162,21 @@ $('#exception-form').onsubmit=e=>{
  e.preventDefault();const d=state.decisions[state.exception];const selected=[...document.querySelectorAll('input[name="exception"]:checked')].map(x=>x.value);
  if(!selected.length){$('#exception-error').textContent='Select each specific difference you accept.';$('#exception-error').hidden=false;return;}
  busy(e.submitter,async()=>{
+  const navigation=state.navigation;
   await api(`/api/decisions/${d.id}/exceptions`,{check_ids:selected,offer_hash:d.offer_hash,confirmation:true});
+  if(!currentRequest(navigation))return;
   d.accepted=d.checks.filter(c=>c.status!=='pass'&&c.exception_allowed).every(c=>selected.includes(c.check_id)) && !d.checks.some(c=>c.status!=='pass'&&!c.exception_allowed&&!String(c.requirement).startsWith('mandate.payment.amount_range'));
   $('#exception-dialog').close();renderOffers();if(!d.accepted)notice('Your acceptance was recorded. Unsupported or integrity conditions still hold checkout.');
  },'Recording this specific acceptance…');
 };
 async function purchase(offerId){
- const d=state.decisions[offerId];state.receipt=await api('/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});transition(5);
+ const navigation=state.navigation,d=state.decisions[offerId];const receipt=await api('/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});if(!currentRequest(navigation))return;state.receipt=receipt;transition(5);
 }
 function renderReceipt(){
  const r=state.receipt;
  $('#workspace').innerHTML=`<section class="receipt"><span class="eyebrow">YOUR CHOICES, PRESERVED</span><h1>Booked in the demo.<br>Backed by a record.</h1><p>The server verified the signed offer against your approval${r.exceptions_count?' and your specific accepted differences':''}. No real flight, hotel, or payment was created.</p><div class="receipt-table"><div><span>All-in total</span><b>${fmtMoney(r.total_cents)}</b></div><div><span>Outcome</span><b>Simulated confirmation</b></div><div><span>Accepted differences</span><b>${r.exceptions_count}</b></div><div><span>Record created</span><b>${escapeHTML(new Date(r.timestamp).toLocaleString())}</b></div></div><div class="receipt-actions"><button class="primary" id="download-evidence">Download evidence ↓</button><button class="secondary" id="dispute-button">Prepare a dispute review ↗</button></div><div id="dispute-result" hidden></div><details><summary>What is included in the evidence?</summary><p class="small">Original request, AI interpretation mode, exact approved requirements, signed VI chain, merchant-signed checkout, deterministic checks, signed specific exceptions, transaction hash, timestamps, and public verification keys.</p><p class="hash">Offer hash: ${escapeHTML(r.offer_hash)}</p></details><p class="small">The final responsibility decision belongs to a dispute analyst. This record does not guarantee chargeback prevention or liability protection.</p></section>`;
  $('#download-evidence').onclick=e=>busy(e.target,async()=>{const evidence=await api(`/api/purchases/${r.id}/evidence`);const blob=new Blob([JSON.stringify(evidence,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`intent-judge-evidence-${r.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);},'Preparing evidence…');
- $('#dispute-button').onclick=e=>busy(e.target,async()=>{const d=await api('/api/disputes',{purchase_id:r.id,reason:'Review whether the agentic purchase reflected the approved requirements and recorded exceptions.'});$('#dispute-result').hidden=false;$('#dispute-result').className='dispute-result';$('#dispute-result').innerHTML=`<span class="eyebrow">EVIDENCE REVIEW PREPARED</span><p>${escapeHTML(d.recommendation)}</p><p class="small">Final decision: dispute analyst. No chargeback was filed.</p>`;},'Preparing analyst context…');
+ $('#dispute-button').onclick=e=>busy(e.target,async()=>{const navigation=state.navigation,d=await api('/api/disputes',{purchase_id:r.id,reason:'Review whether the agentic purchase reflected the approved requirements and recorded exceptions.'});if(!currentRequest(navigation))return;$('#dispute-result').hidden=false;$('#dispute-result').className='dispute-result';$('#dispute-result').innerHTML=`<span class="eyebrow">EVIDENCE REVIEW PREPARED</span><p>${escapeHTML(d.recommendation)}</p><p class="small">Final decision: dispute analyst. No chargeback was filed.</p>`;},'Preparing analyst context…');
 }
 document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>startDemo(b.dataset.domain));
 $('#quality').onclick=()=>transition(6);
@@ -170,9 +185,9 @@ $('#footer-tutorial').onclick=showWalkthrough;
 $('#step-help-toggle').onclick=()=>{const expanded=$('#step-help-toggle').getAttribute('aria-expanded')==='true';$('#step-help').hidden=expanded;$('#step-help-toggle').setAttribute('aria-expanded',String(!expanded));};
 $('#about').onclick=$('#footer-about').onclick=()=>$('#about-dialog').showModal();
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
-$('#new-request').onclick=e=>busy(e.target,async()=>{await api('/api/session/reset',{});await api('/api/session');startDemo();},'Opening a fresh request…');
+$('#new-request').onclick=e=>busy(e.target,async()=>{const navigation=state.navigation;await api('/api/session/reset',{});await api('/api/session');if(currentRequest(navigation))startDemo();},'Opening a fresh request…');
 (async()=>{
- try{const session=await api('/api/session');const [profiles,health]=await Promise.all([api('/api/profiles'),api('/api/health')]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
+ try{const session=await api('/api/session');state.latestIntent=session.intents.at(-1)?.id;const [profiles,health]=await Promise.all([api('/api/profiles'),api('/api/health')]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){state.draft=await api('/api/intents/'+saved.id);state.domain=state.draft.domain;state.mode=state.draft.mode;
  if(state.draft.latest_purchase){state.receipt=state.draft.latest_purchase;state.stage=5;}else if(state.draft.approved){state.offers=state.draft.offer_views;for(const d of state.draft.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;

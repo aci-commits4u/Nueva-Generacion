@@ -1,7 +1,7 @@
 async page => {
  const origin=new URL(page.url()).origin;
  await page.setViewportSize({width:1280,height:900});await page.goto(origin+'/?domain=flight');
- await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
+ await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();
  await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');
  await page.getByRole('button',{name:'A fully specified flight'}).click();await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();

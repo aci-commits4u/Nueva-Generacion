@@ -1,0 +1,8 @@
+# Self-explaining UI review
+
+A fresh, independent read-only reviewer checked the entire UI revision from 94154a7 to f7c7d84, the spec, plan, and rendered behavior. No Critical or Minor findings; two Important findings. No declined-to-judge items.
+
+1. Pending intake, approval, or purchase responses could overwrite a later domain/tutorial selection, including null-state errors. Fixed by binding async operations to the navigation generation and draft; stale results cannot alter the active view or shared draft. Completed server approvals/purchases remain accessible through explicit intent URLs and a root Resume your latest demo link. Interpretation, explanation, exception, analyst-review, and session-reset callbacks follow the same ownership boundary.
+2. Tutorial return discarded unsaved review corrections and explicit no preferences. Fixed by retaining local form controls against draft ID/revision and restoring them across tutorial/quality navigation. Additional conditions are preserved. The snapshot is never submitted or treated as approval. Starting a new request/domain clears it.
+
+Evidence: reviewer reproduced all three response races and the lost origin/no-preferences. Parent independently ran the intake regression RED (“Stale flight response overwrote hotel intake”), then GREEN after the fix. The expanded browser_navigation.js holds real local responses for intake/approval/purchase and passed all ownership, form preservation, and completed-purchase resume assertions. The separate flight browser flow passed real 409 refusal, exact offer exception, simulated receipt, and analyst boundary. The tutorial separately passed all five steps at 390px and zero POST requests. No paid Foundry calls were used in this UI revision.

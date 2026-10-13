@@ -25,6 +25,8 @@ async page => {
  await page.setViewportSize({width:390,height:844});
  if(await page.evaluate(()=>document.documentElement.scrollWidth)>390)throw new Error('Mobile walkthrough overflow');
  await page.screenshot({path:'artifacts/v3-tutorial-mobile.png',fullPage:true});
+ for(let i=0;i<4;i++){await page.getByRole('button',{name:'Next step'}).click();if(await page.evaluate(()=>document.documentElement.scrollWidth)>390)throw new Error('Mobile tutorial step '+(i+2)+' overflow');}
+ await page.keyboard.press('Tab');if(await page.evaluate(()=>document.activeElement.tagName)==='BODY')throw new Error('Tutorial keyboard focus absent');
  await page.getByRole('link',{name:'Intent Judge home'}).click();await page.getByRole('heading',{name:'Make sure your AI buys what you meant.'}).waitFor();
  if(await page.evaluate(()=>document.documentElement.scrollWidth)>390)throw new Error('Mobile overview overflow');
  await page.screenshot({path:'artifacts/v3-overview-mobile.png',fullPage:true});
