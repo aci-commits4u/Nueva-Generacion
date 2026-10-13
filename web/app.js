@@ -206,7 +206,17 @@ $('#footer-tutorial').onclick=showWalkthrough;
 $('#step-help-toggle').onclick=()=>{const expanded=$('#step-help-toggle').getAttribute('aria-expanded')==='true';$('#step-help').hidden=expanded;$('#step-help-toggle').setAttribute('aria-expanded',String(!expanded));};
 $('#about').onclick=$('#footer-about').onclick=()=>$('#about-dialog').showModal();
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
-$('#new-request').onclick=e=>busy(e.target,async()=>{const navigation=state.navigation;await api('/api/session/reset',{});await api('/api/session');if(currentRequest(navigation))startDemo();},'Opening a fresh request…');
+$('#new-request').onclick=e=>{
+ startDemo();
+ busy(e.currentTarget,async()=>{
+  const navigation=state.navigation;
+  $('#workspace').innerHTML='<p class="loading" role="status">Opening a fresh request…</p>';$('#intent-panel').hidden=true;
+  const tabs=[...document.querySelectorAll('[data-domain]')];tabs.forEach(b=>b.disabled=true);
+  try{await api('/api/session/reset',{});await api('/api/session');if(currentRequest(navigation))render();}
+  catch(error){if(currentRequest(navigation))render();throw error;}
+  finally{tabs.forEach(b=>b.disabled=false);}
+ },'Opening a fresh request…');
+};
 (async()=>{
  try{const session=await api('/api/session');state.latestIntent=session.intents.at(-1)?.id;const [profiles,health]=await Promise.all([api('/api/profiles'),api('/api/health')]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;

@@ -1,7 +1,7 @@
 async page => {
  const origin=new URL(page.url()).origin;
  async function delay(path){let ready,release;const received=new Promise(r=>ready=r),gate=new Promise(r=>release=r);const pattern='**'+path;await page.route(pattern,async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});return {received,release:async()=>{release();await page.waitForLoadState('networkidle');await page.unroute(pattern);}};}
- await page.goto(origin+'/?domain=flight');await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();
+ await page.goto(origin+'/?domain=flight');await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  async function intake(){await page.goto(origin+'/?domain=flight');await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');await page.getByRole('button',{name:'A fully specified flight'}).click();}
  await intake();const pending=await delay('/api/intents');await page.getByRole('button',{name:'Start a conversation'}).click();await pending.received;
  await page.locator('[data-domain="hotel"]').click();await pending.release();

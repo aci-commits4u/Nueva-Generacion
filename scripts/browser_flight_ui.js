@@ -1,11 +1,11 @@
 async page => {
  const origin=new URL(page.url()).origin;
  await page.setViewportSize({width:1280,height:900});await page.goto(origin+'/?domain=flight');
- await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();
+ await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');
  await page.getByRole('button',{name:'A fully specified flight'}).click();await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
- const draftUrl=page.url();await page.getByRole('button',{name:'How it works',exact:true}).click();await page.getByRole('button',{name:'Back to your demo'}).click();
+ const draftUrl=page.url();await page.getByRole('button',{name:'How it works',exact:true}).click();await page.getByRole('button',{name:'Back to your demo'}).click();await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
  if(page.url()!==draftUrl)throw new Error('Tutorial return lost draft');
  await page.screenshot({path:'artifacts/v3-conversation-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'Review requirements'}).click();
@@ -23,6 +23,6 @@ async page => {
  await page.reload();await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
  await page.getByRole('button',{name:'Quality',exact:true}).click();await page.getByRole('heading',{name:'Measured, then monitored.'}).waitFor();
  await page.getByRole('button',{name:'How it works',exact:true}).click();await page.getByRole('button',{name:'Back to your demo'}).click();await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor({timeout:4000});
- await page.getByRole('button',{name:'New request'}).click();await page.locator('[data-domain="hotel"]').click();if(await page.getByLabel('AI availability').inputValue()!=='live')throw new Error('Domain reset retained offline');
+ await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.locator('[data-domain="hotel"]').click();if(await page.getByLabel('AI availability').inputValue()!=='live')throw new Error('Domain reset retained offline');
  return {result:'PASS',mode:'explicit offline',flightHoldGate:409,exactOfferException:true,analystFinalDecision:true,draftReturn:true,explicitNoPreference:true,domainReset:true};
 }
