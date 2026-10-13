@@ -3,8 +3,14 @@
   "functions": {
     "app/main.py": {
       "maxDuration": 60,
-      "includeFiles": "{web/**,profiles/**,demo/**}"
+      "includeFiles": "{web/**,profiles/**,demo/**,evals/**}"
     }
   },
-  "framework": "fastapi"
+  "framework": "fastapi",
+  "crons": [
+    {
+      "path": "/api/internal/quality-check",
+      "schedule": "0 7 * * *"
+    }
+  ]
 }
