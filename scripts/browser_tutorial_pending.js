@@ -1,0 +1,15 @@
+async page => {
+ const origin=new URL(page.url()).origin;
+ await page.goto(origin+'/?domain=flight');await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');await page.getByRole('button',{name:'A fully specified flight'}).click();await page.getByRole('button',{name:'Start a conversation'}).click();await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
+ let ready,release;const received=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+ await page.route('**/api/intents/*/clarify',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
+ await page.getByLabel('Add a detail or change your request').fill('Depart from EWR.');await page.getByRole('button',{name:'Send clarification'}).click();await received;await page.getByRole('button',{name:'How it works',exact:true}).click();release();await page.waitForLoadState('networkidle');await page.unroute('**/api/intents/*/clarify');await page.getByRole('button',{name:'Back to your demo'}).click();await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
+ await page.getByLabel('Add a detail or change your request').fill('Arrive at MCO.');await page.getByRole('button',{name:'Send clarification'}).click();await page.getByText('The demo’s AI follow-up limit is reached.').waitFor({timeout:5000});
+ if(!(await page.locator('#notice').isHidden()))throw new Error('Stale retained draft caused clarification conflict');
+
+ await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('button',{name:'No preference for unanswered optional details'}).click();for(const box of await page.locator('[data-remove-condition]').all())await box.check();await page.getByLabel('I reviewed my original request').check();
+ async function delayedTutorial(path,trigger,expected){let ready,release;const received=new Promise(r=>ready=r),gate=new Promise(r=>release=r),pattern='**'+path;await page.route(pattern,async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});await page.getByRole('button',{name:trigger}).click();await received;await page.getByRole('button',{name:'How it works',exact:true}).click();await page.getByRole('button',{name:'Back to your demo'}).click();if(!(await page.getByRole('heading',{name:'Say what matters.'}).isVisible()))throw new Error('Return did not wait for pending operation');release();await page.waitForLoadState('networkidle');await page.unroute(pattern);await page.getByRole('heading',{name:expected}).waitFor();}
+ await delayedTutorial('/api/intents/*/approve','Approve these requirements','Two offers. One approved intent.');
+ await delayedTutorial('/api/purchase','Simulate purchase','Booked in the demo.');
+ return {result:'PASS',retainedDraftReconciled:true,secondClarificationAccepted:true,pendingApprovalResumed:true,pendingPurchaseResumed:true,returnWaitsForPending:true};
+}

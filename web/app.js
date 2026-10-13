@@ -30,6 +30,27 @@ function captureEdits(){
  if(state.stage===3&&state.draft&&$('#review-form'))state.reviewEdits={id:state.draft.id,revision:state.draft.revision,controls:[...$('#review-form').querySelectorAll('input,select,textarea')].map(el=>({value:el.value,checked:el.checked}))};
 }
 function currentRequest(navigation,intentId=null){return state.navigation===navigation&&(!intentId||state.draft?.id===intentId);}
+const pendingIntents=new Map();
+function trackedApi(intentId,path,body){
+ const request=api(path,body);if(!pendingIntents.has(intentId))pendingIntents.set(intentId,new Set());
+ const group=pendingIntents.get(intentId);group.add(request);
+ return request.finally(()=>{group.delete(request);if(!group.size)pendingIntents.delete(intentId);});
+}
+async function returnToDemo(){
+ const navigation=state.navigation,id=state.draft.id,previous=state.returnStage;
+ await Promise.allSettled([...(pendingIntents.get(id)||[])]);
+ const draft=await api('/api/intents/'+id);
+ if(!currentRequest(navigation,id))return;
+ let stage=previous===3?3:2,offers=[],decisions={};
+ if(draft.latest_purchase)stage=5;
+ else if(draft.approved){
+  stage=4;offers=draft.offer_views;decisions=Object.fromEntries(draft.saved_decisions.map(d=>[d.offer_id,d]));
+  const missing=await Promise.all(offers.filter(o=>!decisions[o.id]).map(async o=>[o.id,await api('/api/check',{intent_id:id,offer_id:o.id})]));
+  if(!currentRequest(navigation,id))return;Object.assign(decisions,Object.fromEntries(missing));
+ }
+ state.draft=draft;state.domain=draft.domain;state.mode=draft.mode;state.offers=offers;state.decisions=decisions;state.receipt=draft.latest_purchase||null;transition(stage);
+}
+
 function startDemo(domain=state.domain){state.reviewEdits=null;state.clarifyEdit=null;state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';transition(1);}
 function showWalkthrough(){if(state.stage>=1&&state.stage<=5)state.returnStage=state.stage;state.walkthroughStep=0;transition(7);}
 const stepHelp={
@@ -59,7 +80,7 @@ function render(){
 }
 function renderWalkthrough(){
  $('#workspace').innerHTML=walkthroughMarkup(state.walkthroughStep,Boolean(state.draft));
- if($('#return-demo'))$('#return-demo').onclick=()=>transition(state.returnStage||2);
+ if($('#return-demo'))$('#return-demo').onclick=e=>busy(e.currentTarget,returnToDemo,'Returning to your demo…');
  const advance=n=>{state.walkthroughStep=n;render();$('#workspace').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});};
  $('#previous-step').onclick=()=>advance(state.walkthroughStep-1);
  if($('#next-step'))$('#next-step').onclick=()=>advance(state.walkthroughStep+1);
@@ -81,7 +102,7 @@ function renderConversation(){
  const d=state.draft;$('#workspace').innerHTML=conversationMarkup(d,escapeHTML);
  if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
  $('#review-now').onclick=()=>transition(3);
- const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;const draft=await api(`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'…');
+ const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'…');
  $('#clarify-form').onsubmit=e=>{e.preventDefault();send($('#clarify-text').value);};
  document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>send(b.dataset.reply));
 }
@@ -117,10 +138,10 @@ function renderReview(){
     else if(f.type==='window'){const end=$('#field-'+k+'-end').value;if(!end)throw new Error('Choose both ends of the local departure window.');fields[k]=[input.value,end];}
     else fields[k]=input.value.trim();
    }
-   const reviewed=await api(`/api/intents/${d.id}/answers`,{revision:d.revision,fields,removed_unsupported:d.unsupported.filter((x,i)=>$(`[data-remove-condition="${i}"]`)?.checked),unsupported:[...new Set([...d.unsupported.filter((x,i)=>!$(`[data-remove-condition="${i}"]`)?.checked),...$('#missed-requirements').value.split('\n').map(x=>x.trim()).filter(Boolean)])],confirmation:true});
+   const reviewed=await trackedApi(d.id,`/api/intents/${d.id}/answers`,{revision:d.revision,fields,removed_unsupported:d.unsupported.filter((x,i)=>$(`[data-remove-condition="${i}"]`)?.checked),unsupported:[...new Set([...d.unsupported.filter((x,i)=>!$(`[data-remove-condition="${i}"]`)?.checked),...$('#missed-requirements').value.split('\n').map(x=>x.trim()).filter(Boolean)])],confirmation:true});
    if(!currentRequest(navigation,d.id))return;
    state.draft=reviewed;state.reviewEdits=null;
-   const approved=await api(`/api/intents/${d.id}/approve`,{revision:reviewed.revision,digest:reviewed.digest,confirmation:true});
+   const approved=await trackedApi(d.id,`/api/intents/${d.id}/approve`,{revision:reviewed.revision,digest:reviewed.digest,confirmation:true});
    if(!currentRequest(navigation,d.id))return;
    const decisions=await Promise.all(approved.offers.map(async o=>[o.id,await api('/api/check',{intent_id:d.id,offer_id:o.id})]));
    if(!currentRequest(navigation,d.id))return;
@@ -170,7 +191,7 @@ $('#exception-form').onsubmit=e=>{
  },'Recording this specific acceptance…');
 };
 async function purchase(offerId){
- const navigation=state.navigation,d=state.decisions[offerId];const receipt=await api('/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});if(!currentRequest(navigation))return;state.receipt=receipt;transition(5);
+ const navigation=state.navigation,d=state.decisions[offerId],intentId=state.draft.id;const receipt=await trackedApi(intentId,'/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});if(!currentRequest(navigation))return;state.receipt=receipt;transition(5);
 }
 function renderReceipt(){
  const r=state.receipt;
