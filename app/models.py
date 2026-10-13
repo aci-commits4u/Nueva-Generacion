@@ -14,6 +14,7 @@ class AnswerRequest(StrictModel):
     revision: int
     fields: dict[str, Any]
     unsupported: list[str] = Field(default_factory=list,max_length=20)
+    removed_unsupported: list[str] = Field(default_factory=list,max_length=20)
     confirmation: bool
 
 class ApprovalRequest(StrictModel):

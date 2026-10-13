@@ -65,3 +65,19 @@ def test_evidence_contains_customer_conversation_and_actual_stage_record(client)
  assert evidence['conversation'][0]['content']==d['message']
  assert evidence['interpretation_runs'][0]['mode']=='offline'
  assert evidence['final_decision']=='dispute analyst'
+
+
+def test_only_explicit_specific_review_can_remove_a_flagged_condition(client):
+ d=client.post('/api/intents',json={'message':'Nonstop flight EWR to MCO on 2026-11-12 under $300 with checked bag','mode':'offline'}).json()
+ fields={k:None for k in client.get('/api/profiles/flight').json()['fields']}
+ fields.update(nonstop=True,max_total_cents=29999,origin_airports=['EWR'],destination_airports=['MCO'],departure_date='2026-11-12')
+ body={'revision':d['revision'],'fields':fields,'unsupported':[],'confirmation':True}
+ assert client.post(f"/api/intents/{d['id']}/answers",json=body).status_code==409
+ body['removed_unsupported']=d['unsupported']
+ r=client.post(f"/api/intents/{d['id']}/answers",json=body)
+ assert r.status_code==200,r.text
+ assert not r.json()['unsupported']
+ from app.store import get_store
+ events=get_store().read(client.cookies['ij_session'])['events']
+ assert events[-2]['kind']=='condition_removed_by_traveler'
+ assert events[-2]['data']['conditions']==d['unsupported']
