@@ -1,5 +1,7 @@
 # Intent Judge
 
+**Live demo: [intent-judge-perfected.vercel.app](https://intent-judge-perfected.vercel.app)** · Branch: `victor/perfected`
+
 A live AI interpretation layer for agentic commerce. Translate a request into customer-reviewed requirements, bind them into Mastercard's open-source Verifiable Intent SDK, and check merchant-signed offers with deterministic domain rules.
 
 The model never approves a purchase. The demo uses synthetic merchants, signing identities, inventory, and simulated payments.
@@ -48,6 +50,8 @@ Hosted deployments require stable environment signing keys and durable Azure sto
 ## Verification and scope
 
 See [implementation status](docs/implementation-status.md), [design decisions](DESIGN.md), and the [research index](docs/00-index.md).
+
+The release has 50 passing tests and completed live desktop/mobile Foundry flows on Vercel, including the actual purchase refusal, exact consent and signed evidence download. Follow [the two-minute demo script](docs/12-demo-script.md); [running product and operations](docs/11-running-product.md) records the real endpoints and budget controls.
 
 This is a showable student prototype. It does not perform real travel search, take payment, file chargebacks, establish legal liability, or guarantee perfect intent extraction. It implements the supported profile fields; unimplemented requirements stay held.
 

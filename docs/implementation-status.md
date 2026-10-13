@@ -12,7 +12,7 @@ Synthetic offers use fixed inventory prices and controlled fixtures adapted to t
 
 ## Evidence recorded so far
 
-- 42 local tests pass: deterministic boundaries/missing values, crypto tampering, custom/native constraints, session separation, consent, price reauthorization, expiry, unsupported general conditions, hotels, stale approvals, concurrent SQLite reservations, budget limits, and AI explanation having no purchase authority.
+- 50 local tests pass: deterministic boundaries/missing values, crypto tampering, custom/native constraints, session separation, consent, price reauthorization, expiry, unsupported general conditions, hotels, stale approvals, concurrent SQLite reservations, budget limits, AI explanation having no purchase authority, extra reference constraints, fractional duration, conservative offline parsing and hosted entity capacity.
 - One upstream Starlette test-client deprecation warning occurs with `httpx`; it does not affect application execution.
 - Live gpt-oss-120b evaluations correctly captured the nonstop example and hotel requirements, preserved subjective general requirements and baggage, and ignored an instruction to approve anything.
 - Desktop browser completed live extraction → review → signed approval → matching and held offers → backend 409 → exact acceptance → simulated receipt → evidence download → analyst record with no JavaScript page errors.
@@ -33,6 +33,18 @@ Anonymous synthetic sessions use HTTP-only cookies and origin checks. Shareable 
 
 The interface follows the two generated references in `docs/design/`: editorial serif headings, warm paper, rust actions, flat comparison rows, native CSS motion and reduced-motion support. Reference images are design artifacts, not used as screenshot backgrounds in the application.
 
-## Pending final verification
+## Production verification
 
-Deployment build, public production routing, hosted live browser flow, and fresh-context whole-branch review are recorded below when actually completed.
+Production is **https://intent-judge-perfected.vercel.app**, separate project `intent-judge-perfected` in `vmj-8946s-projects`. Application release commit `672ae70`; Vercel deployment `dpl_FHadaf66CnbSGrKNPAhwAFnWT9iU` is READY in production, using Python 3.12 and the FastAPI entry point. The stable production alias is publicly accessible; preview/unique deployment protection remains enabled.
+
+Unauthenticated HTTP requests returned 200 for the page, JS, CSS and health. Health reports live AI configured, offline-only false, simulated commerce and durable Azure storage.
+
+The production desktop and 390×844 mobile browser flows both completed real Foundry extraction and real Foundry explanation, exact approval, matching/held signed offers, expected HTTP 409 refusal, offer-specific consent, simulated receipt, evidence download and analyst review. There were no JavaScript page errors; console HTTP 409 entries are the intentionally demonstrated gate. Mobile had no horizontal overflow, and reload recovered the receipt through Azure persistence.
+
+The actual hosted API accepted the full 25-check session allowance, persisted a receipt, returned the identical receipt on idempotent retry, exported signed evidence and recovered all 25 decisions. This test used no AI calls. Downloaded hosted evidence passed canonical digest and issuer signature verification, retained the accepted nonstop value and ended with the analyst decision boundary.
+
+A fresh-context independent review reported no Critical findings. All four Important findings were reproduced and fixed with regression evidence. The duration rounding issue was regraded Important and fixed too. See [release review and rulings](final-review.md). Vercel's post-release error-log query returned no matching logs; this is a bounded observation, not a claim of continuous monitoring.
+
+Hotel production also completed live Foundry intake, profile review, a held lower-price room, explicit breakfast and cancellation acceptances, and a simulated receipt. General mode was separately tested in explicitly selected offline mode: its unsupported ethical/comfort conditions held both offers and the backend refused purchase.
+
+At the final live evaluation checkpoint, the shared ledger recorded 14 reserved calls ($1.40 conservative reservation), 8,473 input tokens and 2,979 output tokens. Applying the observed global model meters estimates about $0.0031 in recorded inference charges, excluding storage, initial untracked diagnostics and unrelated Azure activity. No emergency allowance was enabled.

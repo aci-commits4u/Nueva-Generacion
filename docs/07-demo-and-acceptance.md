@@ -1,6 +1,6 @@
 # Demo and future acceptance criteria
 
-Status: scenario specification. These scenarios have not yet been implemented or run as Intent Judge application tests. Upstream research tests are [listed separately](research/vi-sdk-probes.md).
+Status: original scenario specification. The current application has 50 tests and a deployed live browser flow; [implementation status](implementation-status.md) records the tested scope and [demo script](12-demo-script.md) describes the executable presentation. The broader examples below are acceptance targets where they exceed the implemented profiles. Upstream research tests are [listed separately](research/vi-sdk-probes.md).
 
 ## Principal demo: an omitted requirement
 

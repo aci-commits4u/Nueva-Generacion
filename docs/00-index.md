@@ -1,6 +1,6 @@
 # Documentation index
 
-Read the problem first, then the workflow and architecture. The architecture and contracts are proposed designs for review; they are not claims of completed implementation.
+Read the problem first, then the workflow and architecture. Documents 01–10 preserve the research and original design. [Implementation status](implementation-status.md) and [the running product](11-running-product.md) describe what is deployed and tested today.
 
 | Document | Purpose |
 |---|---|
@@ -23,8 +23,12 @@ Read the problem first, then the workflow and architecture. The architecture and
 - **Proposed:** a recommended project design that has not been implemented.
 - **Unproven outcome:** a business effect requiring future measurement, such as fewer disputes or greater merchant adoption.
 
-These labels distinguish product aspiration from evidence. When the build starts, update status with actual implementation and test results rather than changing proposed behavior into a claim by implication.
+These labels distinguish product aspiration from evidence. Detailed proposal examples remain design references; actual file layout, endpoints, supported fields, deployment and verification appear in the implementation documents.
 
 ## Implemented product
 
 [Implementation status](implementation-status.md) records the actual supported scope, tests, live model evaluation, deployment, and limits. [DESIGN.md](../DESIGN.md) records autonomous choices. The [execution plan](superpowers/plans/2026-10-13-intent-judge.md) describes the build sequence.
+
+[Running product and operations](11-running-product.md) explains the deployed contracts and budget controls. [Demo script](12-demo-script.md) gives the judge-facing walkthrough. [Final review](final-review.md) records findings, corrections and autonomous rulings.
+
+[Adopting a domain](13-adopting-a-domain.md) explains the actual executable profile format, trusted fact adapters and current registration boundaries.

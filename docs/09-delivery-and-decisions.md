@@ -1,6 +1,6 @@
 # Delivery order and design decisions
 
-Status: proposed delivery outline, not an executed implementation plan. Victor has requested the research and documentation foundation; application development is a subsequent step.
+Status: original delivery outline. The subsequent application build and separate Vercel release are recorded in [implementation status](implementation-status.md), [the execution plan](superpowers/plans/2026-10-13-intent-judge.md) and [release review](final-review.md).
 
 ## Build sequence
 

@@ -44,7 +44,7 @@ The 93% figure appears in [PYMNTS' September 15, 2026 research summary](https://
 |---|---|
 | We have a documented architecture for conversational capture and domain checks | True on this branch |
 | We inspected and exercised the actual VI SDK | True; see research record |
-| Our application implements extraction, verification, and enforcement | Not yet true on this branch |
+| Our application implements extraction, verification, and enforcement | Implemented and tested for the supported synthetic profiles; see [implementation status](implementation-status.md) |
 | VI provides structured authorization and cryptographic evidence | Documented upstream |
 | The stock VI checker directly evaluates flight connections | Not supported by its registered vocabulary |
 | Our framework supports arbitrary requirements without new code | Not a defensible guarantee |
