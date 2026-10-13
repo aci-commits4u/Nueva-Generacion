@@ -1,0 +1,576 @@
+{
+  "created_at": "2026-10-13T20:16:50Z",
+  "variant": "audited",
+  "split": "holdout",
+  "model": "gpt-oss-120b",
+  "cases": 6,
+  "passed": 6,
+  "rows": [
+    {
+      "case": {
+        "id": "overnight-window",
+        "split": "holdout",
+        "domain": "flight",
+        "message": "Flight EWR to MCO on 2026-11-12 under $300 leaving between 23:00 and 02:00.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 29999,
+          "departure_window": [
+            "23:00",
+            "02:00"
+          ]
+        },
+        "unsupported_groups": []
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "departure_window": [
+            "23:00",
+            "02:00"
+          ]
+        },
+        "sources": {
+          "max_total_cents": "under $300",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "departure_window": "leaving between 23:00 and 02:00"
+        },
+        "unsupported": [],
+        "explanation": "All requested constraints map directly to supported fields; no ambiguous or unsupported conditions present.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1199,
+            "tokens": {
+              "completion_tokens": 240,
+              "prompt_tokens": 781,
+              "total_tokens": 1021,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "59b9c562f7eb410f8d67582e00a1f72d"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 984,
+            "tokens": {
+              "completion_tokens": 198,
+              "prompt_tokens": 1006,
+              "total_tokens": 1204,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "3592684142db4f61a232883cbffc5a4d"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "overnight-window",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "departure_window"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 3231
+    },
+    {
+      "case": {
+        "id": "inclusive-cap",
+        "split": "holdout",
+        "domain": "flight",
+        "message": "Flight EWR to MCO on 2026-11-12 at most $300.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 30000
+        },
+        "unsupported_groups": []
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 30000,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12"
+        },
+        "sources": {
+          "max_total_cents": "at most $300",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12"
+        },
+        "unsupported": [],
+        "explanation": "All explicit constraints are captured; no unsupported conditions present.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 867,
+            "tokens": {
+              "completion_tokens": 191,
+              "prompt_tokens": 771,
+              "total_tokens": 962,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "4adc7104f64b4f85a22e3e5016ff0f50"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1275,
+            "tokens": {
+              "completion_tokens": 243,
+              "prompt_tokens": 959,
+              "total_tokens": 1202,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "21bf4817d5604997aafee335b0fbbe13"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "inclusive-cap",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 2888
+    },
+    {
+      "case": {
+        "id": "explicit-revision",
+        "split": "holdout",
+        "domain": "flight",
+        "message": "Flight EWR to MCO on 2026-11-12 under $300. Actually, I can spend up to $350 total.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 35000
+        },
+        "unsupported_groups": []
+      },
+      "result": {
+        "fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 35000
+        },
+        "sources": {
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "max_total_cents": "up to $350 total"
+        },
+        "unsupported": [],
+        "explanation": "The later budget correction to up to $350 overrides the earlier 'under $300' constraint; all other explicit requirements are captured.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1014,
+            "tokens": {
+              "completion_tokens": 233,
+              "prompt_tokens": 781,
+              "total_tokens": 1014,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "579ead6035534554bed9c9f3bc7d1b87"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 927,
+            "tokens": {
+              "completion_tokens": 233,
+              "prompt_tokens": 970,
+              "total_tokens": 1203,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "78f709e789824b62b083727a296a91e6"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "explicit-revision",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 2600
+    },
+    {
+      "case": {
+        "id": "negative-breakfast-equivalent",
+        "split": "holdout",
+        "domain": "flight",
+        "message": "Flight EWR to MCO on 2026-11-12 under $300. I do not need refundable fares; maximum 1 connection.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 29999,
+          "max_connections": 1
+        },
+        "unsupported_groups": []
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_connections": 1
+        },
+        "sources": {
+          "max_total_cents": "under $300",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "max_connections": "maximum 1 connection"
+        },
+        "unsupported": [],
+        "explanation": "All explicit constraints captured; no refundable or nonstop requirement was stated.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1090,
+            "tokens": {
+              "completion_tokens": 251,
+              "prompt_tokens": 782,
+              "total_tokens": 1033,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "4fd006940fb04732ad7deec95e912411"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 961,
+            "tokens": {
+              "completion_tokens": 180,
+              "prompt_tokens": 988,
+              "total_tokens": 1168,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "6d7ac29ed970485f9e37b2bc3f38c629"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "negative-breakfast-equivalent",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "max_connections"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 2997
+    },
+    {
+      "case": {
+        "id": "hotel-location",
+        "split": "holdout",
+        "domain": "hotel",
+        "message": "Hotel in Boston from 2026-11-12 to 2026-11-14 at most $300, near the conference venue.",
+        "expected_fields": {
+          "city": "Boston",
+          "checkin_date": "2026-11-12",
+          "checkout_date": "2026-11-14",
+          "max_total_cents": 30000
+        },
+        "unsupported_groups": [
+          [
+            "near",
+            "proximity",
+            "venue"
+          ]
+        ]
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 30000,
+          "city": "Boston",
+          "checkin_date": "2026-11-12",
+          "checkout_date": "2026-11-14"
+        },
+        "sources": {
+          "max_total_cents": "at most $300",
+          "city": "Hotel in Boston",
+          "checkin_date": "2026-11-12",
+          "checkout_date": "2026-11-14"
+        },
+        "unsupported": [
+          "near the conference venue"
+        ],
+        "explanation": "Budget, city, and dates are captured; proximity requirement cannot be expressed in the schema.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 959,
+            "tokens": {
+              "completion_tokens": 214,
+              "prompt_tokens": 740,
+              "total_tokens": 954,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "a8642cb85e0e48e8963af5d93b2af95d"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1050,
+            "tokens": {
+              "completion_tokens": 227,
+              "prompt_tokens": 944,
+              "total_tokens": 1171,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "81ca0dd038be4e8c81f8eecc3f3b1c39"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "hotel-location",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 2650
+    },
+    {
+      "case": {
+        "id": "hotel-style-flight",
+        "split": "holdout",
+        "domain": "flight",
+        "message": "Flight EWR to MCO on 2026-11-12 under $300 nonstop in business class and no longer than 180 minutes.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 29999,
+          "nonstop": true,
+          "cabin": "business",
+          "max_duration_minutes": 180
+        },
+        "unsupported_groups": []
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "nonstop": true,
+          "max_duration_minutes": 180,
+          "cabin": "business"
+        },
+        "sources": {
+          "max_total_cents": "under $300",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "nonstop": "nonstop",
+          "max_duration_minutes": "no longer than 180 minutes",
+          "cabin": "business class"
+        },
+        "unsupported": [],
+        "explanation": "All explicit purchasing constraints are captured; no ambiguous or unsupported items present.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1029,
+            "tokens": {
+              "completion_tokens": 276,
+              "prompt_tokens": 781,
+              "total_tokens": 1057,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "b680a42aabc54868b659fbaab1499d21"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1354,
+            "tokens": {
+              "completion_tokens": 228,
+              "prompt_tokens": 1019,
+              "total_tokens": 1247,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "87f1542f0fb142879a062c95c55e4b51"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "hotel-style-flight",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "nonstop",
+          "cabin",
+          "max_duration_minutes"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "duration_ms": 3088
+    }
+  ]
+}

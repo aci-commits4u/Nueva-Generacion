@@ -32,7 +32,7 @@ def test_live_failure_does_not_turn_into_offline(monkeypatch,tmp_path):
     monkeypatch.setenv('SQLITE_PATH',str(tmp_path/'budget.sqlite3'));monkeypatch.setenv('STORE_BACKEND','sqlite');monkeypatch.setenv('MOCK_LLM','0')
     get_store.cache_clear()
     def broken(*a,**k): raise RuntimeError('Provider unavailable')
-    monkeypatch.setattr('app.foundry_client.request_model',broken)
+    monkeypatch.setattr('app.ai_pipeline.call_json',broken)
     with pytest.raises(ValueError,match='Live AI'): extract('flight','nonstop under $300','test-session')
     get_store.cache_clear()
 

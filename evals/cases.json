@@ -407,12 +407,7 @@
         ],
         "max_total_cents": 29999
       },
-      "unsupported_groups": [
-        [
-          "tomorrow",
-          "date"
-        ]
-      ]
+      "unsupported_groups": []
     },
     {
       "id": "broad-destination",
@@ -426,13 +421,7 @@
         "departure_date": "2026-11-12",
         "max_total_cents": 29999
       },
-      "unsupported_groups": [
-        [
-          "Florida",
-          "airport",
-          "destination"
-        ]
-      ]
+      "unsupported_groups": []
     },
     {
       "id": "price-tax",
