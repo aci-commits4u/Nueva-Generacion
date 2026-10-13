@@ -4,7 +4,8 @@ async page => {
  let ready,release;const received=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
  await page.route('**/api/intents/*/clarify',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
  await page.getByLabel('Add a detail or change your request').fill('Depart from EWR.');await page.getByRole('button',{name:'Send clarification'}).click();await received;await page.getByRole('button',{name:'How it works',exact:true}).click();release();await page.waitForLoadState('networkidle');await page.unroute('**/api/intents/*/clarify');await page.getByRole('button',{name:'Back to your demo'}).click();await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
- await page.getByLabel('Add a detail or change your request').fill('Arrive at MCO.');await page.getByRole('button',{name:'Send clarification'}).click();await page.getByText('The demo’s AI follow-up limit is reached.').waitFor({timeout:5000});
+ await page.getByLabel('Add a detail or change your request').fill('Arrive at MCO.');await page.getByRole('button',{name:'Send clarification'}).click();await page.locator('.composer-help').filter({hasText:'4 follow-ups remaining'}).waitFor({timeout:5000});
+ if(!(await page.getByLabel('Add a detail or change your request').isEnabled()))throw new Error('Clarification stopped before the six-turn allowance');
  if(!(await page.locator('#notice').isHidden()))throw new Error('Stale retained draft caused clarification conflict');
 
  await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('button',{name:'No preference for unanswered optional details'}).click();for(const box of await page.locator('[data-remove-condition]').all())await box.check();await page.getByLabel('I reviewed my original request').check();

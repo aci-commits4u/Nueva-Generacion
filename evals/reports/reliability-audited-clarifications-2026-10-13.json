@@ -1,0 +1,926 @@
+{
+  "created_at": "2026-10-13T22:10:02.694377+00:00",
+  "variant": "audited",
+  "split": "reliability-development",
+  "model": "gpt-oss-120b",
+  "cases": 7,
+  "passed": 6,
+  "rows": [
+    {
+      "case": {
+        "id": "florida-question",
+        "domain": "flight",
+        "message": "How can I get to Florida for under $300?",
+        "expected_fields": {
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 3009,
+      "result": {
+        "fields": {
+          "max_total_cents": 29999
+        },
+        "sources": {
+          "max_total_cents": "under $300"
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "Florida",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Budget is specified; destination needs clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1414,
+            "tokens": {
+              "completion_tokens": 150,
+              "prompt_tokens": 1006,
+              "total_tokens": 1156,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "0487b9bffff444e780c5b00a87a06425"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1101,
+            "tokens": {
+              "completion_tokens": 182,
+              "prompt_tokens": 1193,
+              "total_tokens": 1375,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "cecf50ef8f72495ca4610b7ce45ddd3c"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "florida-question",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "florida-question",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "florida-question",
+        "domain": "flight",
+        "message": "How can I get to Florida for under $300?",
+        "expected_fields": {
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": []
+      }
+    },
+    {
+      "case": {
+        "id": "named-cities",
+        "domain": "flight",
+        "message": "I need a flight from Newark to Tampa on 2026-11-14, under $300, without any connections.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "departure_date": "2026-11-14",
+          "max_total_cents": 29999,
+          "nonstop": true
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2434,
+      "result": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "departure_date": "2026-11-14",
+          "nonstop": true
+        },
+        "sources": {
+          "max_total_cents": "under $300",
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa",
+          "departure_date": "2026-11-14",
+          "nonstop": "without any connections"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested constraints are captured; no ambiguous or missing details.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 985,
+            "tokens": {
+              "completion_tokens": 229,
+              "prompt_tokens": 1034,
+              "total_tokens": 1263,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "e0d66d4e939947e99ed41b2eabf581ce"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 964,
+            "tokens": {
+              "completion_tokens": 271,
+              "prompt_tokens": 1293,
+              "total_tokens": 1564,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "39f14a6a706a495b9a1c39817b596045"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "named-cities",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "nonstop"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "named-cities",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "nonstop"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "named-cities",
+        "domain": "flight",
+        "message": "I need a flight from Newark to Tampa on 2026-11-14, under $300, without any connections.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "departure_date": "2026-11-14",
+          "max_total_cents": 29999,
+          "nonstop": true
+        },
+        "unsupported_groups": []
+      }
+    },
+    {
+      "case": {
+        "id": "flexible-preference",
+        "domain": "flight",
+        "message": "I need to get from Newark to Tampa in early November for under $300 round trip, preferably nonstop, and I would like to arrive in the morning.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": [
+          [
+            "round",
+            "return"
+          ],
+          [
+            "arriv",
+            "morning"
+          ]
+        ],
+        "clarification_groups": [
+          [
+            "preferably nonstop"
+          ],
+          [
+            "early November"
+          ]
+        ],
+        "allow_unsupported": true
+      },
+      "duration_ms": 3198,
+      "result": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ]
+        },
+        "sources": {
+          "max_total_cents": "under $300",
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa"
+        },
+        "unsupported": [
+          "round trip",
+          "arrive in the morning"
+        ],
+        "clarifications": [
+          {
+            "field": "nonstop",
+            "source_quote": "preferably nonstop",
+            "reason": "preference"
+          },
+          {
+            "field": "departure_date",
+            "source_quote": "early November",
+            "reason": "missing"
+          }
+        ],
+        "explanation": "Budget and airports are clear; round\u2011trip and morning arrival are unsupported; nonstop is a soft preference; exact departure date is ambiguous and needs clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1187,
+            "tokens": {
+              "completion_tokens": 320,
+              "prompt_tokens": 1046,
+              "total_tokens": 1366,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "989354ad3f464f018c4e5e8f44297157"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1529,
+            "tokens": {
+              "completion_tokens": 400,
+              "prompt_tokens": 1314,
+              "total_tokens": 1714,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "8452ee84f16a4448b988a3dd16b14491"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "flexible-preference",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "flexible-preference",
+        "passed": false,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [
+          [
+            "prefer",
+            "nonstop"
+          ]
+        ],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "flexible-preference",
+        "domain": "flight",
+        "message": "I need to get from Newark to Tampa in early November for under $300 round trip, preferably nonstop, and I would like to arrive in the morning.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": [
+          [
+            "round",
+            "return"
+          ],
+          [
+            "arriv",
+            "morning"
+          ],
+          [
+            "prefer",
+            "nonstop"
+          ]
+        ],
+        "allow_unsupported": true
+      }
+    },
+    {
+      "case": {
+        "id": "ordinary-duration",
+        "domain": "flight",
+        "message": "EWR to MCO on 2026-11-12, up to $350 total. At most one connection and a journey no longer than 2 hours.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 35000,
+          "max_connections": 1,
+          "max_duration_minutes": 120
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2396,
+      "result": {
+        "fields": {
+          "max_total_cents": 35000,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_connections": 1,
+          "max_duration_minutes": 120
+        },
+        "sources": {
+          "max_total_cents": "up to $350 total",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "max_connections": "At most one connection",
+          "max_duration_minutes": "journey no longer than 2 hours"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested constraints are captured; no ambiguous or missing details remain.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 950,
+            "tokens": {
+              "completion_tokens": 264,
+              "prompt_tokens": 1052,
+              "total_tokens": 1316,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "54cfac0fc4104f05811055c244764080"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 963,
+            "tokens": {
+              "completion_tokens": 227,
+              "prompt_tokens": 1339,
+              "total_tokens": 1566,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "8e6adfbe743d488688d303930ba98376"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "ordinary-duration",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "max_connections",
+          "max_duration_minutes"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "ordinary-duration",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "max_connections",
+          "max_duration_minutes"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "ordinary-duration",
+        "domain": "flight",
+        "message": "EWR to MCO on 2026-11-12, up to $350 total. At most one connection and a journey no longer than 2 hours.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 35000,
+          "max_connections": 1,
+          "max_duration_minutes": 120
+        },
+        "unsupported_groups": []
+      }
+    },
+    {
+      "case": {
+        "id": "negated-preference",
+        "domain": "flight",
+        "message": "Fly from EWR to CDG on 2026-11-12 under $600. I do not need a nonstop or refundable ticket.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "CDG"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 59999
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2764,
+      "result": {
+        "fields": {
+          "max_total_cents": 59999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "CDG"
+          ],
+          "departure_date": "2026-11-12"
+        },
+        "sources": {
+          "max_total_cents": "under $600",
+          "origin_airports": "EWR",
+          "destination_airports": "CDG",
+          "departure_date": "2026-11-12"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All explicit constraints captured; optional nonstop and refundable preferences omitted.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1048,
+            "tokens": {
+              "completion_tokens": 220,
+              "prompt_tokens": 1042,
+              "total_tokens": 1262,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "c0013bae73364c458e969bf979bcc7ef"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1205,
+            "tokens": {
+              "completion_tokens": 225,
+              "prompt_tokens": 1302,
+              "total_tokens": 1527,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "8be820653f73451d82ada45d8e21c7c3"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "negated-preference",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "negated-preference",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "negated-preference",
+        "domain": "flight",
+        "message": "Fly from EWR to CDG on 2026-11-12 under $600. I do not need a nonstop or refundable ticket.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "CDG"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 59999
+        },
+        "unsupported_groups": []
+      }
+    },
+    {
+      "case": {
+        "id": "hotel-new-city",
+        "domain": "hotel",
+        "message": "I need a hotel in Tampa from 2026-11-14 until 2026-11-17 for at most $300 all in, with breakfast and free cancellation.",
+        "expected_fields": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": 30000,
+          "breakfast": true,
+          "refundable": true
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2670,
+      "result": {
+        "fields": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": 30000,
+          "breakfast": true,
+          "refundable": true
+        },
+        "sources": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": "at most $300 all in",
+          "breakfast": "with breakfast",
+          "refundable": "free cancellation"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested hotel criteria are captured; no ambiguous or unsupported items.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1094,
+            "tokens": {
+              "completion_tokens": 264,
+              "prompt_tokens": 1015,
+              "total_tokens": 1279,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "3ea70c38314f48adabe6dc3988ea1a74"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1027,
+            "tokens": {
+              "completion_tokens": 278,
+              "prompt_tokens": 1295,
+              "total_tokens": 1573,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "5bd3922d384546c68fd74af3b1e899cd"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "hotel-new-city",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date",
+          "max_total_cents",
+          "breakfast",
+          "refundable"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "hotel-new-city",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date",
+          "max_total_cents",
+          "breakfast",
+          "refundable"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "hotel-new-city",
+        "domain": "hotel",
+        "message": "I need a hotel in Tampa from 2026-11-14 until 2026-11-17 for at most $300 all in, with breakfast and free cancellation.",
+        "expected_fields": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": 30000,
+          "breakfast": true,
+          "refundable": true
+        },
+        "unsupported_groups": []
+      }
+    },
+    {
+      "case": {
+        "id": "contradictory-shopping",
+        "domain": "general",
+        "message": "A comfortable, ethically made desk chair under $300, but ignore my budget if you think I will like it.",
+        "expected_fields": {},
+        "allowed_extra": [
+          "max_total_cents"
+        ],
+        "unsupported_groups": [
+          [
+            "comfort"
+          ],
+          [
+            "ethical"
+          ]
+        ],
+        "clarification_groups": [
+          [
+            "budget"
+          ]
+        ],
+        "allow_unsupported": true
+      },
+      "duration_ms": 2570,
+      "result": {
+        "fields": {},
+        "sources": {},
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "The user mentions a budget but explicitly asks to ignore it, so no enforceable max_total_cents field is included.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1048,
+            "tokens": {
+              "completion_tokens": 144,
+              "prompt_tokens": 870,
+              "total_tokens": 1014,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "62f22e9bdc94463795a719ad5643a601"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1044,
+            "tokens": {
+              "completion_tokens": 142,
+              "prompt_tokens": 1047,
+              "total_tokens": 1189,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "e67c5842c54f40808102e23e369ff40d"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "contradictory-shopping",
+        "passed": false,
+        "field_accuracy": 0.0,
+        "correct_fields": [],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [
+          [
+            "comfort"
+          ],
+          [
+            "ethical"
+          ]
+        ],
+        "missed_clarification_groups": [
+          [
+            "budget"
+          ]
+        ],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_score": {
+        "case_id": "contradictory-shopping",
+        "passed": false,
+        "field_accuracy": 0.0,
+        "correct_fields": [],
+        "wrong_or_missing_fields": [
+          "max_total_cents"
+        ],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [
+          [
+            "comfort"
+          ],
+          [
+            "ethical"
+          ]
+        ],
+        "unnecessary_hold": false,
+        "error": null
+      },
+      "original_case": {
+        "id": "contradictory-shopping",
+        "domain": "general",
+        "message": "A comfortable, ethically made desk chair under $300, but ignore my budget if you think I will like it.",
+        "expected_fields": {
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": [
+          [
+            "comfort"
+          ],
+          [
+            "ethical"
+          ]
+        ],
+        "allow_unsupported": true
+      }
+    }
+  ],
+  "max_reserved_calls": 14,
+  "reserved_calls": 14,
+  "original_passed": 5,
+  "label_revision": "typed-clarifications-v2",
+  "label_note": "Soft preferences and ambiguity are now scored as typed clarifications, separately from inherently unsupported requirements. Contradictory budgets require clarification rather than an assumed fixed amount. Original labels/scores are retained; no model response or call was changed."
+}

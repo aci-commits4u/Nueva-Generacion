@@ -1,0 +1,244 @@
+{
+  "created_at": "2026-10-13T22:01:10.344477+00:00",
+  "variant": "audited",
+  "split": "reliability-development",
+  "model": "gpt-oss-120b",
+  "cases": 3,
+  "passed": 2,
+  "rows": [
+    {
+      "case": {
+        "id": "named-cities",
+        "domain": "flight",
+        "message": "I need a flight from Newark to Tampa on 2026-11-14, under $300, without any connections.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "departure_date": "2026-11-14",
+          "max_total_cents": 29999,
+          "nonstop": true
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 4227,
+      "result": {
+        "error": "ai_interpretation",
+        "stage": "coverage_audit",
+        "request_id": "9b8cc4723347",
+        "fields": {},
+        "sources": {},
+        "unsupported": []
+      },
+      "score": {
+        "case_id": "named-cities",
+        "passed": false,
+        "field_accuracy": 0.0,
+        "correct_fields": [],
+        "wrong_or_missing_fields": [
+          "departure_date",
+          "destination_airports",
+          "max_total_cents",
+          "nonstop",
+          "origin_airports"
+        ],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": "ai_interpretation"
+      }
+    },
+    {
+      "case": {
+        "id": "ordinary-duration",
+        "domain": "flight",
+        "message": "EWR to MCO on 2026-11-12, up to $350 total. At most one connection and a journey no longer than 2 hours.",
+        "expected_fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_total_cents": 35000,
+          "max_connections": 1,
+          "max_duration_minutes": 120
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2456,
+      "result": {
+        "fields": {
+          "max_total_cents": 35000,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ],
+          "departure_date": "2026-11-12",
+          "max_connections": 1,
+          "max_duration_minutes": 120
+        },
+        "sources": {
+          "max_total_cents": "up to $350 total",
+          "origin_airports": "EWR",
+          "destination_airports": "MCO",
+          "departure_date": "2026-11-12",
+          "max_connections": "At most one connection",
+          "max_duration_minutes": "journey no longer than 2 hours"
+        },
+        "unsupported": [],
+        "explanation": "All explicit constraints are captured; no ambiguous or unsupported items present.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1027,
+            "tokens": {
+              "completion_tokens": 330,
+              "prompt_tokens": 887,
+              "total_tokens": 1217,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "9bd370312ef34ba28d1f725271adb99c"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1185,
+            "tokens": {
+              "completion_tokens": 256,
+              "prompt_tokens": 1140,
+              "total_tokens": 1396,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "2b985eb5aca7463494452376f2d1b72d"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "ordinary-duration",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "max_connections",
+          "max_duration_minutes"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      }
+    },
+    {
+      "case": {
+        "id": "hotel-new-city",
+        "domain": "hotel",
+        "message": "I need a hotel in Tampa from 2026-11-14 until 2026-11-17 for at most $300 all in, with breakfast and free cancellation.",
+        "expected_fields": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": 30000,
+          "breakfast": true,
+          "refundable": true
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2338,
+      "result": {
+        "fields": {
+          "max_total_cents": 30000,
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "breakfast": true,
+          "refundable": true
+        },
+        "sources": {
+          "max_total_cents": "at most $300 all in",
+          "city": "hotel in Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "breakfast": "with breakfast",
+          "refundable": "free cancellation"
+        },
+        "unsupported": [],
+        "explanation": "All explicit requirements are captured; no ambiguous or unsupported conditions remain.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1092,
+            "tokens": {
+              "completion_tokens": 274,
+              "prompt_tokens": 850,
+              "total_tokens": 1124,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "90881ae165254830adf45a375f33bd3b"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1091,
+            "tokens": {
+              "completion_tokens": 225,
+              "prompt_tokens": 1100,
+              "total_tokens": 1325,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "d2bad25812bd4e06835aaf5478180e34"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "hotel-new-city",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date",
+          "max_total_cents",
+          "breakfast",
+          "refundable"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": false,
+        "error": null
+      }
+    }
+  ],
+  "max_reserved_calls": 6,
+  "reserved_calls": 6
+}

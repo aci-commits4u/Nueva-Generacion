@@ -1,0 +1,69 @@
+{
+  "created_at": "2026-10-13T21:59:14.894702+00:00",
+  "variant": "guided",
+  "split": "reliability-development",
+  "model": "gpt-oss-120b",
+  "cases": 1,
+  "passed": 0,
+  "rows": [
+    {
+      "case": {
+        "id": "florida-question",
+        "domain": "flight",
+        "message": "How can I get to Florida for under $300?",
+        "expected_fields": {
+          "max_total_cents": 29999
+        },
+        "unsupported_groups": []
+      },
+      "duration_ms": 2262,
+      "result": {
+        "fields": {
+          "max_total_cents": 29999
+        },
+        "sources": {
+          "max_total_cents": "under $300"
+        },
+        "unsupported": [
+          "destination unspecified (Florida)"
+        ],
+        "explanation": "Budget is clear, but the destination is ambiguous; need a specific airport or city.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "guided",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 2084,
+            "tokens": {
+              "completion_tokens": 153,
+              "prompt_tokens": 841,
+              "total_tokens": 994,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "9d5a454d46da468487effd79071aca45"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "florida-question",
+        "passed": false,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "unnecessary_hold": true,
+        "error": null
+      }
+    }
+  ],
+  "max_reserved_calls": 1,
+  "reserved_calls": 1
+}

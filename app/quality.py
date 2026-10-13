@@ -26,10 +26,14 @@ def overview():
     for file in sorted((ROOT/'evals/reports').glob('*.json')):
         report=json.loads(file.read_text())
         rows=report['rows']
-        benchmarks.append({'variant':report['variant'],'split':report['split'],'cases':report['cases'],'passed':report['passed'],'median_ms':round(statistics.median(r['duration_ms'] for r in rows)),'model_calls':sum(len(r['result'].get('trace',[])) for r in rows),'model':report['model'],'created_at':report['created_at']})
+        benchmarks.append({'variant':report['variant'],'split':report['split'],'cases':report['cases'],'passed':report['passed'],'median_ms':round(statistics.median(r['duration_ms'] for r in rows)) if rows else 0,'model_calls':sum(len(r['result'].get('trace',[])) for r in rows),'reserved_calls':report.get('reserved_calls'),'model':report['model'],'created_at':report['created_at']})
     today=datetime.now(timezone.utc).date().isoformat()
     current=get_store().read('quality-'+today) or get_store().read('quality-latest')
-    return {'pipeline':selected_pipeline(),'benchmarks':benchmarks,'monitor':display_report(current.get('report')),'limitations':'Small synthetic benchmark, not a guarantee of complete understanding. The audited development run missed a direct-flight ambiguity (11/12); the untouched holdout passed 6/6. Customer review and deterministic enforcement remain mandatory.'}
+    publication=ROOT/'evals/native-publication.json'
+    return {'pipeline':selected_pipeline(),'benchmarks':benchmarks,'monitor':display_report(current.get('report')),
+            'runtime':get_store().read('ai-runtime'),
+            'native_evaluation':json.loads(publication.read_text()) if publication.exists() else None,
+            'limitations':'Small synthetic benchmarks, not a guarantee of complete understanding. Original development and holdout scores describe the earlier prompts. Reliability-development includes deliberately difficult requests and records failures as well as successes. Customer review and deterministic enforcement remain mandatory.'}
 
 
 def canary(authorization):

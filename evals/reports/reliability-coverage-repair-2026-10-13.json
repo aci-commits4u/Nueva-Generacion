@@ -1,0 +1,105 @@
+{
+  "created_at": "2026-10-13T22:15:58.056894+00:00",
+  "variant": "audited",
+  "split": "reliability-development",
+  "model": "gpt-oss-120b",
+  "cases": 1,
+  "passed": 0,
+  "rows": [
+    {
+      "case": {
+        "id": "contradictory-shopping",
+        "domain": "general",
+        "message": "A comfortable, ethically made desk chair under $300, but ignore my budget if you think I will like it.",
+        "expected_fields": {},
+        "allowed_extra": [
+          "max_total_cents"
+        ],
+        "unsupported_groups": [
+          [
+            "comfort"
+          ],
+          [
+            "ethical"
+          ]
+        ],
+        "clarification_groups": [
+          [
+            "budget"
+          ]
+        ],
+        "allow_unsupported": true
+      },
+      "duration_ms": 3009,
+      "result": {
+        "fields": {},
+        "sources": {},
+        "unsupported": [
+          "comfortable",
+          "ethically made"
+        ],
+        "clarifications": [],
+        "explanation": "The request includes a budget mention that is explicitly dismissed, so no max_total_cents is recorded. Descriptive preferences are unsupported.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1366,
+            "tokens": {
+              "completion_tokens": 162,
+              "prompt_tokens": 1030,
+              "total_tokens": 1192,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "a6ced20fd2864bad8fc0e77d6c7f9486",
+            "prompt_version": "intent-envelope-v2-coverage",
+            "reasoning_effort": "low",
+            "output_format": "plain-json"
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1109,
+            "tokens": {
+              "completion_tokens": 161,
+              "prompt_tokens": 1286,
+              "total_tokens": 1447,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "9b121ce1447e46998b477fe7b9a7c73d",
+            "prompt_version": "intent-envelope-v2-coverage",
+            "reasoning_effort": "low",
+            "output_format": "plain-json"
+          }
+        ]
+      },
+      "score": {
+        "case_id": "contradictory-shopping",
+        "passed": false,
+        "field_accuracy": 0.0,
+        "correct_fields": [],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [
+          [
+            "budget"
+          ]
+        ],
+        "unnecessary_hold": false,
+        "error": null
+      }
+    }
+  ],
+  "max_reserved_calls": 2,
+  "label_revision": "typed-clarifications-v2",
+  "reserved_calls": 2
+}

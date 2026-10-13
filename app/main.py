@@ -14,7 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest
 from app.profile_registry import get_profile,validate_fields,digest
 from app.rules_engine import evaluate
-from app.store import get_store
+from app.store import get_store,ai_capacity
+from app.ai_errors import AIServiceError
+from app.ai_config import selected_pipeline,selected_reasoning_effort
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
@@ -23,6 +25,27 @@ from demo.fixtures import offers_for
 
 ROOT=Path(__file__).resolve().parent.parent
 app=FastAPI(title='Intent Judge',version='1.0.0')
+MAX_FOLLOWUPS=6
+
+
+def live_configuration_ready():
+    endpoint=urlsplit(os.getenv('AZURE_OPENAI_ENDPOINT',''))
+    try: selected_reasoning_effort()
+    except ValueError: return False
+    return bool(endpoint.scheme=='https' and endpoint.netloc and
+                os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT') and
+                selected_pipeline() in {'baseline','guided','audited'})
+
+
+def conversation_view(draft):
+    return {**draft,'max_followups':MAX_FOLLOWUPS,
+            'followups_remaining':max(0,MAX_FOLLOWUPS-(len(draft.get('messages',[]))-1))}
+
+
+@app.exception_handler(AIServiceError)
+async def ai_service_error(request,exc):
+    headers={'Retry-After':str(exc.retry_after_seconds)} if exc.retry_after_seconds is not None else {}
+    return JSONResponse({'detail':str(exc),'error':exc.public()},status_code=exc.status_code,headers=headers)
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def uid(): return secrets.token_urlsafe(16)
@@ -88,7 +111,32 @@ def quality_check(request:Request):
 
 @app.get('/api/health')
 def health():
-    return {'status':'ok','live_ai_configured':bool(os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT')),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
+    return {'status':'ok','live_ai_configured':live_configuration_ready(),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
+
+
+@app.get('/api/ai/status')
+def ai_status(request:Request):
+    capacity=ai_capacity(session_id(request))
+    pipeline=selected_pipeline()
+    calls=2 if pipeline=='audited' else 1
+    configured=live_configuration_ready()
+    reason=None
+    if not configured:
+        reason=AIServiceError('ai_configuration','Live AI is not configured completely. The tutorial remains available; offline mode is an explicit alternative.')
+    elif os.getenv('MOCK_LLM')=='1':
+        reason=AIServiceError('ai_disabled','Live AI is disabled in this environment. Choose offline mode explicitly to try the demo.')
+    elif capacity['lifetime_remaining_calls']<calls:
+        reason=AIServiceError('ai_budget_limit','Live AI is paused to protect the remaining demo credit. Your request is kept; the tutorial remains available.')
+    elif capacity['session_remaining_calls']<calls:
+        reason=AIServiceError('ai_session_limit','This session has reached its live AI allowance. You can keep reviewing the draft or start a new request session.',status_code=429)
+    elif capacity['daily_remaining_calls']<calls:
+        reason=AIServiceError('ai_daily_limit','Today’s live AI allowance is reached. It resumes at midnight UTC. Your request is kept; the tutorial remains available.',status_code=429,retry_after_seconds=capacity['reset_after_seconds'])
+    reset_at=datetime.fromtimestamp(time.time()+capacity['reset_after_seconds'],timezone.utc).isoformat()
+    return {'configured':configured,'available':reason is None,'reason':reason.public() if reason else None,
+            'pipeline':pipeline,'model':os.getenv('AZURE_OPENAI_DEPLOYMENT'),'interpretation_calls':calls,
+            'remaining_calls':capacity['remaining_calls'],'session_remaining_calls':capacity['session_remaining_calls'],
+            'remaining_interpretations':min(capacity['remaining_calls'],capacity['session_remaining_calls'])//calls,
+            'reset_at':reset_at}
 
 @app.get('/api/session')
 def session(request:Request,response:Response):
@@ -122,10 +170,13 @@ def intake(body:IntentRequest,request:Request):
     if body.mode=='offline': extraction=offline_extract(body.domain,body.message)
     else:
         from app.foundry_client import extract
-        try: extraction=extract(body.domain,body.message,sid)
+        try: extraction=extract(body.domain,body.message,sid,source_messages=[{'role':'user','content':body.message}])
+        except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
     d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now(),'messages':[{'role':'user','content':body.message,'timestamp':now()}],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
     d['ai_runs']=[provenance(extraction,1,d['messages'])]
+    d['clarifications']=extraction.get('clarifications',[])
+    d['questions']=questions(body.domain,d['fields'],d['clarifications'])
     try: d['unsupported']=merge_unsupported(d['unsupported'])
     except ValueError as exc: raise HTTPException(422,str(exc))
     refresh(d)
@@ -133,14 +184,14 @@ def intake(body:IntentRequest,request:Request):
         if len(state['drafts'])>=3: raise HTTPException(429,'Scenario limit reached.')
         state['drafts'][d['id']]=d;event(state,'intent_extracted',{'intent_id':d['id'],'revision':1,'mode':d['mode']})
         return d
-    return get_store().mutate(sid,save)
+    return conversation_view(get_store().mutate(sid,save))
 
 @app.get('/api/intents/{id}')
 def get_intent(id:str,request:Request):
     s=get_store().read(session_id(request));d=required(s,'drafts',id)
     decisions=[{k:v for k,v in obj.items() if k not in {'bundle','original_bundle','approved'}} for obj in s['decisions'].values() if obj['intent_id']==id]
     purchases=[p['receipt'] for p in s['purchases'].values() if any(v['id']==p['receipt']['decision_id'] for v in decisions)]
-    return {**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None}
+    return conversation_view({**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None})
 
 @app.post('/api/intents/{id}/clarify')
 def clarify(id:str,body:ClarifyRequest,request:Request):
@@ -148,7 +199,7 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     d=required(get_store().read(sid),'drafts',id)
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
-    if len(messages)>=3: raise HTTPException(409,'Review the captured requirements to continue; this demo allows two AI follow-ups.')
+    if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,'Review the captured requirements to continue; this demo allows six AI follow-ups, and every field remains editable in review.')
     reply_to=(d.get('questions') or questions(d['domain'],d['fields']) or [None])[0]
     messages=messages+[{'role':'user','content':body.message,'timestamp':now(),'reply_to':reply_to}]
     text=context(messages)
@@ -156,7 +207,8 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     if d['mode']=='offline': extraction=offline_extract(d['domain'],user_text(messages))
     else:
         from app.foundry_client import extract
-        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages))
+        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages)
+        except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
     def save(state):
         current=required(state,'drafts',id)
@@ -164,12 +216,25 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
         except ValueError as exc: raise HTTPException(422,str(exc))
         revision=current['revision']+1
+        previous_clarifications=current.get('clarifications',[])
         current.update(fields=extraction['fields'],sources=extraction['sources'],unsupported=unsupported,explanation=extraction['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],extraction['fields']))
+        next_clarifications=extraction.get('clarifications',[])
+        by_field={item['field']:item for item in next_clarifications}
+        for item in previous_clarifications:
+            if item['field'] not in current['fields'] and item['field'] not in by_field:
+                by_field[item['field']]=item
+            elif item['field'] in current['fields']:
+                event(state,'clarification_interpreted',{'intent_id':id,'revision':revision,'field':item['field'],
+                      'original_quote':item['source_quote'],'proposed_value':current['fields'][item['field']],
+                      'new_source_quote':current['sources'].get(item['field']),
+                      'authority':'unapproved draft; customer review still required'})
+        current['clarifications']=list(by_field.values())
+        current['questions']=questions(d['domain'],current['fields'],current['clarifications'])
         current.setdefault('ai_runs',[]).append(provenance(extraction,revision,messages))
         current.pop('approved',None);current.pop('offer_views',None)
         refresh(current);event(state,'intent_clarified',{'intent_id':id,'revision':revision,'digest':current['digest']})
         return current
-    return get_store().mutate(sid,save)
+    return conversation_view(get_store().mutate(sid,save))
 
 @app.post('/api/intents/{id}/answers')
 def answers(id:str,body:AnswerRequest,request:Request):
@@ -185,6 +250,12 @@ def answers(id:str,body:AnswerRequest,request:Request):
         if any(x not in body.unsupported and x not in body.removed_unsupported for x in d['unsupported']): raise HTTPException(409,'Flagged conditions require a specific recorded traveler removal; the AI cannot remove them.')
         if body.removed_unsupported: event(s,'condition_removed_by_traveler',{'intent_id':id,'revision':d['revision'],'draft_digest':d['digest'],'conditions':body.removed_unsupported,'meaning':'Traveler explicitly removed these as separate purchasing requirements; reviewed fields govern.'})
         if d['domain']=='hotel' and body.fields['checkout_date']<=body.fields['checkin_date']: raise HTTPException(422,'Check-out must follow check-in.')
+        if d.get('clarifications'):
+            event(s,'clarifications_resolved_by_traveler',{'intent_id':id,'revision':d['revision'],'draft_digest':d['digest'],
+                  'choices':[{'field':item['field'],'source_quote':item['source_quote'],'reason':item['reason'],
+                              'reviewed_value':body.fields[item['field']],'meaning':'explicit no preference' if body.fields[item['field']] is None else 'customer-reviewed value'}
+                             for item in d['clarifications']]})
+            d['clarifications']=[]
         d.update(fields=body.fields,unsupported=body.unsupported,revision=d['revision']+1,reviewed=True)
         d.pop('approved',None)
         refresh(d);event(s,'requirements_reviewed',{'intent_id':id,'revision':d['revision'],'digest':d['digest']})
@@ -234,6 +305,7 @@ def explain_decision(id:str,request:Request):
     if d.get('explanation_key')==cache_key: return d['explanation']
     from app.foundry_client import explain
     try: narrative=explain(result,sid,required(s,'drafts',d['intent_id'])['mode'])
+    except AIServiceError: raise
     except ValueError as exc: raise HTTPException(503,str(exc))
     def save(state):
         current=required(state,'decisions',id)

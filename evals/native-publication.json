@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "cases": 7,
+  "passed": 6,
+  "failed": 1,
+  "source": "stored synthetic outputs",
+  "model_calls": 0,
+  "label_revision": "typed-clarifications-v2",
+  "evaluation_id": "eval_ff8c6a76362a4ad58f40a38a6e361852",
+  "run_id": "evalrun_76250acff5c04b759d6fb687f3a43e94",
+  "report_url": "https://ai.azure.com/nextgen/r/xagNntfoRYS1VFrLbdrcsg,lead-team-rg,,victor-lead-foundry-20261012,lead-team/build/evaluations/eval_ff8c6a76362a4ad58f40a38a6e361852/run/evalrun_76250acff5c04b759d6fb687f3a43e94"
+}

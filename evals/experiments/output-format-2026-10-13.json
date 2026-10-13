@@ -1,0 +1,62 @@
+[
+  {
+    "format": "json-schema",
+    "reasoning": "low",
+    "domain": "general",
+    "message": "A comfortable, ethically made desk chair under $300, but ignore my budget if you think I will like it.",
+    "response_id": "86b818838fb6468c99db66ac157b034c",
+    "usage": {
+      "completion_tokens": 172,
+      "prompt_tokens": 864,
+      "total_tokens": 1036,
+      "completion_tokens_details": null,
+      "prompt_tokens_details": null,
+      "audio_prompt_tokens": 0
+    },
+    "finish_reason": "stop",
+    "proposal": {
+      "fields": {
+        "max_total_cents": 29999
+      },
+      "sources": {
+        "max_total_cents": "under $300"
+      },
+      "unsupported": [],
+      "clarifications": [],
+      "explanation": "Budget constraint captured; other preferences not supported."
+    },
+    "validated": true,
+    "duration_ms": 2888
+  },
+  {
+    "format": "plain",
+    "reasoning": "medium",
+    "domain": "general",
+    "message": "A comfortable, ethically made desk chair under $300, but ignore my budget if you think I will like it.",
+    "response_id": "7df46c57472e4051956644680e070b58",
+    "usage": {
+      "completion_tokens": 449,
+      "prompt_tokens": 864,
+      "total_tokens": 1313,
+      "completion_tokens_details": null,
+      "prompt_tokens_details": null,
+      "audio_prompt_tokens": 0
+    },
+    "finish_reason": "stop",
+    "proposal": {
+      "fields": {},
+      "sources": {},
+      "unsupported": [],
+      "clarifications": [
+        {
+          "field": "max_total_cents",
+          "source_quote": "under $300, but ignore my budget if you think I will like it.",
+          "reason": "ambiguous"
+        }
+      ],
+      "explanation": "User gave a budget but also asked to ignore it conditionally, making the total cost requirement unclear."
+    },
+    "validated": true,
+    "duration_ms": 1968
+  }
+]

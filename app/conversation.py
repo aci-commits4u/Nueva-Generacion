@@ -24,12 +24,14 @@ def merge_unsupported(*groups):
     return values
 
 
-def questions(domain,fields):
+def questions(domain,fields,clarifications=None):
     profile=get_profile(domain)
     required=[{'field':k,'question':f['question'],'required':True} for k,f in profile['fields'].items() if f.get('required') and fields.get(k) is None]
     optional=[{'field':k,'question':f['question'],'required':False} for k,f in profile['fields'].items() if not f.get('required') and k not in fields]
+    mentioned={item['field'] for item in (clarifications or [])}
+    optional.sort(key=lambda item: item['field'] not in mentioned)
     return required+optional
 
 
 def provenance(extraction,revision,messages=None):
-    return {'revision':revision,'mode':extraction['mode'],'pipeline':extraction.get('pipeline','offline'),'model':extraction.get('model'),'trace':deepcopy(extraction.get('trace',[])),'fields':deepcopy(extraction['fields']),'sources':deepcopy(extraction['sources']),'unsupported':deepcopy(extraction['unsupported']),'guidance':extraction['explanation'],'conversation_digest':digest(messages or []),'source_message_indexes':{k:[i for i,m in enumerate(messages or []) if quote.casefold() in m['content'].casefold()] for k,quote in extraction['sources'].items()}}
+    return {'revision':revision,'mode':extraction['mode'],'pipeline':extraction.get('pipeline','offline'),'model':extraction.get('model'),'trace':deepcopy(extraction.get('trace',[])),'fields':deepcopy(extraction['fields']),'sources':deepcopy(extraction['sources']),'unsupported':deepcopy(extraction['unsupported']),'clarifications':deepcopy(extraction.get('clarifications',[])),'guidance':extraction['explanation'],'conversation_digest':digest(messages or []),'source_message_indexes':{k:[i for i,m in enumerate(messages or []) if quote.casefold() in m['content'].casefold()] for k,quote in extraction['sources'].items()},'clarification_source_message_indexes':{item['field']:[i for i,m in enumerate(messages or []) if item['source_quote'].casefold() in m['content'].casefold()] for item in extraction.get('clarifications',[])}}
