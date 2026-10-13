@@ -1,4 +1,4 @@
-import {api} from './api.js';
+import {api,ApiError,errorFromUnknown} from './api.js';
 import {conversationMarkup} from './views/conversation.js';
 import {overviewMarkup} from './views/overview.js';
 import {walkthroughMarkup} from './views/walkthrough.js';
@@ -6,16 +6,108 @@ import {walkthroughMarkup} from './views/walkthrough.js';
 const $ = s => document.querySelector(s);
 const escapeHTML = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtMoney = cents => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
-const state = {domain:'flight',stage:0,navigation:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live'};
+const state = {domain:'flight',stage:0,navigation:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live',aiStatus:null,aiStatusLoading:false};
 const samples = {
  flight:'Book me a nonstop flight from EWR to MCO on 2026-11-12 under $300.',
  hotel:'Find a hotel in Orlando from 2026-11-12 to 2026-11-14 under $300 with breakfast and free cancellation.',
  general:'Find an ethically sourced, comfortable chair under $300.'
 };
-function notice(message=''){ $('#notice').hidden=!message;$('#notice').textContent=message; if(message)$('#notice').scrollIntoView({behavior:'smooth',block:'nearest'});}
+let aiStatusRequest=null;
+function notice(message='',tone='warning'){
+ const el=$('#notice');
+ el.hidden=!message;el.textContent=message;el.dataset.tone=tone;
+ if(message)el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function formatReset(value){
+ if(!value)return '';
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return '';
+ return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(date);
+}
+function formatDuration(seconds){
+ const value=Number(seconds);
+ if(!Number.isFinite(value)||value<=0)return '';
+ if(value<60)return `${Math.round(value)} seconds`;
+ const minutes=Math.ceil(value/60);
+ if(minutes<60)return `${minutes} minute${minutes===1?'':'s'}`;
+ const hours=Math.ceil(minutes/60);
+ return `${hours} hour${hours===1?'':'s'}`;
+}
+function statusReason(status){return status?.reason&&typeof status.reason==='object'?status.reason:null;}
+function liveAvailable(status=state.aiStatus){return Boolean(status&&status.available===true&&status.configured!==false);}
+function statusBalance(status){
+ const parts=[];
+ const daily=status?.remaining_interpretations??status?.remaining_calls;
+ const session=status?.session_remaining_calls;
+ if(Number.isFinite(Number(daily)))parts.push(`${Number(daily)} live interpretation${Number(daily)===1?'':'s'} left`);
+ if(Number.isFinite(Number(session)))parts.push(`${Number(session)} left in this session`);
+ const reset=formatReset(status?.reset_at||statusReason(status)?.reset_at);
+ if(reset)parts.push(`available again ${reset}`);
+ return parts.join(' · ');
+}
+function knownReasonCopy(status){
+ const reason=statusReason(status),code=reason?.code;
+ if(code==='ai_daily_limit')return 'Today’s live allowance is used up.';
+ if(code==='ai_session_limit')return 'This session’s live allowance is used up.';
+ if(code==='ai_budget_limit')return 'The live allowance is temporarily unavailable.';
+ if(code==='ai_configuration')return 'Live Foundry is not configured for this environment.';
+ if(code==='ai_disabled')return 'Live Foundry is disabled in this environment.';
+ if(code==='ai_provider')return 'Live Foundry is unavailable right now.';
+ if(code==='ai_timeout')return 'Live Foundry did not finish this request.';
+ if(code==='ai_interpretation')return 'The live interpretation could not be validated.';
+ if(code==='ai_status_unavailable'||code==='ai_status_error')return 'Live availability could not be confirmed.';
+ return reason?.message||'Live Foundry availability could not be confirmed.';
+}
+function availabilityMarkup(status=state.aiStatus,mode=state.mode){
+ if(mode==='offline')return '<span class="availability-dot offline"></span><div><b>Explicit offline parser selected</b><p>It keeps unsupported text visible and does not use the live allowance. You can switch back to Live Foundry any time availability is confirmed.</p></div>';
+ if(!status||state.aiStatusLoading)return '<span class="availability-dot checking"></span><div><b>Checking live availability…</b><p>Your request stays in this form while we check whether live interpretation is available.</p></div>';
+ if(liveAvailable(status)){
+  const balance=statusBalance(status);
+  return `<span class="availability-dot ready"></span><div><b>Live Foundry is available</b><p>${escapeHTML(balance||'Ready for a bounded interpretation.')}</p></div>`;
+ }
+ const reason=statusReason(status),reset=formatReset(status?.reset_at||reason?.reset_at),wait=formatDuration(reason?.retry_after_seconds);
+ const details=[knownReasonCopy(status)];
+ if(reset)details.push(`Availability returns ${reset}.`);else if(wait)details.push(`Availability may return in about ${wait}.`);
+ if(reason?.code==='ai_session_limit')details.push('Start a new demo session or choose the explicit offline parser.');
+ else details.push('Keep this request and choose the explicit offline parser, or review the current draft.');
+ return `<span class="availability-dot unavailable"></span><div><b>Live Foundry is unavailable</b><p>${escapeHTML(details.join(' '))}</p></div>`;
+}
+function renderAvailability(){
+ document.querySelectorAll('[data-availability]').forEach(el=>{const mode=el.dataset.mode||state.mode;el.innerHTML=availabilityMarkup(state.aiStatus,mode);el.classList.toggle('is-unavailable',mode!=='offline'&&!liveAvailable());el.classList.toggle('is-offline',mode==='offline');});
+ const modeStatus=$('#mode-status'),mode=state.draft?.mode||state.mode;
+ if(modeStatus)modeStatus.textContent=mode==='offline'?'Explicit offline mode':(state.aiStatus?(liveAvailable()?'Live Foundry ready':'Live Foundry unavailable'):'Live status checking');
+ const submit=$('#intake-form button[type="submit"]');
+ if(submit&&submit.dataset.busy!=='true')submit.disabled=state.mode==='live'&&!liveAvailable();
+}
+async function refreshAIStatus(silent=true){
+ if(aiStatusRequest)return aiStatusRequest;
+ state.aiStatusLoading=true;renderAvailability();
+ aiStatusRequest=api('/api/ai/status').then(status=>{state.aiStatus=status;return status;}).catch(error=>{
+  const e=errorFromUnknown(error,'/api/ai/status');
+  state.aiStatus={configured:false,available:false,reason:{code:e.status===404?'ai_status_unavailable':'ai_status_error',message:'Live availability could not be confirmed.'}};
+  if(!silent)notice('Live availability could not be confirmed. Your request is preserved; choose the explicit offline parser or review the current draft.');
+  return state.aiStatus;
+ }).finally(()=>{state.aiStatusLoading=false;aiStatusRequest=null;renderAvailability();});
+ return aiStatusRequest;
+}
+function errorMessage(error){
+ const e=errorFromUnknown(error);
+ const suffix=e.requestId?` Reference ${e.requestId}.`:'';
+ if(e.status===0)return `The connection was interrupted. Your request is preserved; live availability is shown above.${suffix}`;
+ if(e.code==='ai_daily_limit'||e.code==='ai_session_limit'||e.code==='ai_budget_limit')return `${knownReasonCopy({reason:e.publicError})} ${e.retryAfterSeconds?`Availability may return in about ${formatDuration(e.retryAfterSeconds)}.`:''} Your request is preserved.${suffix}`;
+ if(e.code==='ai_configuration'||e.code==='ai_disabled'||e.code==='ai_provider'||e.code==='ai_timeout'||e.code==='ai_interpretation')return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. Choose the explicit offline parser or review the current draft.${suffix}`;
+ if(/\/api\/intents/.test(e.path||''))return `${e.message||'The request could not be completed.'} Your request is preserved.${suffix}`;
+ return `${e.message||'The request could not be completed.'}${suffix}`;
+}
+async function reportError(error,navigation){
+ const e=errorFromUnknown(error);
+ if(String(e.code||'').startsWith('ai_')||/\/api\/intents/.test(e.path||''))await refreshAIStatus(true);
+ if(navigation===state.navigation)notice(errorMessage(e));
+}
 async function busy(button,fn,label='Working…'){
- const old=button.textContent,navigation=state.navigation;button.disabled=true;button.textContent=label;notice();
- try{await fn();}catch(e){if(navigation===state.navigation)notice(e.message);}finally{button.disabled=false;button.textContent=old;}
+ const old=button?.textContent,navigation=state.navigation;if(button){button.disabled=true;button.dataset.busy='true';button.textContent=label;}notice();
+ try{await fn();}catch(e){await reportError(e,navigation);}finally{if(button){button.disabled=false;button.textContent=old;}}
+ if(button){delete button.dataset.busy;renderAvailability();}
 }
 function routeForStage(stage){
  if(stage===0)return '/';
@@ -55,9 +147,9 @@ function startDemo(domain=state.domain){state.reviewEdits=null;state.clarifyEdit
 function showWalkthrough(){if(state.stage>=1&&state.stage<=5)state.returnStage=state.stage;state.walkthroughStep=0;transition(7);}
 const stepHelp={
  1:['Start with your words','Choose a profile, describe what matters, and send your request. Foundry proposes a draft and checks for missed requirements. Try an example if you want a starting point. Nothing is approved yet.'],
- 2:['Clarify what matters','Answer the next question or add a correction. Your live summary shows what was captured and quotes your words. When you are ready, choose Review requirements. The demo allows two AI follow-ups; you can edit everything in review.'],
+ 2:['Clarify what matters','Answer the next targeted question or add a correction. Your live summary separates captured details from unresolved choices and quotes your words. When you are ready, choose Review requirements. The remaining follow-up allowance is shown beside the composer.'],
  3:['Review every rule','Check each field against your request. Fill required details and explicitly choose no preference for optional details you don’t care about. Flagged conditions hold checkout unless you specifically remove them. Only your confirmation authorizes these rules.'],
- 4:['Compare the offers','The backend verifies the merchant’s signature and checks the itinerary against your approved rules. Matches can proceed. Differences or missing facts hold checkout. You can review eligible differences and explicitly accept them for that exact offer; integrity failures stay blocked.'],
+ 4:['Compare the offers','Verified merchant facts are checked against your approved rules. Matches can proceed. Differences or missing facts hold checkout. You can review eligible differences and explicitly accept them for that exact offer; integrity failures stay blocked.'],
  5:['Follow the record','This is a simulated confirmation. Download the evidence to see your request, approval, signed offer, checks, and any accepted differences. Prepare a dispute review to see the recommendation; the final responsibility decision belongs to a dispute analyst.']
 };
 function render(){
@@ -71,11 +163,12 @@ function render(){
  document.querySelectorAll('[data-stage]').forEach(el=>el.classList.toggle('active',Number(el.dataset.stage)===(state.stage<=2?1:state.stage===3?2:3)));
  document.querySelectorAll('[data-domain]').forEach(el=>{const selected=el.dataset.domain===state.domain;el.classList.toggle('selected',selected);el.setAttribute('aria-pressed',String(selected));});
  $('#context-title').textContent=state.domain[0].toUpperCase()+state.domain.slice(1)+' request';
- $('#mode-status').textContent=state.draft?.mode==='offline'?'Explicit offline mode':state.draft?'Live Foundry':'Synthetic commerce demo';
+ $('#mode-status').textContent=state.draft?.mode==='offline'?'Explicit offline mode':(state.aiStatus?(liveAvailable()?'Live Foundry ready':'Live Foundry unavailable'):'Live status checking');
  $('#workspace').className=state.stage===2?'conversation-canvas':'';
  if(state.stage===0)$('#workspace').innerHTML=overviewMarkup(state.latestIntent?'/?intent='+encodeURIComponent(state.latestIntent):null);else if(state.stage===7)renderWalkthrough();else if(state.stage===1)renderIntake();else if(state.stage===2)renderConversation();else if(state.stage===3)renderReview();else if(state.stage===4)renderOffers();else if(state.stage===5)renderReceipt();else renderQuality();
  document.querySelectorAll('[data-walkthrough]').forEach(b=>b.onclick=showWalkthrough);
  document.querySelectorAll('[data-start-demo]').forEach(b=>b.onclick=()=>startDemo());
+ renderAvailability();
  renderSummary();
 }
 function renderWalkthrough(){
@@ -89,20 +182,29 @@ function renderWalkthrough(){
 function renderSummary(){
  const d=state.draft,p=state.profiles[state.domain];
  $('#intent-panel').hidden=![1,2,3,4,5].includes(state.stage);
- $('#intent-content').innerHTML=d?`<span class="eyebrow">${d.approved?'APPROVED BY YOU':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':'Updates as we clarify.'}</p><div class="summary-rules">${Object.entries(p.fields).filter(([k,f])=>d.fields[k]!==undefined||f.required).map(([k,f])=>`<div><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in total':f.label)}</b><span>${d.fields[k]===undefined?'<em>Needs your answer</em>':d.fields[k]===null?'No preference':escapeHTML(k==='max_total_cents'?fmtMoney(d.fields[k]):Array.isArray(d.fields[k])?d.fields[k].join(' – '):typeof d.fields[k]==='boolean'?d.fields[k]?'Required':'Must be absent':d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}</div>`).join('')}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">Nothing is authorized by an AI response. You approve the rules; the backend checks merchant-signed facts.</p>`:`<span class="eyebrow">YOUR INTENT, MADE EXPLICIT</span><h2>A clearer way to delegate.</h2><ol class="rail-steps"><li><b>Say what you want</b><p>We capture your words and ask about gaps.</p></li><li><b>Approve your rules</b><p>Every preference is your choice.</p></li><li><b>Check the offer</b><p>Signed facts are checked before checkout.</p></li></ol><p class="small summary-note">Synthetic offers and payments. No real booking.</p>`;
+ if(!d){$('#intent-content').innerHTML='<span class="eyebrow">YOUR INTENT, MADE EXPLICIT</span><h2>A clearer way to delegate.</h2><ol class="rail-steps"><li><b>Say what you want</b><p>We capture your words and ask about gaps.</p></li><li><b>Approve your rules</b><p>Every preference is your choice.</p></li><li><b>Check the offer</b><p>Signed facts are checked before checkout.</p></li></ol><p class="small summary-note">Synthetic offers and payments. No real booking.</p>';return;}
+ const entries=Object.entries(p.fields);
+ const unresolved=entries.filter(([k])=>d.fields[k]===undefined).length;
+ const captured=entries.length-unresolved;
+ const valueFor=(key,value)=>value===null?'No preference':escapeHTML(key==='max_total_cents'?fmtMoney(value):Array.isArray(value)?value.join(' – '):typeof value==='boolean'?value?'Required':'Must be absent':value);
+ const rows=entries.map(([k,f])=>{const open=d.fields[k]===undefined;return `<div class="summary-rule${open?' unresolved':''}"><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in price':f.label)}</b><span>${open?'<em>Still open</em>':valueFor(k,d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}</div>`;}).join('');
+ $('#intent-content').innerHTML=`<span class="eyebrow">${d.approved?'APPROVED BY YOU':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':'Captured values stay visible while you clarify.'}</p><div class="summary-counts"><span><b>${captured}</b> captured</span><span><b>${unresolved}</b> unresolved</span></div><div class="summary-rules">${rows}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">You approve the rules; signed merchant facts are checked before checkout.</p>`;
 }
 function renderIntake(){
- $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">INTENT JUDGE / AGENTIC COMMERCE</span><h1>What should your agent know?</h1><p>Start with what matters. We’ll clarify the rest together.</p></div><form id="intake-form" class="intake-form"><label for="request-text">What would you like to find?</label><textarea id="request-text" name="request" autocomplete="off" maxlength="2500" minlength="5" rows="5" required placeholder="I need a nonstop flight to Florida under $300…">${escapeHTML(state.message||'')}</textarea><div class="intake-controls"><span class="small">Your words become an unapproved draft.</span><button class="primary" type="submit">Start a conversation →</button></div><div class="examples"><span>Try an example</span><button type="button" id="sample-ambiguous" class="chip">${state.domain==='flight'?'A flight with missing details':state.domain==='hotel'?'Breakfast & cancellation':'An unsupported preference'}</button><button type="button" id="sample-standard" class="chip">${state.domain==='flight'?'A fully specified flight':'Full request'}</button></div><details class="mode-settings"><summary>Interpretation settings</summary><label for="ai-mode">AI availability</label><select id="ai-mode" name="interpretation_mode" autocomplete="off"><option value="live">Live Microsoft Foundry</option><option value="offline" ${state.mode==='offline'?'selected':''}>Explicit emergency offline parser</option></select><p class="small">Provider failures stay visible. Offline mode is an explicit choice, never an automatic substitute.</p></details></form><section class="principle"><span class="eyebrow">WHY THIS LAYER EXISTS</span><h2>A valid authorization can still miss what you meant.</h2><p>If “nonstop” gets lost before approval, a cheap flight with three connections may satisfy the recorded rules. We help capture that requirement, ask you to approve it, and check the signed itinerary.</p></section>`;
+ $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">INTENT JUDGE / AGENTIC COMMERCE</span><h1>What should your agent know?</h1><p>Start with what matters. We’ll clarify the rest together.</p></div><div id="intake-availability" class="availability-card" data-availability data-mode="${state.mode}" role="status" aria-live="polite"></div><form id="intake-form" class="intake-form"><label for="request-text">What would you like to find?</label><textarea id="request-text" name="request" autocomplete="off" maxlength="2500" minlength="5" rows="5" required placeholder="I need a nonstop flight to Florida under $300…">${escapeHTML(state.message||'')}</textarea><div class="intake-controls"><span class="small">Your words become an unapproved draft.</span><button class="primary" type="submit">Start a conversation →</button></div><div class="examples"><span>Try an example</span><button type="button" id="sample-ambiguous" class="chip">${state.domain==='flight'?'A flight with missing details':state.domain==='hotel'?'Breakfast & cancellation':'An unsupported preference'}</button><button type="button" id="sample-standard" class="chip">${state.domain==='flight'?'A fully specified flight':'Full request'}</button></div><details class="mode-settings"><summary>Interpretation settings</summary><label for="ai-mode">AI availability</label><select id="ai-mode" name="interpretation_mode" autocomplete="off"><option value="live">Live Microsoft Foundry</option><option value="offline" ${state.mode==='offline'?'selected':''}>Explicit emergency offline parser</option></select><p class="small">Live availability is shown above. Offline mode is always an explicit choice and keeps unsupported text visible.</p></details></form><section class="principle"><span class="eyebrow">WHY THIS LAYER EXISTS</span><h2>A valid authorization can still miss what you meant.</h2><p>If “nonstop” gets lost before approval, a cheap flight with three connections may satisfy the recorded rules. We help capture that requirement, ask you to approve it, and check the signed itinerary.</p></section>`;
  $('#sample-standard').onclick=()=>{$('#request-text').value=samples[state.domain];$('#request-text').focus();};
  $('#sample-ambiguous').onclick=()=>{$('#request-text').value=state.domain==='flight'?'I need a nonstop flight to Florida under $300.':samples[state.domain];$('#request-text').focus();};
- $('#ai-mode').onchange=e=>state.mode=e.target.value;
- $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation;const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
+ const syncMode=()=>{state.mode=$('#ai-mode').value;$('#intake-availability').dataset.mode=state.mode;renderAvailability();const submit=$('#intake-form button[type="submit"]');submit.disabled=state.mode==='live'&&!liveAvailable();};
+ $('#ai-mode').onchange=syncMode;
+ syncMode();
+ $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation;if(state.mode==='live'){await refreshAIStatus(true);if(!liveAvailable())throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(state.aiStatus),error:{code:statusReason(state.aiStatus)?.code||'ai_status_unavailable',message:knownReasonCopy(state.aiStatus),retry_after_seconds:statusReason(state.aiStatus)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
 }
 function renderConversation(){
  const d=state.draft;$('#workspace').innerHTML=conversationMarkup(d,escapeHTML);
  if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
+ renderAvailability();
  $('#review-now').onclick=()=>transition(3);
- const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'…');
+ const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;if(d.mode==='live'){await refreshAIStatus(true);if(!liveAvailable())throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(state.aiStatus),error:{code:statusReason(state.aiStatus)?.code||'ai_status_unavailable',message:knownReasonCopy(state.aiStatus),retry_after_seconds:statusReason(state.aiStatus)?.retry_after_seconds||null}});}const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'Interpreting your clarification…');
  $('#clarify-form').onsubmit=e=>{e.preventDefault();send($('#clarify-text').value);};
  document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>send(b.dataset.reply));
 }
@@ -116,12 +218,13 @@ function fieldMarkup(key,spec){
  let input;
  if(spec.type==='boolean')input=`<select id="${id}" name="${key}" autocomplete="off" data-field="${key}"><option value="">Choose…</option><option value="true" ${v===true?'selected':''}>Yes — must be included</option><option value="false" ${v===false?'selected':''}>No — must be absent</option></select>`;
  else if(spec.type==='window')input=`<div class="time-inputs"><input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="time" value="${escapeHTML(v?.[0]||'')}" aria-label="Start of local departure window"><input id="${id}-end" type="time" value="${escapeHTML(v?.[1]||'')}" aria-label="End of local departure window"></div>`;
- else{const value=v===undefined||v===null?'':key==='max_total_cents'?(v/100).toFixed(2):Array.isArray(v)?v.join(', '):v;input=`<input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="${key.endsWith('date')?'date':spec.type==='integer'?'number':'text'}" ${spec.type==='integer'?`min="0" step="${key==='max_total_cents'?'0.01':'1'}"`:''} value="${escapeHTML(value)}" ${spec.required?'required':''} ${spec.type==='strings'?'placeholder="Airport codes, separated by commas"':''}>`;}
- return `<div class="field"><label for="${id}">${escapeHTML(key==='max_total_cents'?'Maximum all-in price (USD)':spec.label)}${spec.required?' *':''}</label>${input}<small>${escapeHTML(spec.question)}${d.sources[key]?`<br>From your words: “${escapeHTML(d.sources[key])}”`:''}</small>${!spec.required?`<label class="preference"><input type="checkbox" data-no-preference="${key}" ${v===null?'checked':''}> I have no preference for this detail</label>`:''}</div>`;
+ else{const value=v===undefined||v===null?'':key==='max_total_cents'?(v/100).toFixed(2):Array.isArray(v)?v.join(', '):v;input=`<input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="${key.endsWith('date')?'date':spec.type==='integer'?'number':'text'}" ${spec.type==='integer'?`min="0" step="${key==='max_total_cents'?'0.01':'1'}" ${key==='max_total_cents'?'inputmode="decimal"':''}`:''} value="${escapeHTML(value)}" ${spec.required?'required':''} ${spec.type==='strings'?'placeholder="Airport codes, separated by commas"':''}>`;}
+ const moneyNote=key==='max_total_cents'?'<span class="money-helper">Enter a USD amount. It is checked precisely against the approved limit.</span>':'';
+ return `<div class="field"><label for="${id}">${escapeHTML(key==='max_total_cents'?'Maximum all-in price (USD)':spec.label)}${spec.required?' *':''}</label>${input}<small>${escapeHTML(spec.question)}${moneyNote}${d.sources[key]?`<br>From your words: “${escapeHTML(d.sources[key])}”`:''}</small>${!spec.required?`<label class="preference"><input type="checkbox" data-no-preference="${key}" ${v===null?'checked':''}> I have no preference for this detail</label>`:''}</div>`;
 }
 function renderReview(){
  const d=state.draft,p=state.profiles[d.domain];
- $('#workspace').innerHTML=`<section><div class="section-head"><span class="eyebrow">02 / YOUR APPROVAL IS THE SOURCE OF TRUTH</span><h1 class="page-title">These are the rules you authorize.</h1><p>Review what the ${d.mode==='live'?'AI':'emergency parser'} captured. Answer what is missing. Nothing is approved until you confirm.</p></div><div class="review-layout"><aside class="request-summary"><span class="eyebrow">YOUR ORIGINAL REQUEST</span><blockquote>“${escapeHTML(d.message)}”</blockquote><span class="small">${d.mode==='live'?`Live Foundry · ${escapeHTML(d.model)}`:'Emergency offline parser — limited phrase support'}</span><p>${escapeHTML(d.explanation)}</p><p>A blank optional field means unresolved. “No preference” is a choice you make.</p>${d.unsupported.length?`<div class="unsupported"><b>Not yet enforceable</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p>Keep these in your approval to hold checkout, or specifically remove a condition in the review below.</p></div>`:''}</aside><form id="review-form"><div class="flagged-review">${d.unsupported.length?`<h3>Resolve the flagged conditions</h3><p class="small">Keep each condition to hold checkout, or explicitly remove it as a separate requirement. Your removal is recorded alongside the original request.</p>${d.unsupported.map((x,i)=>`<label class="consent"><input type="checkbox" data-remove-condition="${i}"><span>I remove “${escapeHTML(x)}” as a separate purchasing requirement. The fields I review below express what I authorize.</span></label>`).join('')}`:''}</div><div class="fields">${Object.entries(p.fields).map(([k,f])=>fieldMarkup(k,f)).join('')}</div><div class="field"><label for="missed-requirements">Any other requirement we missed?</label><textarea id="missed-requirements" name="missed_requirements" maxlength="2000" placeholder="One additional requirement per line"></textarea><small>Correct a supported field above, or record an additional condition here. Additional conditions stay in your approval and hold checkout until an evaluator supports them.</small></div><div class="review-actions"><button type="button" class="text-button" id="no-preference">No preference for unanswered optional details ↗</button><label class="consent"><input type="checkbox" id="review-confirm" required><span>I reviewed my original request and every requirement above, including each explicit no preference. These are the rules I authorize for this demo.</span></label><button class="primary" type="submit">Approve these requirements <span aria-hidden="true">→</span></button><p class="small">${d.unsupported.length?'Unsupported conditions remain held after approval.':'Your approved requirements will be signed into a Verifiable Intent mandate.'}</p></div></form></div></section>`;
+ $('#workspace').innerHTML=`<section><div class="section-head"><span class="eyebrow">02 / YOUR APPROVAL IS THE SOURCE OF TRUTH</span><h1 class="page-title">Review what will be checked.</h1><p>Confirm the captured details, answer anything still open, and make an explicit choice for each optional field. Nothing is approved until you confirm.</p></div><div class="review-layout"><aside class="request-summary"><span class="eyebrow">YOUR ORIGINAL REQUEST</span><blockquote>“${escapeHTML(d.message)}”</blockquote><details class="interpretation-note"><summary>Interpretation details</summary><span class="small">${d.mode==='live'?`Live Foundry · ${escapeHTML(d.model)}`:'Explicit offline parser — limited phrase support'}</span><p>${escapeHTML(d.explanation)}</p></details><p>A blank optional field stays unresolved. Select “No preference” only when that is your choice.</p>${d.unsupported.length?`<div class="unsupported"><b>Not yet enforceable</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p>Keep these in your approval to hold checkout, or specifically remove a condition below.</p></div>`:''}</aside><form id="review-form"><div class="flagged-review">${d.unsupported.length?`<h3>Resolve the flagged conditions</h3><p class="small">Keep each condition to hold checkout, or explicitly remove it as a separate requirement. Your removal is recorded alongside the original request.</p>${d.unsupported.map((x,i)=>`<label class="consent"><input type="checkbox" data-remove-condition="${i}"><span>I remove “${escapeHTML(x)}” as a separate purchasing requirement. The fields I review below express what I authorize.</span></label>`).join('')}`:''}</div><div class="fields">${Object.entries(p.fields).map(([k,f])=>fieldMarkup(k,f)).join('')}</div><div class="field"><label for="missed-requirements">Any other requirement we missed?</label><textarea id="missed-requirements" name="missed_requirements" maxlength="2000" placeholder="One additional requirement per line"></textarea><small>Correct a supported field above, or record an additional condition here. Additional conditions stay in your approval and hold checkout until an evaluator supports them.</small></div><div class="review-actions"><button type="button" class="text-button" id="no-preference">No preference for unanswered optional details ↗</button><label class="consent"><input type="checkbox" id="review-confirm" required><span>I reviewed my original request and every requirement above, including each explicit no preference. These are the rules I authorize for this demo.</span></label><button class="primary" type="submit">Approve these requirements <span aria-hidden="true">→</span></button><p class="small">${d.unsupported.length?'Unsupported conditions remain held after approval.':'Your approved requirements will be signed into a Verifiable Intent mandate.'}</p></div></form></div></section>`;
  if(state.reviewEdits?.id===d.id&&state.reviewEdits.revision===d.revision)[...$('#review-form').querySelectorAll('input,select,textarea')].forEach((el,i)=>{const saved=state.reviewEdits.controls[i];if(saved){el.value=saved.value;if(el.type==='checkbox')el.checked=saved.checked;}});
  document.querySelectorAll('[data-no-preference]').forEach(box=>{box.onchange=()=>{const input=$('#field-'+box.dataset.noPreference);input.disabled=box.checked;if(input.type==='time')$('#'+input.id+'-end').disabled=box.checked;};box.onchange();});
  $('#no-preference').onclick=()=>{document.querySelectorAll('[data-no-preference]').forEach(box=>{const input=$('#field-'+box.dataset.noPreference);if(!input.value){box.checked=true;box.onchange();}});};
@@ -171,7 +274,7 @@ function renderOffers(){
   const navigation=state.navigation,d=state.decisions[b.dataset.testGate];
   try{await api('/api/purchase',{decision_id:d.id,idempotency_key:crypto.randomUUID()});throw new Error('The server allowed the purchase; review the current requirements.');}
   catch(e){if(currentRequest(navigation))notice('Purchase gate result: '+e.message);}
- },'Asking the backend…'));
+ },'Checking the purchase gate…'));
 }
 function openExceptions(offerId){
  const d=state.decisions[offerId];state.exception=offerId;$('#exception-error').hidden=true;
@@ -218,10 +321,10 @@ $('#new-request').onclick=e=>{
  },'Opening a fresh request…');
 };
 (async()=>{
- try{const session=await api('/api/session');state.latestIntent=session.intents.at(-1)?.id;const [profiles,health]=await Promise.all([api('/api/profiles'),api('/api/health')]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
+ try{const session=await api('/api/session');state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true)]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){state.draft=await api('/api/intents/'+saved.id);state.domain=state.draft.domain;state.mode=state.draft.mode;
  if(state.draft.latest_purchase){state.receipt=state.draft.latest_purchase;state.stage=5;}else if(state.draft.approved){state.offers=state.draft.offer_views;for(const d of state.draft.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;
- }else{const domain=new URLSearchParams(location.search).get('domain');if(state.profiles[domain]){state.domain=domain;state.stage=1;}}if(params.get('view')==='quality')state.stage=6;if(params.get('view')==='walkthrough')state.stage=7;if(matchMedia('(max-width:850px)').matches)$('#intent-panel details').open=false;render();if(state.stage===1&&(!health.live_ai_configured||health.offline_only))notice('Live Foundry AI is unavailable in this environment. Choose emergency offline mode explicitly to continue.');}
- catch(e){$('#workspace').innerHTML='<p class="loading">The workspace could not open. Reload to retry.</p>';notice(e.message);}
+ }else{const domain=new URLSearchParams(location.search).get('domain');if(state.profiles[domain]){state.domain=domain;state.stage=1;}}if(params.get('view')==='quality')state.stage=6;if(params.get('view')==='walkthrough')state.stage=7;if(matchMedia('(max-width:850px)').matches)$('#intent-panel details').open=false;render();}
+ catch(e){$('#workspace').innerHTML='<p class="loading">The workspace could not open.</p>';notice(errorMessage(e));}
 })();
