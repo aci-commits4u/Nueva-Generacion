@@ -1,0 +1,5 @@
+# Intent Judge — design system
+
+Swiss structure / conceptual commerce diagram. Explain the product before showing the workspace. Warm-white canvas (#f7f8f3), forest-ink text (#18251f), lime accent (#c8e583), muted text (#59665e), fine borders (#dce2d8), amber holds (#8a520d on #fff0d5). Geist Sans, local variable WOFF2, fallback system sans. Headline 72px desktop / 42px mobile; headings 32–42px; body 16–18px; secondary text no smaller than 12px. Spacious 1200px content grid, compact horizontal navigation, one primary action per section. Buttons 48px, 8px radius; surfaces 14px, sparse borders, no gradient or nested dashboard containers. Flight comparison diagrams explain price vs nonstop requirements. Walkthrough illustrative labels persist. App progress and contextual help explain AI → traveler → backend responsibility. All semantic controls keyboard accessible, native dialogs Escape-close, reduced motion respected.
+
+Stitch connector returned Authentication required on October 13. This system is Stitch-compatible but has not been uploaded; generated local references guide this release.

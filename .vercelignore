@@ -9,3 +9,5 @@ tests/
 scripts/
 *.sqlite3
 requirements-dev.txt
+
+.stitch/

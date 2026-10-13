@@ -61,3 +61,5 @@ This is a showable student prototype. It does not perform real travel search, ta
 The upstream draft checker does not natively support our custom constraint. We verify the original chain, evaluate supported native constraints strictly, dispatch our recognized custom constraint to the deterministic engine, and hold any unimplemented constraint. We do not claim stock SDK or payment-network compatibility for the extension.
 
 See [AI evaluation and conversation](docs/15-ai-evaluation-and-conversation.md) for experimental results, known failures, the daily canary, and budget limits. The Quality view shows real recorded results.
+
+The product now starts with an overview and a **Show me how** walkthrough. Read [the tutorial guide](docs/16-product-walkthrough.md) for the five stages and working demo controls. The tutorial makes no paid model calls; **Try the demo** opens the actual Foundry workflow.

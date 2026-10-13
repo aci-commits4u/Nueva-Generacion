@@ -1,10 +1,12 @@
 import {api} from './api.js';
 import {conversationMarkup} from './views/conversation.js';
+import {overviewMarkup} from './views/overview.js';
+import {walkthroughMarkup} from './views/walkthrough.js';
 'use strict';
 const $ = s => document.querySelector(s);
 const escapeHTML = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtMoney = cents => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
-const state = {domain:'flight',stage:1,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live'};
+const state = {domain:'flight',stage:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live'};
 const samples = {
  flight:'Book me a nonstop flight from EWR to MCO on 2026-11-12 under $300.',
  hotel:'Find a hotel in Orlando from 2026-11-12 to 2026-11-14 under $300 with breakfast and free cancellation.',
@@ -15,21 +17,51 @@ async function busy(button,fn,label='Working…'){
  const old=button.textContent;button.disabled=true;button.textContent=label;notice();
  try{await fn();}catch(e){notice(e.message);}finally{button.disabled=false;button.textContent=old;}
 }
-function transition(stage){state.stage=stage;notice();render();window.scrollTo({top:0,behavior:'instant'});history.replaceState(null,'',stage===1?'/'+'?domain='+state.domain:'/?intent='+encodeURIComponent(state.draft.id));$('#workspace').focus({preventScroll:true});}
+function routeForStage(stage){
+ if(stage===0)return '/';
+ if(stage===7)return '/?view=walkthrough';
+ if(stage===6)return '/?view=quality';
+ return stage===1?'/?domain='+state.domain:'/?intent='+encodeURIComponent(state.draft.id);
+}
+function transition(stage){state.stage=stage;notice();render();window.scrollTo({top:0,behavior:'instant'});history.replaceState(null,'',routeForStage(stage));$('#workspace').focus({preventScroll:true});}
+function startDemo(domain=state.domain){state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';transition(1);}
+function showWalkthrough(){if(state.stage>=1&&state.stage<=5)state.returnStage=state.stage;state.walkthroughStep=0;transition(7);}
+const stepHelp={
+ 1:['Start with your words','Choose a profile, describe what matters, and send your request. Foundry proposes a draft and checks for missed requirements. Try an example if you want a starting point. Nothing is approved yet.'],
+ 2:['Clarify what matters','Answer the next question or add a correction. Your live summary shows what was captured and quotes your words. When you are ready, choose Review requirements. The demo allows two AI follow-ups; you can edit everything in review.'],
+ 3:['Review every rule','Check each field against your request. Fill required details and explicitly choose no preference for optional details you don’t care about. Flagged conditions hold checkout unless you specifically remove them. Only your confirmation authorizes these rules.'],
+ 4:['Compare the offers','The backend verifies the merchant’s signature and checks the itinerary against your approved rules. Matches can proceed. Differences or missing facts hold checkout. You can review eligible differences and explicitly accept them for that exact offer; integrity failures stay blocked.'],
+ 5:['Follow the record','This is a simulated confirmation. Download the evidence to see your request, approval, signed offer, checks, and any accepted differences. Prepare a dispute review to see the recommendation; the final responsibility decision belongs to a dispute analyst.']
+};
 function render(){
- $('.progress').hidden=state.stage===6;
+ const product=state.stage===0||state.stage===7,workspace=state.stage>=1&&state.stage<=5;
+ if(workspace)state.returnStage=state.stage;
+ document.body.classList.toggle('product-view',product);document.body.classList.toggle('quality-view',state.stage===6);
+ $('.topbar').hidden=!workspace;$('#workspace-navigation').hidden=!workspace;$('#new-request').hidden=!workspace;
+ $('#step-help').hidden=true;$('#step-help-toggle').setAttribute('aria-expanded','false');
+ const help=stepHelp[state.stage];$('#step-help').innerHTML=help?`<b>${help[0]}</b><p>${help[1]}</p>`:'';
  $('#quality').classList.toggle('selected',state.stage===6);
  document.querySelectorAll('[data-stage]').forEach(el=>el.classList.toggle('active',Number(el.dataset.stage)===(state.stage<=2?1:state.stage===3?2:3)));
- document.querySelectorAll('[data-domain]').forEach(el=>el.classList.toggle('selected',el.dataset.domain===state.domain));
- $('#context-title').textContent=state.stage===6?'Quality observatory':state.domain[0].toUpperCase()+state.domain.slice(1)+' request';
- $('#mode-status').textContent=state.draft?.mode==='offline'?'Emergency offline':state.draft?'Live Foundry':'Synthetic commerce demo';
+ document.querySelectorAll('[data-domain]').forEach(el=>{const selected=el.dataset.domain===state.domain;el.classList.toggle('selected',selected);el.setAttribute('aria-pressed',String(selected));});
+ $('#context-title').textContent=state.domain[0].toUpperCase()+state.domain.slice(1)+' request';
+ $('#mode-status').textContent=state.draft?.mode==='offline'?'Explicit offline mode':state.draft?'Live Foundry':'Synthetic commerce demo';
  $('#workspace').className=state.stage===2?'conversation-canvas':'';
- if(state.stage===1)renderIntake();else if(state.stage===2)renderConversation();else if(state.stage===3)renderReview();else if(state.stage===4)renderOffers();else if(state.stage===5)renderReceipt();else renderQuality();
+ if(state.stage===0)$('#workspace').innerHTML=overviewMarkup();else if(state.stage===7)renderWalkthrough();else if(state.stage===1)renderIntake();else if(state.stage===2)renderConversation();else if(state.stage===3)renderReview();else if(state.stage===4)renderOffers();else if(state.stage===5)renderReceipt();else renderQuality();
+ document.querySelectorAll('[data-walkthrough]').forEach(b=>b.onclick=showWalkthrough);
+ document.querySelectorAll('[data-start-demo]').forEach(b=>b.onclick=()=>startDemo());
  renderSummary();
+}
+function renderWalkthrough(){
+ $('#workspace').innerHTML=walkthroughMarkup(state.walkthroughStep,Boolean(state.draft));
+ if($('#return-demo'))$('#return-demo').onclick=()=>transition(state.returnStage||2);
+ const advance=n=>{state.walkthroughStep=n;render();$('#workspace').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});};
+ $('#previous-step').onclick=()=>advance(state.walkthroughStep-1);
+ if($('#next-step'))$('#next-step').onclick=()=>advance(state.walkthroughStep+1);
+ $('#replay-walkthrough').onclick=()=>advance(0);
 }
 function renderSummary(){
  const d=state.draft,p=state.profiles[state.domain];
- $('#intent-panel').hidden=state.stage===6;
+ $('#intent-panel').hidden=![1,2,3,4,5].includes(state.stage);
  $('#intent-content').innerHTML=d?`<span class="eyebrow">${d.approved?'APPROVED BY YOU':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':'Updates as we clarify.'}</p><div class="summary-rules">${Object.entries(p.fields).filter(([k,f])=>d.fields[k]!==undefined||f.required).map(([k,f])=>`<div><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in total':f.label)}</b><span>${d.fields[k]===undefined?'<em>Needs your answer</em>':d.fields[k]===null?'No preference':escapeHTML(k==='max_total_cents'?fmtMoney(d.fields[k]):Array.isArray(d.fields[k])?d.fields[k].join(' – '):typeof d.fields[k]==='boolean'?d.fields[k]?'Required':'Must be absent':d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}</div>`).join('')}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">Nothing is authorized by an AI response. You approve the rules; the backend checks merchant-signed facts.</p>`:`<span class="eyebrow">YOUR INTENT, MADE EXPLICIT</span><h2>A clearer way to delegate.</h2><ol class="rail-steps"><li><b>Say what you want</b><p>We capture your words and ask about gaps.</p></li><li><b>Approve your rules</b><p>Every preference is your choice.</p></li><li><b>Check the offer</b><p>Signed facts are checked before checkout.</p></li></ol><p class="small summary-note">Synthetic offers and payments. No real booking.</p>`;
 }
 function renderIntake(){
@@ -48,7 +80,7 @@ function renderConversation(){
 }
 async function renderQuality(){
  $('#workspace').innerHTML='<p class="loading">Loading measured quality…</p>';
- try{const q=await api('/api/quality');$('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><section class="quality-section"><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p><p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs provider-independent regression tests. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;}
+ try{const q=await api('/api/quality');if(state.stage!==6)return;$('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><section class="quality-section"><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p><p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs provider-independent regression tests. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;}
  catch(e){notice(e.message);}
 }
 function fieldMarkup(key,spec){
@@ -131,16 +163,19 @@ function renderReceipt(){
  $('#download-evidence').onclick=e=>busy(e.target,async()=>{const evidence=await api(`/api/purchases/${r.id}/evidence`);const blob=new Blob([JSON.stringify(evidence,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`intent-judge-evidence-${r.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);},'Preparing evidence…');
  $('#dispute-button').onclick=e=>busy(e.target,async()=>{const d=await api('/api/disputes',{purchase_id:r.id,reason:'Review whether the agentic purchase reflected the approved requirements and recorded exceptions.'});$('#dispute-result').hidden=false;$('#dispute-result').className='dispute-result';$('#dispute-result').innerHTML=`<span class="eyebrow">EVIDENCE REVIEW PREPARED</span><p>${escapeHTML(d.recommendation)}</p><p class="small">Final decision: dispute analyst. No chargeback was filed.</p>`;},'Preparing analyst context…');
 }
-document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>{state.domain=b.dataset.domain;state.draft=null;state.message=null;state.stage=1;history.replaceState(null,'','/?domain='+state.domain);render();});
-$('#quality').onclick=()=>{state.stage=6;history.replaceState(null,'','/?view=quality');render();};
-$('#about').onclick=()=>$('#about-dialog').showModal();
+document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>startDemo(b.dataset.domain));
+$('#quality').onclick=()=>transition(6);
+$('#walkthrough-link').onclick=showWalkthrough;
+$('#footer-tutorial').onclick=showWalkthrough;
+$('#step-help-toggle').onclick=()=>{const expanded=$('#step-help-toggle').getAttribute('aria-expanded')==='true';$('#step-help').hidden=expanded;$('#step-help-toggle').setAttribute('aria-expanded',String(!expanded));};
+$('#about').onclick=$('#footer-about').onclick=()=>$('#about-dialog').showModal();
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
-$('#new-request').onclick=e=>busy(e.target,async()=>{await api('/api/session/reset',{});await api('/api/session');state.draft=null;state.message=null;state.offers=[];state.decisions={};transition(1);},'Opening a fresh request…');
+$('#new-request').onclick=e=>busy(e.target,async()=>{await api('/api/session/reset',{});await api('/api/session');startDemo();},'Opening a fresh request…');
 (async()=>{
  try{const session=await api('/api/session');const [profiles,health]=await Promise.all([api('/api/profiles'),api('/api/health')]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
- const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=params.has('domain')||params.get('view')==='quality'?null:session.intents.find(x=>x.id===requested)||session.intents.at(-1);
+ const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){state.draft=await api('/api/intents/'+saved.id);state.domain=state.draft.domain;state.mode=state.draft.mode;
  if(state.draft.latest_purchase){state.receipt=state.draft.latest_purchase;state.stage=5;}else if(state.draft.approved){state.offers=state.draft.offer_views;for(const d of state.draft.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;
- }else{const domain=new URLSearchParams(location.search).get('domain');if(state.profiles[domain])state.domain=domain;}if(params.get('view')==='quality')state.stage=6;if(matchMedia('(max-width:850px)').matches)$('#intent-panel details').open=false;render();if(!health.live_ai_configured||health.offline_only)notice('Live Foundry AI is unavailable in this environment. Choose emergency offline mode explicitly to continue.');}
+ }else{const domain=new URLSearchParams(location.search).get('domain');if(state.profiles[domain]){state.domain=domain;state.stage=1;}}if(params.get('view')==='quality')state.stage=6;if(params.get('view')==='walkthrough')state.stage=7;if(matchMedia('(max-width:850px)').matches)$('#intent-panel details').open=false;render();if(state.stage===1&&(!health.live_ai_configured||health.offline_only))notice('Live Foundry AI is unavailable in this environment. Choose emergency offline mode explicitly to continue.');}
  catch(e){$('#workspace').innerHTML='<p class="loading">The workspace could not open. Reload to retry.</p>';notice(e.message);}
 })();

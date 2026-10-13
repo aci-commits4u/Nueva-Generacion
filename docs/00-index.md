@@ -36,3 +36,4 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 [Evaluated conversation and continuous quality](15-ai-evaluation-and-conversation.md) documents the conversational revision, actual pipeline comparisons, holdout results, CI and bounded live monitoring.
 
 [Conversational final review](final-review-conversation.md) and [revision ledger](conversation-build-ledger.md) record the independent findings, test-driven fixes, choices and hosted release verification.
+- [16 — Product walkthrough](16-product-walkthrough.md): self-explaining overview, tutorial, demo instructions, and design decisions.
