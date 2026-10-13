@@ -1,0 +1,242 @@
+"""Intent Judge's server-owned approval, verification, and simulated purchase gate."""
+import json
+import os
+import secrets
+import time
+from datetime import datetime,timezone
+from pathlib import Path
+from urllib.parse import urlsplit
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent/'.env')
+from fastapi import FastAPI,HTTPException,Request,Response
+from fastapi.responses import FileResponse,JSONResponse
+from fastapi.staticfiles import StaticFiles
+from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest
+from app.profile_registry import get_profile,validate_fields,digest
+from app.rules_engine import evaluate
+from app.store import get_store
+from app.intent_service import offline_extract,refresh
+from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
+from app.evidence import make_evidence
+from demo.fixtures import offers_for
+
+ROOT=Path(__file__).resolve().parent.parent
+app=FastAPI(title='Intent Judge',version='1.0.0')
+
+def now(): return datetime.now(timezone.utc).isoformat()
+def uid(): return secrets.token_urlsafe(16)
+
+def session_id(request):
+    sid=request.cookies.get('ij_session')
+    if not sid or len(sid)!=43 or not get_store().read(sid).get('created'):
+        raise HTTPException(401,'Start a demo session first.')
+    if time.time()-get_store().read(sid)['created']>28800:
+        raise HTTPException(401,'Demo session expired. Reload to start again.')
+    return sid
+
+def event(s,kind,data):
+    events=s.setdefault('events',[])
+    events.append({'index':len(events),'timestamp':now(),'kind':kind,'data':data,'previous_hash':digest(events[-1]) if events else None})
+
+def required(s,collection,id):
+    obj=s.get(collection,{}).get(id)
+    if obj is None: raise HTTPException(404,'This record is not in your demo session.')
+    return obj
+
+def integrity(check_id,ok,message):
+    return {'check_id':check_id,'label':check_id.replace('_',' ').title(),'requirement':True,'offer_value':ok,'status':'pass' if ok else 'fail','message':message,'exception_allowed':False,'integrity':True}
+
+def judge(s,d):
+    draft=required(s,'drafts',d['intent_id'])
+    approved=d['approved']
+    fresh=draft.get('approved')==approved
+    v=verify(d['bundle'],approved)
+    gates=[integrity('approval_current',fresh,'The signed requirements must match your current approval.'),integrity('cryptographic_integrity',v['valid'],v.get('error','VI chain and merchant signature passed.'))]
+    if v['valid']:
+        for i,l in enumerate(v['ledger']):
+            if l['status']!='pass':
+                gates.append({'check_id':'native_'+str(i),'label':'VI purchasing constraint','requirement':l['type'],'offer_value':None,'status':l['status'],'message':l['message'],'exception_allowed':False})
+    result=evaluate(get_profile(approved['domain']),approved['fields'],v['facts'],approved['unsupported'],gates)
+    return result,v
+
+@app.middleware('http')
+async def boundaries(request,call_next):
+    if request.method in {'POST','PUT','PATCH','DELETE'}:
+        origin=request.headers.get('origin')
+        if (origin and urlsplit(origin).netloc!=request.headers.get('host')) or request.headers.get('sec-fetch-site')=='cross-site':
+            return JSONResponse({'detail':'Cross-origin writes are not allowed.'},status_code=403)
+        if int(request.headers.get('content-length','0') or 0)>20000:
+            return JSONResponse({'detail':'Request is too large.'},status_code=413)
+    response=await call_next(request)
+    response.headers['X-Content-Type-Options']='nosniff'
+    response.headers['Referrer-Policy']='same-origin'
+    response.headers['Content-Security-Policy']="default-src 'self'; style-src 'self'; img-src 'self' data:; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    if request.url.path.startswith('/api'):
+        response.headers['Cache-Control']='no-store'
+    return response
+
+@app.get('/api/health')
+def health():
+    return {'status':'ok','live_ai_configured':bool(os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT')),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
+
+@app.get('/api/session')
+def session(request:Request,response:Response):
+    sid=request.cookies.get('ij_session')
+    s=get_store().read(sid) if sid and len(sid)==43 else {}
+    if not s or time.time()-s.get('created',0)>28800:
+        sid=secrets.token_urlsafe(32)
+        get_store().mutate(sid,lambda state:state.update({'created':time.time(),'drafts':{},'offers':{},'decisions':{},'purchases':{},'idempotency':{},'events':[]}))
+    response.set_cookie('ij_session',sid,max_age=28800,httponly=True,secure=request.url.scheme=='https' or bool(os.getenv('VERCEL')),samesite='strict')
+    s=get_store().read(sid)
+    return {'synthetic_actor':'Demo traveler','ai_calls':s.get('ai_calls',0),'intents':[{'id':d['id'],'domain':d['domain'],'message':d['message'],'approved':bool(d.get('approved'))} for d in s['drafts'].values()]}
+
+@app.get('/api/profiles')
+def profiles(): return [get_profile(x) for x in ('flight','hotel','general')]
+@app.get('/api/profiles/{domain}')
+def profile(domain:str):
+    try: return get_profile(domain)
+    except ValueError as e: raise HTTPException(404,str(e))
+
+@app.post('/api/intents')
+def intake(body:IntentRequest,request:Request):
+    sid=session_id(request)
+    s=get_store().read(sid)
+    if len(s.get('drafts',{}))>=3: raise HTTPException(429,'This session has three scenarios. Start a fresh session to explore another.')
+    if body.mode=='offline': extraction=offline_extract(body.domain,body.message)
+    else:
+        from app.foundry_client import extract
+        try: extraction=extract(body.domain,body.message,sid)
+        except ValueError as exc: raise HTTPException(503,str(exc))
+    d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now()})
+    def save(state):
+        if len(state['drafts'])>=3: raise HTTPException(429,'Scenario limit reached.')
+        state['drafts'][d['id']]=d;event(state,'intent_extracted',{'intent_id':d['id'],'revision':1,'mode':d['mode']})
+        return d
+    return get_store().mutate(sid,save)
+
+@app.get('/api/intents/{id}')
+def get_intent(id:str,request:Request): return required(get_store().read(session_id(request)),'drafts',id)
+
+@app.post('/api/intents/{id}/answers')
+def answers(id:str,body:AnswerRequest,request:Request):
+    def update(s):
+        d=required(s,'drafts',id)
+        if not body.confirmation or body.revision!=d['revision']: raise HTTPException(409,'Confirm your review of the current draft revision.')
+        p=get_profile(d['domain'])
+        try: validate_fields(p,body.fields)
+        except ValueError as e: raise HTTPException(422,str(e))
+        if set(body.fields)!=set(p['fields']): raise HTTPException(409,'Review every field, including explicit no preference.')
+        if any(body.fields[k] is None for k,v in p['fields'].items() if v.get('required')): raise HTTPException(409,'Required task details must be specified.')
+        if any(x not in body.unsupported for x in d['unsupported']): raise HTTPException(409,'Unsupported conditions cannot disappear during review. Revise your original request to remove a condition.')
+        if d['domain']=='hotel' and body.fields['checkout_date']<=body.fields['checkin_date']: raise HTTPException(422,'Check-out must follow check-in.')
+        d.update(fields=body.fields,unsupported=body.unsupported,revision=d['revision']+1,reviewed=True)
+        d.pop('approved',None)
+        refresh(d);event(s,'requirements_reviewed',{'intent_id':id,'revision':d['revision'],'digest':d['digest']})
+        return d
+    return get_store().mutate(session_id(request),update)
+
+@app.post('/api/intents/{id}/approve')
+def approve(id:str,body:ApprovalRequest,request:Request):
+    sid=session_id(request)
+    def action(s):
+        d=required(s,'drafts',id)
+        if not body.confirmation or body.revision!=d['revision'] or body.digest!=d['digest'] or not d['reviewed']:
+            raise HTTPException(409,'Approve the exact reviewed draft and digest.')
+        if d.get('approved'):
+            return {'approved':d['approved'],'offers':d['offer_views']}
+        approved={'id':id,'revision':d['revision'],'domain':d['domain'],'profile_digest':d['profile_digest'],'fields':d['fields'],'unsupported':d['unsupported'],'actor':sid,'approved_at':now(),'draft_digest':d['digest']}
+        d['approved']=approved
+        views=[]
+        for o in offers_for(approved):
+            bundle=issue(approved,o['checkout_jwt']);v=verify(bundle,approved)
+            if not v['valid']: raise HTTPException(500,'Synthetic merchant fixture did not verify.')
+            s['offers'][o['id']]={'intent_id':id,'bundle':bundle,'facts':v['facts']}
+            views.append({'id':o['id'],'facts':v['facts'],'offer_hash':v['offer_hash'],'expires_at':v['offer']['exp'],'merchant':'Demo Travel','signed':True})
+        d['offer_views']=views;event(s,'requirements_approved',{'intent_id':id,'approved_digest':digest(approved),'signed_authorization':True})
+        return {'approved':approved,'offers':views}
+    return get_store().mutate(sid,action)
+
+@app.post('/api/check')
+def check(body:CheckRequest,request:Request):
+    def action(s):
+        draft=required(s,'drafts',body.intent_id);o=required(s,'offers',body.offer_id)
+        if not draft.get('approved') or o['intent_id']!=body.intent_id: raise HTTPException(409,'Offer requires its matching approval.')
+        if len(s['decisions'])>=25: raise HTTPException(429,'This session has reached its verification allowance.')
+        d={'id':uid(),'intent_id':body.intent_id,'offer_id':body.offer_id,'approved':draft['approved'],'bundle':o['bundle'],'offer_hash':offer_hash(o['bundle']['checkout_jwt']),'approved_digest':digest(draft['approved']),'exceptions':[],'created_at':now()}
+        result,v=judge(s,d);d.update(result,ledger=v['ledger'],facts=v['facts'])
+        # Native verification shows authorized rules; domain checks capture more detailed intent.
+        d['native_vi_passed']=v['valid'] and v['native_ok']
+        s['decisions'][d['id']]=d;event(s,'offer_checked',{'decision_id':d['id'],'offer_hash':d['offer_hash'],'status':d['status'],'checks':d['checks']})
+        return {k:v for k,v in d.items() if k not in {'bundle','approved'}}
+    return get_store().mutate(session_id(request),action)
+
+@app.post('/api/decisions/{id}/exceptions')
+def accept_exception(id:str,body:ExceptionRequest,request:Request):
+    sid=session_id(request)
+    def action(s):
+        d=required(s,'decisions',id);result,v=judge(s,d)
+        if not body.confirmation or body.offer_hash!=d['offer_hash'] or result['status']=='BLOCK': raise HTTPException(409,'Specific acceptance needs a current, trustworthy offer and matching hash.')
+        by_id={c['check_id']:c for c in result['checks']}
+        selected=[]
+        for check_id in set(body.check_ids):
+            c=by_id.get(check_id)
+            if not c or c['status']=='pass' or not c['exception_allowed']: raise HTTPException(409,'This check cannot be accepted as an exception.')
+            record={'check_id':check_id,'requirement':c['requirement'],'accepted_value':c['offer_value'],'accepted_status':c['status'],'offer_hash':d['offer_hash'],'approved_digest':d['approved_digest'],'profile_digest':d['approved']['profile_digest'],'actor':sid,'timestamp':now()}
+            record['signature']=sign_record(record)
+            selected.append(record)
+        d['exceptions']=[e for e in d['exceptions'] if e['check_id'] not in body.check_ids]+selected
+        if 'max_total_cents' in body.check_ids:
+            if v['facts'].get('currency')!='USD' or type(v['facts'].get('total_cents')) is not int: raise HTTPException(409,'A new native amount authorization requires a known USD total.')
+            # Specific signed acceptance authorizes this exact offer's revised native cap.
+            d.setdefault('original_bundle',d['bundle'])
+            d['bundle']=issue(d['approved'],d['bundle']['checkout_jwt'],native_max=v['facts']['total_cents'])
+            d['reauthorization_exceptions']=[e['signature'] for e in d['exceptions'] if e['check_id']=='max_total_cents']
+        event(s,'exceptions_accepted',{'decision_id':id,'exceptions':selected})
+        return {'exceptions':d['exceptions'],'offer_hash':d['offer_hash'],'native_reauthorized':bool(d.get('original_bundle'))}
+    return get_store().mutate(sid,action)
+
+@app.post('/api/purchase')
+def purchase(body:PurchaseRequest,request:Request):
+    def action(s):
+        old=s['idempotency'].get(body.idempotency_key)
+        if old:
+            if old['decision_id']!=body.decision_id: raise HTTPException(409,'Idempotency key belongs to another purchase request.')
+            return s['purchases'][old['purchase_id']]['receipt']
+        d=required(s,'decisions',body.decision_id)
+        existing=next((p for p in s['purchases'].values() if p['receipt']['offer_hash']==d['offer_hash']),None)
+        if existing: return existing['receipt']
+        result,v=judge(s,d)
+        failures=[c for c in result['checks'] if c['status']!='pass']
+        accepted={}
+        for e in d['exceptions']:
+            try: payload=read_signed(e['signature'],'user','intent-judge-record+jwt')
+            except ValueError: raise HTTPException(409,'Exception signature did not verify.')
+            if payload!={k:v for k,v in e.items() if k!='signature'} or e['offer_hash']!=d['offer_hash'] or e['approved_digest']!=d['approved_digest'] or e['profile_digest']!=d['approved']['profile_digest']: raise HTTPException(409,'Exception binding changed.')
+            accepted[e['check_id']]=e
+        unaccepted=[c for c in failures if not c['exception_allowed'] or c['check_id'] not in accepted or accepted[c['check_id']]['accepted_value']!=c['offer_value'] or accepted[c['check_id']]['accepted_status']!=c['status']]
+        if result['status']=='BLOCK' or unaccepted:
+            raise HTTPException(409,{'message':'Purchase held. Every difference needs specific consent; integrity and unsupported conditions cannot be waived.','status':result['status'],'checks':unaccepted})
+        receipt={'id':uid(),'decision_id':d['id'],'offer_id':d['offer_id'],'offer_hash':d['offer_hash'],'approved_digest':d['approved_digest'],'total_cents':v['facts']['total_cents'],'currency':v['facts']['currency'],'mode':'simulated','outcome':'confirmed','timestamp':now(),'exceptions_count':len(d['exceptions'])}
+        event(s,'simulated_purchase',receipt)
+        evidence=make_evidence(receipt,required(s,'drafts',d['intent_id']),d,s['events'])
+        s['purchases'][receipt['id']]={'receipt':receipt,'evidence':evidence}
+        s['idempotency'][body.idempotency_key]={'decision_id':d['id'],'purchase_id':receipt['id']}
+        return receipt
+    return get_store().mutate(session_id(request),action)
+
+@app.get('/api/purchases/{id}/evidence')
+def evidence(id:str,request:Request):
+    return required(get_store().read(session_id(request)),'purchases',id)['evidence']
+
+@app.post('/api/disputes')
+def dispute(body:DisputeRequest,request:Request):
+    def action(s):
+        p=required(s,'purchases',body.purchase_id)
+        record={'id':uid(),'purchase_id':body.purchase_id,'reason':body.reason,'timestamp':now(),'recommendation':'An analyst should compare the original request, approved constraints, verified merchant offer, and recorded exceptions.','final_decision':'dispute analyst','evidence_digest':p['evidence']['digest']}
+        event(s,'dispute_requested',record)
+        return record
+    return get_store().mutate(session_id(request),action)
+
+@app.get('/')
+def index(): return FileResponse(ROOT/'web'/'index.html')
+app.mount('/web',StaticFiles(directory=ROOT/'web'),name='web')
