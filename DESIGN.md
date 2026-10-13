@@ -15,3 +15,7 @@ Anonymous sessions use unpredictable HTTP-only cookies and origin checks. All ap
 Native VI price violations require a revised signed authorization after specific customer acceptance. Unknown constraints, untrusted offers, missing approval, and expired offers remain nonwaivable.
 
 Motion: short native CSS transitions only; OriginKit considered, but no animation dependency is necessary for a static Python-served app. Respect reduced motion, visible keyboard focus, readable contrast, and mobile stacking.
+
+Reference analysis: the generated intake image uses a two-column 45/55 split, oversized serif title at left, quiet tinted form at right, a thin top rule, and a three-part footer sequence. Implementation keeps that rhythm with smaller laptop-friendly headline and textarea heights, and limits navigation to working demo/about controls. The comparison view uses two parallel offer columns and flat tabular check rows. Local Claude community design reference informed warm neutrals and typographic pairing; no brand assets are copied.
+
+Foundry compatibility ruling: this existing gpt-oss deployment produced semantically broken envelopes with `response_format=json_object`. The same deployment succeeds with plain JSON instructions, `reasoning_effort=low`, and strict server-side validation. It remains real Foundry inference. No silent retry or scripted substitution is used. Live extraction is still probabilistic and every proposal is customer-reviewed.

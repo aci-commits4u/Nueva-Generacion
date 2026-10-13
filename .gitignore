@@ -9,3 +9,7 @@ __pycache__/
 .playwright-cli/
 *.sqlite3
 artifacts/
+.vercel
+.env*
+
+!.env.example
