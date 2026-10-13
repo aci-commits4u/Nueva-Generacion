@@ -23,3 +23,14 @@ Foundry compatibility ruling: this existing gpt-oss deployment produced semantic
 Review decisions: preserve all unrecognized offline text as unsupported, rather than maintain a keyword blacklist. Customers can add a missed requirement during review; it holds execution until supported. Compress atomic Azure session records into bounded binary properties instead of spreading one purchase across separate entities. Validate every payment-reference instance, including placement and duplication. Round duration upward to respect an approved maximum. Full findings and costs if these choices are wrong are recorded in `docs/final-review.md`.
 
 Release choice: keep the work on `victor/perfected` and deploy a separate Vercel project. Public production uses the stable alias; protected previews remain protected. Synthetic keys, merchants, inventory and payments are disclosed in the product. The live model is the ordinary demo path.
+
+
+## October 13 conversational revision
+
+Victor rejected the original form-led flow and serif direction. The replacement uses Swiss product typography with a Linear-informed density: dark charcoal navigation, a white conversation canvas and a pale gray live intent rail. System sans fonts, restrained teal action color, fine borders, 8–12px control radii, 36px desktop headings and 14–16px readable body text. Generated references are in docs/design/conversation-reference.png and offers-v2-reference.png. They guide geometry, not invented data: no airline brands, passenger names, baggage defaults or assumed preferences from the generated images enter the product.
+
+The desktop reference is a three-column composition: ~230px navigation, flexible primary canvas, ~310px intent rail. Primary content uses 32–48px padding and a bottom composer; the rail separates requirements with rules. On small screens navigation becomes compact, the intent panel moves into an accessible disclosure, and every control stays reachable.
+
+The default flow is request → conversation with ranked profile questions → explicit review → signed comparison → receipt/evidence. AI traces are secondary disclosures. The quality page contains measured synthetic results and actual daily canary status, never decorative accuracy numbers. Every optional no preference remains an explicit customer choice.
+
+Specific flagged-condition removal is an explicit customer action in review, bound to the current revision and stored in the event chain. AI follow-ups cannot discard earlier flags. This avoids an unresolved ambiguity becoming permanently uneditable while preserving the original conversation and consent history. Victor confirmed the conversational direction during implementation.

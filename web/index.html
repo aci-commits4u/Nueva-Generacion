@@ -3,21 +3,15 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Clarify what you want. Approve your rules. Check signed offers before an agent buys.">
-<meta name="theme-color" content="#f6f3ec">
+<meta name="theme-color" content="#142328">
 <title>Intent Judge — Your words. Your rules.</title>
 <link rel="icon" href="/web/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/web/styles.css"><script src="/web/app.js" defer></script>
+<link rel="stylesheet" href="/web/styles.css"><script src="/web/app.js" type="module"></script>
 </head>
 <body>
 <a class="skip" href="#workspace">Skip to workspace</a>
-<header class="topbar">
-<a class="brand" href="/" aria-label="Intent Judge home"><img src="/web/mark.svg" width="36" height="36" alt=""><span>Intent Judge</span></a>
-<nav class="progress" aria-label="Demo progress"><span data-stage="1">01 <b>Clarify</b></span><i></i><span data-stage="2">02 <b>Approve</b></span><i></i><span data-stage="3">03 <b>Check</b></span></nav>
-<div class="nav-actions"><button id="new-request" class="text-button" hidden>New request ↗</button><button id="about" class="text-button">About the layer</button></div>
-</header>
-<div id="notice" class="notice" role="alert" hidden></div>
-<main id="workspace" tabindex="-1"><p class="loading">Opening your demo workspace…</p></main>
-<footer class="footer"><span>Built on open-source Verifiable Intent <span class="dot">·</span> Microsoft Foundry</span><span>Synthetic offers. No real payment.</span></footer>
+<aside class="sidebar"><a class="brand" href="/" aria-label="Intent Judge home"><img src="/web/mark.svg" width="30" height="30" alt=""><span>Intent Judge</span></a><button id="new-request" class="primary">＋ New request</button><nav aria-label="Scenario"><button data-domain="flight">↗ <span>Flight</span></button><button data-domain="hotel">⌂ <span>Hotel</span></button><button data-domain="general">≡ <span>General</span></button></nav><div class="sidebar-bottom"><button id="quality">◇ Quality</button><button id="about">ⓘ About the layer</button><p>Synthetic commerce demo</p></div></aside>
+<div class="app-shell"><header class="topbar"><b id="context-title">Flight request</b><nav class="progress" aria-label="Demo progress"><span data-stage="1">Clarify</span><i>›</i><span data-stage="2">Approve</span><i>›</i><span data-stage="3">Check</span></nav><span id="mode-status">Synthetic commerce demo</span></header><div id="notice" class="notice" role="alert" aria-live="polite" hidden></div><div class="content-grid"><main id="workspace" tabindex="-1"><p class="loading">Opening your workspace…</p></main><aside id="intent-panel"><details open><summary>Live intent summary</summary><div id="intent-content"></div></details></aside></div><footer class="footer"><span>Verifiable Intent + Microsoft Foundry</span><span>Synthetic offers. No real payment.</span></footer></div>
 <dialog id="about-dialog" aria-labelledby="about-title"><button class="dialog-close" data-close="about-dialog" aria-label="Close explanation">×</button><span class="eyebrow">THE INTERPRETATION GAP</span><h2 id="about-title">Authorized doesn't always mean intended.</h2><p>Verifiable Intent proves authorization and checks structured purchasing rules. Intent Judge helps capture the rules from your conversation, asks you to review them, and checks domain details against merchant-signed offers.</p><div class="about-flow"><p><b>AI interprets.</b> Foundry proposes requirements and flags uncertainty.</p><p><b>You authorize.</b> Every requirement and no preference is explicitly reviewed.</p><p><b>Rules enforce.</b> The backend checks verified merchant facts and holds differences.</p></div><p class="small">This is a student prototype with synthetic issuers, merchants, identities, and payments. “Intent-checked” is our application label. A dispute analyst makes the final responsibility decision.</p><a href="https://github.com/agent-intent/verifiable-intent" target="_blank" rel="noopener">Explore the Verifiable Intent SDK ↗</a></dialog>
-<dialog id="exception-dialog" aria-labelledby="exception-title"><button class="dialog-close" data-close="exception-dialog" aria-label="Close difference review">×</button><span class="eyebrow">YOUR CHOICE, RECORDED</span><h2 id="exception-title">Review every difference.</h2><p>Your original rules stay in the record. Accepting a difference applies only to this exact signed offer.</p><form id="exception-form"><div id="exception-checks"></div><p id="exception-error" class="error-text" role="alert" hidden></p><button type="submit" class="primary">Accept selected differences</button></form></dialog>
+<dialog id="exception-dialog" aria-labelledby="exception-title"><button class="dialog-close" data-close="exception-dialog" aria-label="Close difference review">×</button><span class="eyebrow">YOUR CHOICE, RECORDED</span><h2 id="exception-title">Review every difference.</h2><p>Your original rules stay in the record. Accepting a difference applies only to this exact signed offer.</p><form id="exception-form"><div id="exception-checks"></div><p id="exception-error" class="error-text" role="alert" aria-live="polite" hidden></p><button type="submit" class="primary">Accept selected differences</button></form></dialog>
 </body></html>
