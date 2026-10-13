@@ -539,6 +539,227 @@ def test_unpreferred_boolean_phrases_omit_the_field_instead_of_grounding_false(p
     assert "breakfast" not in result["fields"]
 
 
+@pytest.mark.parametrize("phrase", [
+    "the reservation must be freely cancellable",
+    "the reservation must be free cancelable",
+    "the reservation can be canceled free",
+    "the reservation can be cancelled freely",
+    "free cancellation is required",
+])
+def test_refundable_accepts_customer_cancellation_synonyms(phrase):
+    result = validate_extraction(
+        "hotel",
+        phrase,
+        envelope({"refundable": True}, {"refundable": phrase}),
+    )
+    assert result["fields"]["refundable"] is True
+
+
+@pytest.mark.parametrize("phrase", [
+    "I don't want free cancellation",
+    "no refundable fees",
+])
+def test_refundable_negation_or_fee_language_cannot_ground_true(phrase):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel",
+            phrase,
+            envelope({"refundable": True}, {"refundable": phrase}),
+        )
+
+
+def test_refundable_no_requirement_is_omitted_even_with_curly_apostrophe():
+    phrase = "I don’t require refundable fees"
+    result = validate_extraction(
+        "hotel", phrase,
+        envelope({"refundable": True}, {"refundable": phrase}),
+    )
+    assert "refundable" not in result["fields"]
+
+
+@pytest.mark.parametrize("phrase", ["non-refundable", "non refundable"])
+def test_non_refundable_is_not_positive_refundable_evidence(phrase):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel", phrase,
+            envelope({"refundable": True}, {"refundable": phrase}),
+        )
+    result = validate_extraction(
+        "hotel", phrase,
+        envelope({"refundable": False}, {"refundable": phrase}),
+    )
+    assert result["fields"]["refundable"] is False
+
+
+def test_refundable_is_scoped_past_unrelated_no_preference_clause():
+    phrase = "I have no preference on departure time; refundable is fine"
+    result = validate_extraction(
+        "hotel", phrase,
+        envelope({"refundable": True}, {"refundable": phrase}),
+    )
+    assert result["fields"]["refundable"] is True
+
+
+def test_preferably_refundable_remains_a_soft_preference():
+    phrase = "Preferably refundable"
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel", phrase,
+            envelope({"refundable": True}, {"refundable": phrase}),
+        )
+
+
+def test_no_accessibility_requirement_is_omitted_instead_of_false_preference():
+    phrase = "No accessibility requirement; a standard room is fine."
+    result = validate_extraction(
+        "hotel", phrase,
+        envelope({"accessible": False}, {"accessible": "No accessibility requirement"}),
+    )
+    assert "accessible" not in result["fields"]
+
+
+def test_hotel_same_month_shared_year_proves_yearless_checkin_only():
+    message = (
+        "One room for two adults from November 20 through November 22, 2026, "
+        "under $350."
+    )
+    result = validate_extraction(
+        "hotel",
+        message,
+        envelope5(
+            {
+                "max_total_cents": 34999,
+                "checkin_date": "2026-11-20",
+                "checkout_date": "2026-11-22",
+                "rooms": 1,
+                "adults": 2,
+            },
+            {
+                "max_total_cents": "under $350",
+                "checkin_date": "November 20",
+                "checkout_date": "November 22, 2026",
+                "rooms": "one room",
+                "adults": "two adults",
+            },
+        ),
+    )
+    assert result["fields"]["checkin_date"] == "2026-11-20"
+    assert result["clarifications"] == []
+
+
+def test_shared_year_date_inference_stays_narrow_to_hotel_same_month():
+    cross_month = (
+        "One room from November 20 through December 22, 2026, under $350."
+    )
+    result = validate_extraction(
+        "hotel",
+        cross_month,
+        envelope5(
+            {"max_total_cents": 34999, "checkin_date": "2026-11-20", "rooms": 1},
+            {"max_total_cents": "under $350", "checkin_date": "November 20", "rooms": "one room"},
+        ),
+    )
+    assert "checkin_date" not in result["fields"]
+    assert result["clarifications"] == [{
+        "field": "checkin_date", "source_quote": "November 20", "reason": "ambiguous"
+    }]
+
+    flight = "Fly November 20 through November 22, 2026, under $350."
+    result = validate_extraction(
+        "flight",
+        flight,
+        envelope5(
+            {"max_total_cents": 34999, "departure_date": "2026-11-20"},
+            {"max_total_cents": "under $350", "departure_date": "November 20"},
+        ),
+    )
+    assert "departure_date" not in result["fields"]
+    assert result["clarifications"] == [{
+        "field": "departure_date", "source_quote": "November 20", "reason": "ambiguous"
+    }]
+
+
+def test_unambiguous_money_clarification_compiles_to_canonical_bound():
+    message = "Keep the all-in total under $350."
+    result = validate_extraction(
+        "hotel",
+        message,
+        envelope5(
+            {}, {},
+            clarifications=[{
+                "field": "max_total_cents", "source_quote": "under $350", "reason": "ambiguous"
+            }],
+        ),
+    )
+    assert result["fields"] == {"max_total_cents": 34999}
+    assert result["sources"] == {"max_total_cents": "under $350"}
+    assert result["clarifications"] == []
+
+
+@pytest.mark.parametrize("message", [
+    "Keep the total around $350.",
+    "Keep the total under $350, but I can be flexible.",
+    "Ignore the budget and keep the total under $350.",
+    "Keep the total under $300, but maybe up to $350.",
+    "Keep the total under $350, but the budget is $300.",
+])
+def test_ambiguous_or_conflicting_money_clarification_stays_for_review(message):
+    if "around $350" in message:
+        quote = "around $350"
+    elif "up to $350" in message:
+        quote = "up to $350"
+    else:
+        quote = "under $350"
+    result = validate_extraction(
+        "hotel",
+        message,
+        envelope5(
+            {}, {},
+            clarifications=[{
+                "field": "max_total_cents", "source_quote": quote, "reason": "ambiguous"
+            }],
+        ),
+    )
+    assert "max_total_cents" not in result["fields"]
+    assert result["clarifications"][0]["field"] == "max_total_cents"
+
+
+def test_unmatched_money_clarification_quote_fails_closed():
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel",
+            "Keep the total under $300.",
+            envelope5(
+                {}, {},
+                clarifications=[{
+                    "field": "max_total_cents", "source_quote": "under $350", "reason": "ambiguous"
+                }],
+            ),
+        )
+
+
+def test_adult_and_room_counts_require_their_adjacent_units():
+    message = "one room for two adults"
+    result = validate_extraction(
+        "hotel", message,
+        envelope(
+            {"rooms": 1, "adults": 2},
+            {"rooms": "one room", "adults": "two adults"},
+        ),
+    )
+    assert result["fields"] == {"rooms": 1, "adults": 2}
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel", message,
+            envelope({"rooms": 2}, {"rooms": "two adults"}),
+        )
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel", "two rooms",
+            envelope({"adults": 2}, {"adults": "two rooms"}),
+        )
+
+
 def test_natural_number_and_duration_units_are_grounded():
     connections = validate_extraction(
         "flight",

@@ -1,6 +1,6 @@
 {
   "id": "hotel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "custom_constraint_type": "urn:intent-judge:hotel-requirements",
   "fields": {
     "max_total_cents": {
@@ -73,6 +73,16 @@
       "label": "Number of rooms",
       "question": "How many rooms?",
       "exception_allowed": true,
+      "required": false
+    },
+    "adults": {
+      "type": "integer",
+      "op": "gte",
+      "fact": "max_adults",
+      "min": 1,
+      "label": "Adult guests",
+      "question": "How many adults must this room offer accommodate?",
+      "exception_allowed": false,
       "required": false
     }
   },

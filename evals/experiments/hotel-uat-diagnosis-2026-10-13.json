@@ -1,0 +1,63 @@
+{
+  "message": "For a short Seattle stay, could you arrange one room for two adults from November 20 through November 22, 2026, keeping the all-in total under $350? Breakfast needs to be included and the reservation must be freely cancellable.",
+  "stages": [
+    {
+      "stage": "extract",
+      "proposal": {
+        "fields": {
+          "max_total_cents": 35000,
+          "city": "Seattle",
+          "checkin_date": "2026-11-20",
+          "checkout_date": "2026-11-22",
+          "breakfast": true,
+          "refundable": true,
+          "rooms": 1
+        },
+        "sources": {
+          "max_total_cents": "keeping the all-in total under $350",
+          "city": "Seattle",
+          "checkin_date": "November 20",
+          "checkout_date": "November 22, 2026",
+          "breakfast": "Breakfast needs to be included",
+          "refundable": "the reservation must be freely cancellable",
+          "rooms": "one room"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested criteria map directly to supported fields; no ambiguities or unsupported conditions were found."
+      }
+    },
+    {
+      "stage": "coverage_audit",
+      "proposal": {
+        "fields": {
+          "max_total_cents": 34999,
+          "city": "Seattle",
+          "checkin_date": "2026-11-20",
+          "checkout_date": "2026-11-22",
+          "breakfast": true,
+          "refundable": true,
+          "rooms": 1
+        },
+        "sources": {
+          "max_total_cents": "keeping the all-in total under $350",
+          "city": "Seattle",
+          "checkin_date": "November 20",
+          "checkout_date": "November 22, 2026",
+          "breakfast": "Breakfast needs to be included",
+          "refundable": "the reservation must be freely cancellable",
+          "rooms": "one room"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "Adjusted max_total_cents to reflect 'under $350' (34999 cents). All other fields correctly map to supported criteria."
+      }
+    }
+  ],
+  "result": {
+    "error": "ai_interpretation",
+    "stage": "coverage_audit",
+    "validation_issue": "refundable value is not supported by its source quotation"
+  },
+  "reserved_calls": 2
+}

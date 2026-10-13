@@ -127,3 +127,45 @@ def test_offline_explicit_one_way_preserves_other_conditions_and_negative_direct
     assert offline_extract('flight',message+' with checked bag')['unsupported']
     negative=offline_extract('flight','I do not want a one-way flight from EWR to MCO on 2026-11-12 under $300')
     assert 'trip_type' not in negative['fields'] and negative['unsupported']
+
+
+def test_profile_upgrade_rejects_old_work_before_ai_but_preserves_past_evidence(client,monkeypatch):
+    d,offers=prepare(client);v=decision(client,d,offers[0])
+    receipt=client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'before-profile-upgrade'}).json()
+    def provider(*args,**kwargs):raise AssertionError('No paid interpretation for an obsolete profile')
+    monkeypatch.setattr('app.foundry_client.extract',provider)
+    monkeypatch.setattr('app.foundry_client.explain',provider)
+    get_store().mutate(client.cookies['ij_session'],lambda s:s['drafts'][d['id']].update(profile_digest='previous-profile-digest',mode='live'))
+    saved=client.get(f"/api/intents/{d['id']}").json()
+    assert saved['profile_current'] is False and saved['latest_purchase']['id']==receipt['id']
+    assert client.post(f"/api/intents/{d['id']}/clarify",json={'revision':d['revision'],'message':'Actually change the departure'}).status_code==409
+    assert client.post(f"/api/intents/{d['id']}/answers",json={'revision':d['revision'],'fields':d['fields'],'unsupported':[],'confirmation':True}).status_code==409
+    assert client.post(f"/api/intents/{d['id']}/approve",json={'revision':d['revision'],'digest':d['digest'],'confirmation':True}).status_code==409
+    assert client.post(f"/api/decisions/{v['id']}/explain").status_code==409
+    assert client.get(f"/api/purchases/{receipt['id']}/evidence").json()['purchase']['id']==receipt['id']
+
+
+def test_hotel_adult_capacity_uses_signed_fact_and_missing_capacity_holds():
+    from app.rules_engine import evaluate
+    from app.profile_registry import get_profile
+    profile=get_profile('hotel')
+    for requested,expected in [(1,'PASS'),(2,'PASS'),(3,'HOLD')]:
+        result=evaluate(profile,{'adults':requested},{'max_adults':2})
+        assert result['status']==expected
+    assert evaluate(profile,{'adults':2},{})['checks'][0]['status']=='missing'
+    assert evaluate(profile,{'adults':2},{'max_adults':'2'})['checks'][0]['status']=='missing'
+
+
+def test_conversation_reconciles_only_duplicate_cabin_condition(client,monkeypatch):
+    calls=[]
+    def extraction(*args,**kwargs):
+        calls.append(True)
+        fields={'max_total_cents':29999};sources={'max_total_cents':'under $300'}
+        if len(calls)>1:fields['cabin']='economy';sources['cabin']='Economy is fine'
+        return {'fields':fields,'sources':sources,'unsupported':['Economy is fine','checked bag'] if len(calls)==1 else [],'explanation':'Review the cabin and dates.','mode':'live','model':'test'}
+    monkeypatch.setattr('app.foundry_client.extract',extraction)
+    d=client.post('/api/intents',json={'mode':'live','message':'Economy is fine with a checked bag, under $300.'}).json()
+    r=client.post(f"/api/intents/{d['id']}/clarify",json={'revision':d['revision'],'message':'Use November 7, 2026.'}).json()
+    assert r['fields']['cabin']=='economy' and r['unsupported']==['checked bag']
+    assert r['ai_runs'][0]['unsupported']==['Economy is fine','checked bag']
+    assert not r.get('approved')

@@ -18,6 +18,7 @@ def evaluate(profile, fields, facts, unsupported=(), gates=()):
             valid = (t=='integer' and type(value) is int and value>=0 and type(required) is int) or (t=='boolean' and type(value) is bool and type(required) is bool) or (t=='string' and type(value) is str and type(required) is str) or (t=='strings' and type(value) is str and type(required) is list and all(type(x) is str for x in required)) or (t=='window' and valid_time(value) and type(required) is list and len(required)==2 and all(valid_time(x) for x in required))
             if valid:
                 if op=='lte': ok=value<=required
+                elif op=='gte': ok=value>=required
                 elif op=='eq': ok=value==required
                 elif op=='in': ok=value in required
                 elif op=='window':

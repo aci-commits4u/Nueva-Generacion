@@ -1,7 +1,7 @@
 """One selected default for interactive inference and live evaluations."""
 import os
 DEFAULT_PIPELINE='audited'
-PROMPT_VERSION='intent-envelope-v2-coverage'
+PROMPT_VERSION='intent-envelope-v3-domain-grounding'
 REASONING_EFFORTS={'low','medium','high'}
 
 def selected_pipeline():

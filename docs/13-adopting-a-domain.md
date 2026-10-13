@@ -33,6 +33,8 @@ The AI can propose `true` only with a source quotation. The customer chooses tru
 
 This is low-code adoption, not zero-code universal enforcement. An existing operator and trustworthy mapped fact reuse the engine immediately. A new calculation, identity model or protocol needs reviewed implementation. The current profile allowlists and synthetic trust registry are deliberately closed.
 
+The current numeric operators include `lte` for spending/duration caps and `gte` for minimum merchant capacity. Hotel `adults` maps to merchant-signed `max_adults`; a two-adult request passes only when disclosed capacity is at least two. Missing or incorrectly typed capacity holds checkout. Flight `trip_type=one_way` uses a signed offer fact and the shared `eq` operator. These are examples of extending profiles and data contracts without delegating a decision to the model. Room counts and adult counts have different source units and are never interchangeable.
+
 ## Handling requirements outside the schema
 
 Preserve them as unsupported. The review screen displays them and permits adding missed conditions. Approving the request does not make those conditions executable. General mode provides broad intake with a shared price field, while unknown qualities such as “ethical” or “comfortable” hold checkout.

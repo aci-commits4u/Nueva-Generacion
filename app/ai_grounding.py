@@ -190,6 +190,11 @@ def _target_phrase_negated(text: str, start: int, end: int) -> bool:
     """Check polarity immediately surrounding one matched target phrase."""
     prefix = text[max(0, start - 100):start]
     suffix = text[end:end + 60]
+    # ``non-refundable`` is an explicit absence requirement.  The word
+    # boundary before ``refundable`` still lets the target matcher see it, so
+    # handle the compound prefix before the ordinary negation patterns.
+    if re.search(r"\bnon[- ]$", prefix):
+        return True
     if re.search(
         r"(?:\b(?:do|does|did)\s+not|\b(?:don't|doesn't|didn't))\s+"
         r"(?:want|need|require|prefer)\s+(?:a|an|the)?\s*$"
@@ -201,7 +206,7 @@ def _target_phrase_negated(text: str, start: int, end: int) -> bool:
     ):
         return True
     return bool(re.match(
-        r"^\s*(?:(?:is|was)\s+not\s+|(?:isn't|wasn't)\s+|not\s+)+"
+        r"^\s*(?:(?:is|are|was|were)\s+not\s+|(?:isn't|aren't|wasn't|weren't)\s+|not\s+)+"
         r"(?:required|needed|wanted|preferred|necessary|unwanted|unnecessary)\b",
         suffix,
     ))
@@ -413,6 +418,49 @@ def reconcile_one_way_unsupported(data: dict) -> dict:
     return _reconcile_one_way_unsupported(data)
 
 
+def _cabin_marker_canonical(value: str) -> str | None:
+    if type(value) is not str:
+        return None
+    normalized = _cabin_label(value).rstrip(".!?;:,")
+    markers = {
+        "basic economy": "basic_economy",
+        "basic economy class": "basic_economy",
+        "premium economy": "premium_economy",
+        "premium economy class": "premium_economy",
+        "economy": "economy",
+        "economy class": "economy",
+        "business": "business",
+        "business class": "business",
+        "first": "first",
+        "first class": "first",
+    }
+    for label, canonical in list(markers.items()):
+        if normalized in {label, f"{label} is fine", f"{label} is okay"}:
+            return canonical
+    return None
+
+
+def reconcile_cabin_unsupported(data: dict, domain: str, message: str) -> dict:
+    """Remove only duplicate standalone positive cabin markers after merging."""
+    result = deepcopy(data)
+    value = result.get("fields", {}).get("cabin") if isinstance(result.get("fields"), dict) else None
+    quote = result.get("sources", {}).get("cabin") if isinstance(result.get("sources"), dict) else None
+    if (not isinstance(value, str) or not isinstance(quote, str)
+            or not _contains(quote, message)):
+        return result
+    try:
+        canonical = _canonical_cabin(domain, value)
+    except GroundingFailure:
+        return result
+    if not _cabin_quote_supports(canonical, quote, domain):
+        return result
+    result["unsupported"] = [
+        item for item in result.get("unsupported", [])
+        if _cabin_marker_canonical(item) != _cabin_label(canonical).replace(" ", "_")
+    ]
+    return result
+
+
 def clarification_guidance(data: object, message: str) -> list[str]:
     """Return guidance for broad/unknown airport values in a quarantined draft."""
     if not isinstance(data, dict) or not isinstance(data.get("fields"), dict):
@@ -456,23 +504,214 @@ def _money_cents(quote: str) -> int | None:
     return None
 
 
-def _date_in_quote(value: str, quote: str) -> bool:
+_MONEY_BOUND = re.compile(
+    r"(?i)\b(?:under|below|at\s+most|up\s+to|max(?:imum)?(?:\s+of)?|"
+    r"budget(?:\s+of)?)\s*(?:USD\s*)?\$?\s*"
+    r"\d[\d,]*(?:\.\d{1,2})?"
+)
+_MONEY_AMBIGUITY = re.compile(
+    r"(?i)\b(?:around|about|roughly|approximately|flexible|prefer(?:ably)?|"
+    r"ignore\s+(?:the\s+)?budget|if|unless|maybe)\b"
+)
+_MONEY_CORRECTION = re.compile(
+    r"(?i)\b(?:actually|instead|correction|change(?:d)?|update(?:d)?|"
+    r"rather|now)\b"
+)
+_MONEY_TOKEN = re.compile(
+    r"(?i)(?:USD\s*\$?\s*|\$\s*)\d[\d,]*(?:\.\d{1,2})?"
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:USD|dollars?)\b"
+)
+
+
+def _amount_token_cents(token: str) -> int | None:
+    match = re.search(r"\d[\d,]*(?:\.\d{1,2})?", token)
+    if not match:
+        return None
+    try:
+        return int(Decimal(match.group(0).replace(",", "")) * 100)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _money_bounds(message: str) -> list[tuple[int, int, int]]:
+    """Return (start, end, cents) for explicit monetary bounds."""
+    bounds: list[tuple[int, int, int]] = []
+    normalized = message.translate(_SOURCE_TYPOGRAPHY)
+    for match in _MONEY_BOUND.finditer(normalized):
+        cents = _money_cents(match.group(0))
+        if cents is not None:
+            bounds.append((match.start(), match.end(), cents))
+    # Count standalone dollar/USD amounts too, so a conflicting bare budget
+    # cannot be hidden behind one otherwise valid bound.  Skip tokens already
+    # covered by a qualified match.
+    for match in _MONEY_TOKEN.finditer(normalized):
+        if any(match.start() < end and match.end() > start for start, end, _ in bounds):
+            continue
+        cents = _amount_token_cents(match.group(0))
+        if cents is not None:
+            bounds.append((match.start(), match.end(), cents))
+    return sorted(bounds, key=lambda item: item[0])
+
+
+def _safe_money_clarification(quote: str, message: str) -> int | None:
+    """Compile one unambiguous quoted bound into its canonical cents value.
+
+    This is a small compiler for an explicit customer bound, rather than a
+    fallback extractor.  Ambiguous budget language and conflicting bounds
+    stay as reviewable clarifications.
+    """
+    if (not isinstance(quote, str) or not isinstance(message, str)
+            or not _contains(quote, message)
+            or _MONEY_AMBIGUITY.search(quote.translate(_SOURCE_TYPOGRAPHY))
+            or _MONEY_AMBIGUITY.search(message.translate(_SOURCE_TYPOGRAPHY))):
+        return None
+    value = _money_cents(quote)
+    if value is None or not _MONEY_BOUND.search(quote.translate(_SOURCE_TYPOGRAPHY)):
+        return None
+    bounds = _money_bounds(message)
+    if not bounds:
+        return None
+    values = {item[2] for item in bounds}
+    if len(values) == 1:
+        return value if value in values else None
+    # Multiple bounds are accepted only when the final one is an explicit
+    # correction.  This preserves the existing latest-correction semantics
+    # while leaving ordinary contradictory budgets for human review.
+    latest = bounds[-1]
+    if value != latest[2] or not _MONEY_CORRECTION.search(
+        message[max(0, latest[0] - 80):latest[0]]
+    ):
+        return None
+    return value
+
+
+def _remove_money_clarification_explanation(text: str) -> str:
+    """Remove only an explanation sentence made obsolete by money repair."""
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept = []
+    for sentence in sentences:
+        has_money = re.search(r"(?i)\b(?:price|budget|total|cost|amount|cent)\w*\b", sentence)
+        has_uncertainty = re.search(
+            r"(?i)\b(?:clarif\w*|ambigu\w*|unclear|cannot|can't|unable|not\s+map)\b",
+            sentence,
+        )
+        if has_money and has_uncertainty:
+            continue
+        if sentence:
+            kept.append(sentence)
+    return " ".join(kept).strip() or "Review the proposed requirements."
+
+
+def _recover_money_clarification(data: dict, domain: str, message: str) -> dict:
+    """Promote only a safely compilable max-total clarification."""
+    if domain not in {"flight", "hotel"}:
+        return data
+    result = deepcopy(data)
+    if "max_total_cents" in result["fields"]:
+        return result
+    clarifications = result.get("clarifications", [])
+    for item in list(clarifications):
+        if (not isinstance(item, dict) or item.get("field") != "max_total_cents"
+                or not isinstance(item.get("source_quote"), str)):
+            continue
+        value = _safe_money_clarification(item["source_quote"], message)
+        if value is None:
+            continue
+        result["fields"]["max_total_cents"] = value
+        result["sources"]["max_total_cents"] = item["source_quote"]
+        result["clarifications"].remove(item)
+        result["explanation"] = _remove_money_clarification_explanation(
+            result["explanation"]
+        )
+        break
+    return result
+
+
+_NATURAL_DATE = re.compile(
+    r"(?i)\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?"
+    r"(?:,?\s+(\d{4}))?\b"
+)
+_HOTEL_SHARED_YEAR_RANGE = re.compile(
+    r"(?i)\b(?P<month1>[A-Za-z]{3,9})\.?\s+"
+    r"(?P<day1>\d{1,2})(?:st|nd|rd|th)?\s*"
+    r"(?:through|to|[-\u2010-\u2015])\s*"
+    r"(?:(?P<month2>[A-Za-z]{3,9})\.?\s+)?"
+    r"(?P<day2>\d{1,2})(?:st|nd|rd|th)?\s*,?\s*"
+    r"(?P<year>(?:19|20)\d{2})\b"
+)
+
+
+def _shared_hotel_year_supports(value: str, quote: str, message: str,
+                                domain: str | None, key: str | None) -> bool:
+    """Prove a yearless hotel date from one same-month, shared-year range.
+
+    This is deliberately narrower than general date inference.  It only uses
+    an explicit full range in the hotel request, and never applies to flight
+    dates, cross-month ranges, or a phrase without a year.
+    """
+    if domain != "hotel" or key not in {"checkin_date", "checkout_date"}:
+        return False
+    if not isinstance(value, str) or not isinstance(quote, str) or not isinstance(message, str):
+        return False
+    try:
+        expected = date.fromisoformat(value)
+    except ValueError:
+        return False
+    if _YEAR.search(quote):
+        return False
+    natural = _NATURAL_DATE.search(quote.translate(_SOURCE_TYPOGRAPHY))
+    if not natural or natural.group(1).casefold() not in _MONTHS or natural.group(3):
+        return False
+    quote_month = _MONTHS[natural.group(1).casefold()]
+    quote_day = int(natural.group(2))
+    if (expected.month, expected.day) != (quote_month, quote_day):
+        return False
+    normalized_message = message.translate(_SOURCE_TYPOGRAPHY)
+    for match in _HOTEL_SHARED_YEAR_RANGE.finditer(normalized_message):
+        month1 = match.group("month1").casefold()
+        month2 = match.group("month2")
+        if month1 not in _MONTHS:
+            continue
+        month1_number = _MONTHS[month1]
+        month2_number = month1_number if not month2 else _MONTHS.get(month2.casefold())
+        if month2_number != month1_number:
+            continue
+        if expected.year != int(match.group("year")):
+            continue
+        day1 = int(match.group("day1"))
+        day2 = int(match.group("day2"))
+        if (quote_month, quote_day) not in {
+            (month1_number, day1), (month2_number, day2)
+        }:
+            continue
+        try:
+            # Validate both endpoints too; malformed dates must never become
+            # authority through a regex-only match.
+            date(expected.year, month1_number, day1)
+            date(expected.year, month2_number, day2)
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+def _date_in_quote(value: str, quote: str, *, message: str | None = None,
+                   domain: str | None = None, key: str | None = None) -> bool:
     if value.casefold() in quote.casefold():
         return True
     try:
         expected = date.fromisoformat(value)
     except ValueError:
         return False
-    natural = re.search(
-        r"(?i)\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b",
-        quote,
-    )
+    natural = _NATURAL_DATE.search(quote.translate(_SOURCE_TYPOGRAPHY))
     if not natural or natural.group(1).casefold() not in _MONTHS or not natural.group(3):
-        return False
+        return bool(message and _shared_hotel_year_supports(value, quote, message, domain, key))
     try:
-        return expected == date(int(natural.group(3)), _MONTHS[natural.group(1).casefold()], int(natural.group(2)))
+        if expected == date(int(natural.group(3)), _MONTHS[natural.group(1).casefold()], int(natural.group(2))):
+            return True
     except ValueError:
         return False
+    return bool(message and _shared_hotel_year_supports(value, quote, message, domain, key))
 
 
 def _airport_quote_supports(value: list[str], quote: str) -> bool:
@@ -516,7 +755,7 @@ def _reply_binding(key: str, value: bool, quote: str, domain: str,
 
 def _boolean_quote_supports(key: str, value: bool, quote: str, *, domain: str = "flight",
                             source_messages: list[dict] | None = None) -> bool:
-    q = quote.casefold()
+    q = quote.translate(_SOURCE_TYPOGRAPHY).casefold()
     reply_binding = _reply_binding(key, value, quote, domain, source_messages)
     if reply_binding is not None:
         # "No" answers a requirement question by declining the requirement;
@@ -524,12 +763,48 @@ def _boolean_quote_supports(key: str, value: bool, quote: str, *, domain: str = 
         return reply_binding == "yes" and value is True
     terms = {
         "nonstop": (r"\bnon[- ]?stop\b", r"\b(?:zero|no|without(?:\s+any)?)\s+(?:connections?|stops?)\b"),
-        "refundable": (r"\brefundable\b", r"\bfree\s+cancellation\b"),
+        "refundable": (
+            r"\brefundable\b",
+            r"\bfree\s+cancellation\b",
+            r"\bfree(?:ly)?\s+cancel(?:l)?able\b",
+            r"\b(?:cancelled|canceled)\s+free(?:ly)?\b",
+            r"\b(?:cancellation|reservation)\s+(?:is\s+)?free\b",
+        ),
         "breakfast": (r"\bbreakfast\b",),
-        "accessible": (r"\baccessible\b",),
+        "accessible": (r"\baccessib(?:le|ility)\b",),
     }.get(key, ())
-    if not terms or not any(re.search(pattern, q) for pattern in terms):
+    matches = [
+        match for pattern in terms
+        for match in re.finditer(pattern, q)
+    ] if terms else []
+    if not matches:
         return False
+    if key == "refundable":
+        # Refundability has several customer-facing phrasings.  Evaluate
+        # polarity around each target phrase instead of letting an unrelated
+        # clause such as "no preference on departure time" poison the value.
+        # A fee/charge clause that is explicitly not required is still a
+        # negation of the target, never proof of a refundable stay.
+        def positive(match: re.Match) -> bool:
+            if _target_phrase_negated(q, match.start(), match.end()):
+                return False
+            prefix = q[max(0, match.start() - 90):match.start()]
+            if re.search(
+                r"\b(?:preferably|ideally|would\s+prefer|prefer)\s+"
+                r"(?:a|an|the)?\s*$",
+                prefix,
+            ):
+                return False
+            suffix = q[match.end():match.end() + 90]
+            return not bool(re.match(
+                r"\s+(?:fees?|charges?|costs?)\b[^.;!?]{0,60}\b"
+                r"(?:is|are|was|were)?\s*not\s+"
+                r"(?:required|needed|wanted|included|necessary)\b",
+                suffix,
+            ))
+        if value:
+            return any(positive(match) for match in matches)
+        return any(_target_phrase_negated(q, match.start(), match.end()) for match in matches)
     if re.search(
         r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care)\b"
         r"|\bno\s+(?:need|requirement|preference)\b"
@@ -573,6 +848,19 @@ def _integer_appears(value: int, quote: str) -> bool:
                for word, number in _NUMBER_WORDS.items())
 
 
+def _integer_with_unit_supports(value: int, quote: str, unit: str) -> bool:
+    """Require a count and its reviewed unit in the same source phrase."""
+    if type(value) is not int or unit not in {"room", "adult"}:
+        return False
+    number = r"(?:\d+|" + "|".join(_NUMBER_WORDS) + r")"
+    match = re.search(rf"\b({number})\s+{unit}s?\b", quote.translate(_SOURCE_TYPOGRAPHY), re.I)
+    if not match:
+        return False
+    token = match.group(1).casefold()
+    parsed = int(token) if token.isdigit() else _NUMBER_WORDS.get(token)
+    return parsed == value
+
+
 def _time_in_quote(value: str, quote: str) -> bool:
     if value in quote:
         return True
@@ -602,7 +890,9 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         if type(value) is not int or _money_cents(quote) != value:
             raise GroundingFailure("price value is not supported by its source quotation")
     elif key.endswith("date"):
-        if not isinstance(value, str) or not _date_in_quote(value, quote):
+        if not isinstance(value, str) or not _date_in_quote(
+            value, quote, message=message, domain=domain, key=key
+        ):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key in {"nonstop", "refundable", "breakfast", "accessible"}:
         if type(value) is not bool or not _boolean_quote_supports(
@@ -621,6 +911,10 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         else:
             supported = _integer_appears(value, quote)
         if not supported:
+            raise GroundingFailure(f"{key} value is not supported by its source quotation")
+    elif key in {"rooms", "adults"}:
+        unit = "room" if key == "rooms" else "adult"
+        if not _integer_with_unit_supports(value, quote, unit):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "cabin":
         if not _cabin_quote_supports(value, quote, domain):
@@ -650,6 +944,10 @@ _NO_REQUIREMENT_BOOLEAN = re.compile(
     r"|\bno\s+(?:need|requirement|preference)\b"
     r"|\bwithout\s+(?:a\s+)?(?:caring|care|preference)\b"
     r"|\bnot\s+(?:required|needed|necessary)\b",
+    re.I,
+)
+_ACCESSIBLE_NO_REQUIREMENT = re.compile(
+    r"\bno\s+accessib(?:le|ility)\s+requirement\b",
     re.I,
 )
 _UNSUPPORTED_BOOLEAN = re.compile(
@@ -690,6 +988,7 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
     profile_fields = get_profile(domain)["fields"]
     guidance: list[str] = []
     for key in list(fields):
+        value = fields[key]
         quote = sources.get(key)
         if not isinstance(quote, str) or not quote or not _contains(quote, message):
             continue
@@ -701,7 +1000,8 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
             if quote not in result["unsupported"]:
                 result["unsupported"].append(quote)
             continue
-        if key.endswith("date") and _yearless_date_quote(quote):
+        if (key.endswith("date") and _yearless_date_quote(quote)
+                and not _shared_hotel_year_supports(value, quote, message, domain, key)):
             fields.pop(key, None)
             sources.pop(key, None)
             clarification = {"field": key, "source_quote": quote, "reason": "ambiguous"}
@@ -734,8 +1034,20 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
             continue
         if key not in {"nonstop", "refundable", "breakfast", "accessible"}:
             continue
-        if (_NO_REQUIREMENT_BOOLEAN.search(quote)
-                or _reply_binding(key, fields[key], quote, domain, source_messages) == "no"):
+        normalized_quote = quote.translate(_SOURCE_TYPOGRAPHY)
+        no_requirement = _NO_REQUIREMENT_BOOLEAN.search(normalized_quote)
+        if key == "accessible" and _ACCESSIBLE_NO_REQUIREMENT.search(normalized_quote):
+            no_requirement = True
+        if (key == "refundable" and no_requirement
+                and _boolean_quote_supports(
+                    key, value, quote, domain=domain, source_messages=source_messages
+                )):
+            # Scope "no preference" to the refundability phrase.  For
+            # example, "no preference on departure time; refundable is fine"
+            # still contains a positive, source-grounded refund requirement.
+            no_requirement = None
+        if (no_requirement
+                or _reply_binding(key, value, quote, domain, source_messages) == "no"):
             # A no-preference answer is an intentional omission, never a
             # stored false requirement and never an unsupported condition.
             fields.pop(key, None)
@@ -747,7 +1059,7 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
             continue
         if (_UNSUPPORTED_BOOLEAN.search(quote)
                 and not _boolean_quote_supports(
-                    key, fields[key], quote, domain=domain, source_messages=source_messages
+                    key, value, quote, domain=domain, source_messages=source_messages
                 )):
             # Preserve an uncheckable condition as the exact customer phrase
             # rather than laundering it into a false boolean.
@@ -874,7 +1186,8 @@ def recovery_records(data: object, domain: str, message: str,
         reason = None
         if key not in profile_fields:
             reason = "unsupported_profile_field"
-        elif key.endswith("date") and _yearless_date_quote(quote):
+        elif (key.endswith("date") and _yearless_date_quote(quote)
+              and not _shared_hotel_year_supports(value, quote, message, domain, key)):
             reason = "year_missing"
         elif (key == "departure_window" and _AMBIGUOUS_WINDOW.search(quote)
               and not _EXPLICIT_CLOCK.search(quote)):
@@ -967,6 +1280,7 @@ def validate_extraction(domain: str, message: str, data: dict,
     canonical = _recover_safe_field_uncertainty(
         canonical, domain, message, source_messages=source_messages
     )
+    canonical = _recover_money_clarification(canonical, domain, message)
     canonical = _recover_unknown_clarifications(canonical, domain, message)
     canonical = _reconcile_one_way_unsupported(canonical)
     if (len(canonical["unsupported"]) > 20

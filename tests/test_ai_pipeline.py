@@ -191,6 +191,32 @@ def test_pipeline_reconciles_merged_one_way_marker_after_audit(monkeypatch):
  assert r['unsupported']==[]
 
 
+@pytest.mark.parametrize('extract_legacy,audit_legacy', [(True, False), (False, True)])
+def test_pipeline_reconciles_duplicate_cabin_marker_across_envelope_versions(
+  monkeypatch, extract_legacy, audit_legacy,
+):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  legacy = extract_legacy if stage=='extract' else audit_legacy
+  result={
+   'fields':{'cabin':'Economy','max_total_cents':29999},
+   'sources':{'cabin':'Economy is fine','max_total_cents':'under $300'},
+   'unsupported':(
+    ['Economy is fine','economy with checked bag','premium economy',"I don't want economy"]
+    if stage=='extract' else []
+   ),
+   'explanation':'Review the cabin and price.',
+  }
+  if not legacy:
+   result['clarifications']=[]
+  return result,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight','Economy is fine under $300','s',variant='audited')
+ assert r['fields']['cabin']=='economy'
+ assert r['unsupported']==['economy with checked bag','premium economy',"I don't want economy"]
+
+
 def test_audit_reconciles_typed_location_marker_with_structured_clarification(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)

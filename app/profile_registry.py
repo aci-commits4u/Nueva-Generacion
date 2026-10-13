@@ -39,6 +39,8 @@ def validate_fields(profile, fields):
             raise ValueError(f'Invalid value for {key}')
         if f.get('enum') and value not in f['enum']:
             raise ValueError(f'Unsupported choice for {key}')
+        if f.get('min') is not None and (type(value) is not int or value<f['min']):
+            raise ValueError(f'Invalid minimum value for {key}')
         if key in {'origin_airports','destination_airports'}:
             import re
             if any(not re.fullmatch(r'[A-Z]{3}',airport) or airport in {'USA','NYC','CHI'} for airport in value):

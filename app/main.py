@@ -41,7 +41,14 @@ def live_configuration_ready():
 
 def conversation_view(draft):
     return {**draft,'max_followups':MAX_FOLLOWUPS,
+            'profile_current':draft.get('profile_digest')==get_profile(draft['domain'])['digest'],
             'followups_remaining':max(0,MAX_FOLLOWUPS-(len(draft.get('messages',[]))-1))}
+
+
+def require_current_profile(draft):
+    """A changed task schema needs a new review, never silent consent migration."""
+    if draft.get('profile_digest')!=get_profile(draft['domain'])['digest']:
+        raise HTTPException(409,'This task profile was updated. Start a new conversation and review the current rules. Your saved evidence remains available.')
 
 
 @app.exception_handler(AIServiceError)
@@ -239,6 +246,7 @@ def get_intent(id:str,request:Request):
 def clarify(id:str,body:ClarifyRequest,request:Request):
     sid=session_id(request)
     d=required(get_store().read(sid),'drafts',id)
+    require_current_profile(d)
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
     if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,'Review the captured requirements to continue; this demo allows six AI follow-ups, and every field remains editable in review.')
@@ -257,6 +265,14 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         if current['revision']!=body.revision: raise HTTPException(409,'Another edit arrived during interpretation. Reload your latest draft.')
         try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
         except ValueError as exc: raise HTTPException(422,str(exc))
+        from app.ai_grounding import reconcile_one_way_unsupported,reconcile_cabin_unsupported
+        merged={**extraction,'unsupported':unsupported}
+        merged=reconcile_one_way_unsupported(merged)
+        merged=reconcile_cabin_unsupported(merged,d['domain'],user_text(messages))
+        removed=[item for item in unsupported if item not in merged['unsupported']]
+        if removed:
+            event(state,'condition_represented_by_grounded_field',{'intent_id':id,'conditions':removed,'authority':'unapproved draft; explicit customer review still required'})
+        unsupported=merged['unsupported']
         revision=current['revision']+1
         previous_clarifications=current.get('clarifications',[])
         current.update(fields=extraction['fields'],sources=extraction['sources'],unsupported=unsupported,explanation=extraction['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],extraction['fields']))
@@ -288,6 +304,7 @@ def answers(id:str,body:AnswerRequest,request:Request):
         if active_ai_request(s,'interpretation'):
             raise HTTPException(409,'Wait for the current clarification before reviewing its requirements.')
         d=required(s,'drafts',id)
+        require_current_profile(d)
         if not body.confirmation or body.revision!=d['revision']: raise HTTPException(409,'Confirm your review of the current draft revision.')
         p=get_profile(d['domain'])
         body.fields=normalise_review_fields(d['domain'],body.fields)
@@ -318,6 +335,7 @@ def approve(id:str,body:ApprovalRequest,request:Request):
         if active_ai_request(s,'interpretation'):
             raise HTTPException(409,'Wait for the current clarification before approving requirements.')
         d=required(s,'drafts',id)
+        require_current_profile(d)
         if not body.confirmation or body.revision!=d['revision'] or body.digest!=d['digest'] or not d['reviewed']:
             raise HTTPException(409,'Approve the exact reviewed draft and digest.')
         if d.get('approved'):
@@ -352,6 +370,7 @@ def check(body:CheckRequest,request:Request):
 @serialize_interpretation
 def explain_decision(id:str,request:Request):
     sid=session_id(request);s=get_store().read(sid);d=required(s,'decisions',id)
+    require_current_profile(required(s,'drafts',d['intent_id']))
     result,v=judge(s,d)
     cache_key=digest({'checks':result['checks'],'exceptions':d['exceptions']})
     if d.get('explanation_key')==cache_key: return d['explanation']

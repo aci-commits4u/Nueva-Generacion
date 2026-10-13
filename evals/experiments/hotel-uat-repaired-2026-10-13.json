@@ -1,0 +1,75 @@
+{
+  "message": "For a short Seattle stay, could you arrange one room for two adults from November 20 through November 22, 2026, keeping the all-in total under $350? Breakfast needs to be included and the reservation must be freely cancellable.",
+  "result": {
+    "fields": {
+      "city": "Seattle",
+      "checkin_date": "2026-11-20",
+      "checkout_date": "2026-11-22",
+      "rooms": 1,
+      "adults": 2,
+      "breakfast": true,
+      "refundable": true
+    },
+    "sources": {
+      "city": "Seattle",
+      "checkin_date": "November 20",
+      "checkout_date": "November 22, 2026",
+      "rooms": "one room",
+      "adults": "two adults",
+      "breakfast": "Breakfast needs to be included",
+      "refundable": "reservation must be freely cancellable"
+    },
+    "unsupported": [],
+    "clarifications": [
+      {
+        "field": "max_total_cents",
+        "source_quote": "under $350",
+        "reason": "ambiguous"
+      }
+    ],
+    "explanation": "All explicit requirements are captured; budget phrase is ambiguous because 'under $350' cannot be mapped to a precise cent value.",
+    "mode": "live",
+    "model": "gpt-oss-120b",
+    "pipeline": "audited",
+    "trace": [
+      {
+        "stage": "extract",
+        "model": "gpt-oss-120b",
+        "duration_ms": 1542,
+        "tokens": {
+          "completion_tokens": 285,
+          "prompt_tokens": 1259,
+          "total_tokens": 1544,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "b1f01d5d987645b9b4891d6ecea29062",
+        "prompt_version": "intent-envelope-v2-coverage",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      {
+        "stage": "coverage_audit",
+        "model": "gpt-oss-120b",
+        "duration_ms": 1180,
+        "tokens": {
+          "completion_tokens": 376,
+          "prompt_tokens": 1646,
+          "total_tokens": 2022,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "4fa1c35609134fa1bb903a478658305f",
+        "prompt_version": "intent-envelope-v2-coverage",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      }
+    ]
+  },
+  "reserved_calls": 2,
+  "duration_ms": 4277
+}
