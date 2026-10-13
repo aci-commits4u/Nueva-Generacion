@@ -58,3 +58,10 @@ npx --yes vercel@63.1.2 deploy --prod --yes --scope vmj-8946s-projects
 ```
 
 `scripts/browser_flow.js` verifies live intake, approval, explanation, held checkout, exact consent, receipt, evidence and analyst context with Playwright CLI. `scripts/browser_explanation.js` is the independent offline POST regression. Neither exports browser credentials. The hosted capacity script exercises all 25 checks and durable receipt recovery without AI calls.
+
+
+## Conversational revision
+
+`POST /api/intents/{id}/clarify` accepts the current revision and a customer message. It binds the response to the displayed profile question, performs the selected extraction/audit pipeline, stores immutable source mappings and invalidates prior approval. There are two follow-up turns; every field remains editable in final review. Specific removal of a flagged condition is a recorded traveler action, not model authority. Overflow beyond 20 flags or 6,000 UTF-8 bytes is rejected before saving an unreviewable draft.
+
+`GET /api/quality` serves synthetic aggregate benchmarks and current live-canary status. `GET /api/internal/quality-check` requires the private scheduler bearer secret and is idempotent for its UTC date. `vercel.json` schedules it daily at 07:00 UTC. Stale interrupted runs become unavailable without another paid call. See [the measured evaluation record](15-ai-evaluation-and-conversation.md) for limits and results.

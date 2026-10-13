@@ -32,3 +32,5 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 [Running product and operations](11-running-product.md) explains the deployed contracts and budget controls. [Demo script](12-demo-script.md) gives the judge-facing walkthrough. [Final review](final-review.md) records findings, corrections and autonomous rulings.
 
 [Adopting a domain](13-adopting-a-domain.md) explains the actual executable profile format, trusted fact adapters and current registration boundaries.
+
+[Evaluated conversation and continuous quality](15-ai-evaluation-and-conversation.md) documents the conversational revision, actual pipeline comparisons, holdout results, CI and bounded live monitoring.

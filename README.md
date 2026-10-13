@@ -9,7 +9,7 @@ The model never approves a purchase. The demo uses synthetic merchants, signing 
 ## Demo
 
 1. Choose Flight, Hotel, or General and enter a request. Live Microsoft Foundry is the default.
-2. Review extracted fields and their source quotations. Answer missing questions and explicitly choose any no preferences.
+2. Continue the conversation while the intent summary updates. Review the captured rules, source quotations, and explicit no preferences before approval.
 3. Approve the exact reviewed requirements. Compare two merchant-signed synthetic offers.
 4. Demonstrate a refused purchase, or accept a specific difference tied to the exact offer hash.
 5. Confirm a simulated booking, download signed evidence, and prepare an analyst review.
@@ -40,7 +40,10 @@ Open http://127.0.0.1:8000. Configure Azure variables for live AI. For a disconn
 - `profiles/`: versioned flights, hotels, and limited general-mode schemas.
 - `app/vi_adapter.py`: pinned VI SDK L1/L2/split L3 issuance and verification; independent ES256 merchant verification; explicit dispatch of every constraint.
 - `app/main.py`: server-owned review, approval, exact exceptions, reauthorization, idempotent purchase, evidence, and session recovery.
-- `app/foundry_client.py`: source-grounded draft extraction and on-demand explanation through the existing Foundry gpt-oss-120b deployment.
+- `app/ai_pipeline.py`: measured extraction + independent coverage audit on Foundry gpt-oss-120b, with strict grounded output validation.
+- `app/conversation.py`: revision-bound conversation and ranked profile questions.
+- `app/quality.py`: authenticated, replay-safe daily live canary and public synthetic quality reports.
+- `app/foundry_client.py`: original baseline and on-demand explanation, without purchase authority.
 - `app/store.py`: SQLite locally; Azure Table conditional writes on Vercel. Function memory is not authoritative.
 - `demo/`: separate synthetic commerce adapter. Replacing search/payment does not replace intent enforcement.
 - `web/`: static vanilla HTML, JS, and CSS served by FastAPI; no frontend build step.
@@ -51,8 +54,10 @@ Hosted deployments require stable environment signing keys and durable Azure sto
 
 See [implementation status](docs/implementation-status.md), [design decisions](DESIGN.md), and the [research index](docs/00-index.md).
 
-The release has 50 passing tests and completed live desktop/mobile Foundry flows on Vercel, including the actual purchase refusal, exact consent and signed evidence download. Follow [the two-minute demo script](docs/12-demo-script.md); [running product and operations](docs/11-running-product.md) records the real endpoints and budget controls.
+The conversational revision has 76 passing regression tests, measured three pipelines on 12 development cases, and passed 6/6 untouched holdout cases with the selected audited pipeline. It completed live desktop/mobile Foundry flows, including the actual purchase refusal, exact consent and signed evidence download. Follow [the two-minute demo script](docs/12-demo-script.md); [running product and operations](docs/11-running-product.md) records the real endpoints and budget controls.
 
 This is a showable student prototype. It does not perform real travel search, take payment, file chargebacks, establish legal liability, or guarantee perfect intent extraction. It implements the supported profile fields; unimplemented requirements stay held.
 
 The upstream draft checker does not natively support our custom constraint. We verify the original chain, evaluate supported native constraints strictly, dispatch our recognized custom constraint to the deterministic engine, and hold any unimplemented constraint. We do not claim stock SDK or payment-network compatibility for the extension.
+
+See [AI evaluation and conversation](docs/15-ai-evaluation-and-conversation.md) for experimental results, known failures, the daily canary, and budget limits. The Quality view shows real recorded results.

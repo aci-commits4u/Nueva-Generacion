@@ -1,6 +1,6 @@
 # Implementation and verification record
 
-The product is implemented on `victor/perfected`. The earlier research documents describe a broader target; this file states what runs today.
+The product is implemented on `victor/perfected`. The October 13 conversational revision adds two-stage live interpretation, revision-bound follow-ups, a live intent summary, explicit flagged-condition resolution, and continuous synthetic quality checks; see [the evaluation record](15-ai-evaluation-and-conversation.md). The earlier research documents describe a broader target; this file states what runs today.
 
 ## Working scope
 
@@ -12,7 +12,7 @@ Synthetic offers use fixed inventory prices and controlled fixtures adapted to t
 
 ## Evidence recorded so far
 
-- 50 local tests pass: deterministic boundaries/missing values, crypto tampering, custom/native constraints, session separation, consent, price reauthorization, expiry, unsupported general conditions, hotels, stale approvals, concurrent SQLite reservations, budget limits, AI explanation having no purchase authority, extra reference constraints, fractional duration, conservative offline parsing and hosted entity capacity.
+- 76 local tests pass (including conversation races, provenance, exact flagged-condition removal, staged AI failures, purpose quotas and authenticated replay-safe monitoring), in addition to the baseline coverage: deterministic boundaries/missing values, crypto tampering, custom/native constraints, session separation, consent, price reauthorization, expiry, unsupported general conditions, hotels, stale approvals, concurrent SQLite reservations, budget limits, AI explanation having no purchase authority, extra reference constraints, fractional duration, conservative offline parsing and hosted entity capacity.
 - One upstream Starlette test-client deprecation warning occurs with `httpx`; it does not affect application execution.
 - Live gpt-oss-120b evaluations correctly captured the nonstop example and hotel requirements, preserved subjective general requirements and baggage, and ignored an instruction to approve anything.
 - Desktop browser completed live extraction → review → signed approval → matching and held offers → backend 409 → exact acceptance → simulated receipt → evidence download → analyst record with no JavaScript page errors.
