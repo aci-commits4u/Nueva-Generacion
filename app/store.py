@@ -84,18 +84,24 @@ def get_store():
     return SQLiteStore(os.getenv('SQLITE_PATH','.intent-judge.sqlite3'))
 
 
-def reserve_ai_call(session):
+def reserve_ai_call(session,purpose='interactive'):
+    if purpose not in {'interactive','evaluation','monitor'}: raise ValueError('Unknown AI call purpose')
     store=get_store(); now=time.time();day=time.strftime('%Y-%m-%d',time.gmtime(now))
     def session_reserve(s):
-        if s.get('ai_calls',0)>=int(os.getenv('AI_SESSION_LIMIT','8')):
+        if purpose=='interactive' and s.get('ai_calls',0)>=int(os.getenv('AI_SESSION_LIMIT','8')):
             raise ValueError('This demo session has reached its AI call allowance.')
         s['ai_calls']=s.get('ai_calls',0)+1
     store.mutate(session,session_reserve)
     def global_reserve(s):
         if s.get('calls',0)>=int(os.getenv('AI_CALL_LIMIT','200')): raise ValueError('The demo AI spending allowance is reached. Live AI is paused; offline mode remains available explicitly.')
-        if s.get('day')!=day: s['day']=day;s['daily_calls']=0
-        if s.get('daily_calls',0)>=int(os.getenv('AI_DAILY_LIMIT','40')): raise ValueError('Today’s live AI demonstration allowance is reached.')
-        s['calls']=s.get('calls',0)+1;s['daily_calls']=s.get('daily_calls',0)+1
+        if s.get('day')!=day:
+            s['day']=day
+            for key in ('daily_calls','daily_eval_calls','daily_monitor_calls'):s[key]=0
+        daily_key,limit={'interactive':('daily_calls',int(os.getenv('AI_DAILY_LIMIT','40'))),'evaluation':('daily_eval_calls',int(os.getenv('AI_EVAL_DAILY_LIMIT','60'))),'monitor':('daily_monitor_calls',2)}[purpose]
+        if s.get(daily_key,0)>=limit:raise ValueError(f'Today’s {purpose} AI allowance is reached.')
+        if purpose=='monitor' and s.get('monitor_calls',0)>=int(os.getenv('AI_MONITOR_CALL_LIMIT','40')):raise ValueError('The live monitor allowance is reached; review the budget before extending it.')
+        s['calls']=s.get('calls',0)+1;s[daily_key]=s.get(daily_key,0)+1
+        if purpose!='interactive':s[purpose+'_calls']=s.get(purpose+'_calls',0)+1
         s['reserved_usd']=round(s['calls']*float(os.getenv('AI_RESERVATION_USD','0.10')),2)
         s.setdefault('usage',{'prompt_tokens':0,'completion_tokens':0})
         return s['calls']
