@@ -24,3 +24,7 @@ Read the problem first, then the workflow and architecture. The architecture and
 - **Unproven outcome:** a business effect requiring future measurement, such as fewer disputes or greater merchant adoption.
 
 These labels distinguish product aspiration from evidence. When the build starts, update status with actual implementation and test results rather than changing proposed behavior into a claim by implication.
+
+## Implemented product
+
+[Implementation status](implementation-status.md) records the actual supported scope, tests, live model evaluation, deployment, and limits. [DESIGN.md](../DESIGN.md) records autonomous choices. The [execution plan](superpowers/plans/2026-10-13-intent-judge.md) describes the build sequence.

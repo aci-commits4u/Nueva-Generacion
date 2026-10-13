@@ -90,6 +90,12 @@ def session(request:Request,response:Response):
     s=get_store().read(sid)
     return {'synthetic_actor':'Demo traveler','ai_calls':s.get('ai_calls',0),'intents':[{'id':d['id'],'domain':d['domain'],'message':d['message'],'approved':bool(d.get('approved'))} for d in s['drafts'].values()]}
 
+@app.post('/api/session/reset')
+def reset_session(request:Request,response:Response):
+    session_id(request)
+    response.delete_cookie('ij_session',secure=request.url.scheme=='https' or bool(os.getenv('VERCEL')),httponly=True,samesite='strict')
+    return {'reset':True}
+
 @app.get('/api/profiles')
 def profiles(): return [get_profile(x) for x in ('flight','hotel','general')]
 @app.get('/api/profiles/{domain}')
@@ -115,7 +121,11 @@ def intake(body:IntentRequest,request:Request):
     return get_store().mutate(sid,save)
 
 @app.get('/api/intents/{id}')
-def get_intent(id:str,request:Request): return required(get_store().read(session_id(request)),'drafts',id)
+def get_intent(id:str,request:Request):
+    s=get_store().read(session_id(request));d=required(s,'drafts',id)
+    decisions=[{k:v for k,v in obj.items() if k not in {'bundle','original_bundle','approved'}} for obj in s['decisions'].values() if obj['intent_id']==id]
+    purchases=[p['receipt'] for p in s['purchases'].values() if any(v['id']==p['receipt']['decision_id'] for v in decisions)]
+    return {**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None}
 
 @app.post('/api/intents/{id}/answers')
 def answers(id:str,body:AnswerRequest,request:Request):
@@ -144,7 +154,7 @@ def approve(id:str,body:ApprovalRequest,request:Request):
             raise HTTPException(409,'Approve the exact reviewed draft and digest.')
         if d.get('approved'):
             return {'approved':d['approved'],'offers':d['offer_views']}
-        approved={'id':id,'revision':d['revision'],'domain':d['domain'],'profile_digest':d['profile_digest'],'fields':d['fields'],'unsupported':d['unsupported'],'actor':sid,'approved_at':now(),'draft_digest':d['digest']}
+        approved={'id':id,'revision':d['revision'],'domain':d['domain'],'profile_digest':d['profile_digest'],'fields':d['fields'],'unsupported':d['unsupported'],'actor':'traveler-'+digest({'session':sid})[:20],'approved_at':now(),'draft_digest':d['digest']}
         d['approved']=approved
         views=[]
         for o in offers_for(approved):
@@ -170,6 +180,22 @@ def check(body:CheckRequest,request:Request):
         return {k:v for k,v in d.items() if k not in {'bundle','approved'}}
     return get_store().mutate(session_id(request),action)
 
+@app.post('/api/decisions/{id}/explain')
+def explain_decision(id:str,request:Request):
+    sid=session_id(request);s=get_store().read(sid);d=required(s,'decisions',id)
+    result,v=judge(s,d)
+    cache_key=digest({'checks':result['checks'],'exceptions':d['exceptions']})
+    if d.get('explanation_key')==cache_key: return d['explanation']
+    from app.foundry_client import explain
+    try: narrative=explain(result,sid,required(s,'drafts',d['intent_id'])['mode'])
+    except ValueError as exc: raise HTTPException(503,str(exc))
+    def save(state):
+        current=required(state,'decisions',id)
+        current['explanation']=narrative;current['explanation_key']=cache_key
+        event(state,'decision_explained',{'decision_id':id,'mode':narrative['mode'],'authority':'none'})
+        return narrative
+    return get_store().mutate(sid,save)
+
 @app.post('/api/decisions/{id}/exceptions')
 def accept_exception(id:str,body:ExceptionRequest,request:Request):
     sid=session_id(request)
@@ -181,7 +207,7 @@ def accept_exception(id:str,body:ExceptionRequest,request:Request):
         for check_id in set(body.check_ids):
             c=by_id.get(check_id)
             if not c or c['status']=='pass' or not c['exception_allowed']: raise HTTPException(409,'This check cannot be accepted as an exception.')
-            record={'check_id':check_id,'requirement':c['requirement'],'accepted_value':c['offer_value'],'accepted_status':c['status'],'offer_hash':d['offer_hash'],'approved_digest':d['approved_digest'],'profile_digest':d['approved']['profile_digest'],'actor':sid,'timestamp':now()}
+            record={'check_id':check_id,'requirement':c['requirement'],'accepted_value':c['offer_value'],'accepted_status':c['status'],'offer_hash':d['offer_hash'],'approved_digest':d['approved_digest'],'profile_digest':d['approved']['profile_digest'],'actor':d['approved']['actor'],'timestamp':now()}
             record['signature']=sign_record(record)
             selected.append(record)
         d['exceptions']=[e for e in d['exceptions'] if e['check_id'] not in body.check_ids]+selected

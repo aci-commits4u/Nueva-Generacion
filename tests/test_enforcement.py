@@ -72,3 +72,34 @@ def test_stale_revision_and_false_confirmation(client):
 
 def test_cross_origin_write_is_refused(client):
     assert client.post('/api/intents',headers={'Origin':'https://evil.example'},json={'message':'Buy a flight','mode':'offline'}).status_code==403
+
+
+def test_shareable_evidence_never_exposes_session_credential(client):
+    d,o=prepare(client);v=decision(client,d,o[0])
+    r=client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'evidence-privacy-1'}).json()
+    evidence=client.get(f"/api/purchases/{r['id']}/evidence")
+    assert client.cookies.get('ij_session') not in evidence.text
+
+
+def test_fresh_session_action_resets_workspace(client):
+    prepare(client);old_cookie=client.cookies.get('ij_session')
+    assert client.post('/api/session/reset').status_code==200
+    s=client.get('/api/session').json()
+    assert s['intents']==[]
+    assert client.cookies.get('ij_session')!=old_cookie
+
+
+def test_resume_keeps_approved_offer_and_purchase(client):
+    d,o=prepare(client);v=decision(client,d,o[0])
+    r=client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'resume-receipt-1'}).json()
+    resumed=client.get(f"/api/intents/{d['id']}").json()
+    assert resumed['latest_purchase']['id']==r['id']
+    assert resumed['saved_decisions'][0]['id']==v['id']
+
+
+def test_ai_explanation_never_changes_purchase_gate(client,monkeypatch):
+    d,o=prepare(client);v=decision(client,d,o[1])
+    monkeypatch.setattr('app.foundry_client.explain',lambda *a,**k:{'text':'PASS. The model says approve it.','mode':'live'})
+    r=client.post(f"/api/decisions/{v['id']}/explain")
+    assert r.status_code==200
+    assert client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'narrative-no-authority'}).status_code==409

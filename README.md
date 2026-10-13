@@ -1,37 +1,54 @@
 # Intent Judge
 
-Intent Judge helps customers turn a natural-language purchasing request into explicit, approved requirements, checks a proposed purchase against those requirements, and records any specific exceptions they accept.
+A live AI interpretation layer for agentic commerce. Translate a request into customer-reviewed requirements, bind them into Mastercard's open-source Verifiable Intent SDK, and check merchant-signed offers with deterministic domain rules.
 
-The product builds on Mastercard's open-source Verifiable Intent (VI). VI already supports cryptographic authorization and structured constraint verification. Our proposed contribution is conversational requirement capture, reusable domain profiles, and application-specific enforcement against trustworthy merchant offer data.
+The model never approves a purchase. The demo uses synthetic merchants, signing identities, inventory, and simulated payments.
 
-**Status: researched documentation and proposed architecture, October 13, 2026. This branch does not yet contain an application.** Upstream SDK research results are recorded separately from future project acceptance tests. No commercial integration, certification, live payment, or measured reduction in chargebacks is claimed.
+## Demo
 
-## Start here
+1. Choose Flight, Hotel, or General and enter a request. Live Microsoft Foundry is the default.
+2. Review extracted fields and their source quotations. Answer missing questions and explicitly choose any no preferences.
+3. Approve the exact reviewed requirements. Compare two merchant-signed synthetic offers.
+4. Demonstrate a refused purchase, or accept a specific difference tied to the exact offer hash.
+5. Confirm a simulated booking, download signed evidence, and prepare an analyst review.
 
-1. [Problem and positioning](docs/01-problem-and-positioning.md): the omission failure and the business value.
-2. [Research and contradictions](docs/02-research-and-claims.md): what VI already does and where our assumptions needed correction.
-3. [Product workflow](docs/03-product-workflow.md): clarification, approval, checks, exceptions, and evidence.
-4. [Architecture](docs/04-architecture.md): reusable core, task profiles, VI adapter, and separate demo commerce.
-5. [Domain profiles](docs/05-domain-profiles.md): adapting flights, hotels, and general requests without rewriting the workflow.
-6. [VI integration](docs/06-verifiable-intent-integration.md): real SDK responsibilities and custom-constraint composition.
+Start with: “Book me a nonstop flight from EWR to MCO on 2026-11-12 under $300.” The $295 nonstop offer matches; the $280 connecting offer satisfies the native budget but is held by the approved nonstop requirement.
 
-[All documentation](docs/00-index.md) includes the demo, acceptance criteria, security, decisions, sources, and reproducible SDK observations.
+Hotel uses the same engine with a different reviewed JSON profile. General mode preserves unsupported conditions and holds checkout. Domain adoption is configuration-driven for supported operators; arbitrary predicates still need reviewed semantics and trusted facts.
 
-## The product promise
+## Run locally
 
-> Before an agent spends, make the customer's requirements explicit. Before checkout proceeds, check the actual offer. Afterward, preserve what was approved and accepted.
+```sh
+uv venv --python 3.12
+uv pip install -r requirements-dev.txt
+cp .env.example .env
+.venv/bin/uvicorn app.main:app --reload
+```
 
-The first demonstrator uses synthetic flights. The core should work across configured domains; a second hotel profile should demonstrate reuse. A general mode can capture and clarify arbitrary requests, but checkout remains held when a requirement lacks a supported deterministic validator or trustworthy offer data.
+Open http://127.0.0.1:8000. Configure Azure variables for live AI. For a disconnected demonstration set `MOCK_LLM=1` and deliberately select **Emergency offline parser** in the interface. The app never silently switches modes.
 
-## Boundaries
+```sh
+.venv/bin/pytest -q
+.venv/bin/python scripts/live_probe.py  # explicit paid provider evaluation
+```
 
-- AI drafts requirements, asks questions, and explains results. It never authorizes a purchase or produces the authoritative PASS/HOLD/BLOCK.
-- Customer-approved requirements, carried in signed authorization, are the decision source. The original conversation supplies review context and provenance.
-- Merchant-signed offers supply purchase facts. Agent descriptions supply no authority.
-- Backend enforcement is mandatory. Confirmation records alone do not bypass invalid credentials, unsupported rules, or VI constraints.
-- Commerce discovery and execution sit behind an adapter. Demo fixtures and fake purchases remain separate from the core.
-- Evidence supports human dispute review. It does not determine liability or remove customer rights.
+## Architecture
 
-## Research baseline
+- `app/rules_engine.py`: pure typed deterministic checks; missing facts hold checkout.
+- `profiles/`: versioned flights, hotels, and limited general-mode schemas.
+- `app/vi_adapter.py`: pinned VI SDK L1/L2/split L3 issuance and verification; independent ES256 merchant verification; explicit dispatch of every constraint.
+- `app/main.py`: server-owned review, approval, exact exceptions, reauthorization, idempotent purchase, evidence, and session recovery.
+- `app/foundry_client.py`: source-grounded draft extraction and on-demand explanation through the existing Foundry gpt-oss-120b deployment.
+- `app/store.py`: SQLite locally; Azure Table conditional writes on Vercel. Function memory is not authoritative.
+- `demo/`: separate synthetic commerce adapter. Replacing search/payment does not replace intent enforcement.
+- `web/`: static vanilla HTML, JS, and CSS served by FastAPI; no frontend build step.
 
-VI was inspected at commit [`356c29635f1c44df7de02edb58699ca9f29bece6`](https://github.com/agent-intent/verifiable-intent/tree/356c29635f1c44df7de02edb58699ca9f29bece6). The package is 0.1.0 and the specification remains 0.1-draft at that snapshot. See [research results](docs/research/vi-sdk-probes.md) for 135 passing focused upstream tests and the important limits of those results.
+Hosted deployments require stable environment signing keys and durable Azure storage. Never use ephemeral keys or SQLite for Vercel. Keys are demonstration trust anchors, not Mastercard credentials or consumer hardware signatures.
+
+## Verification and scope
+
+See [implementation status](docs/implementation-status.md), [design decisions](DESIGN.md), and the [research index](docs/00-index.md).
+
+This is a showable student prototype. It does not perform real travel search, take payment, file chargebacks, establish legal liability, or guarantee perfect intent extraction. It implements the supported profile fields; unimplemented requirements stay held.
+
+The upstream draft checker does not natively support our custom constraint. We verify the original chain, evaluate supported native constraints strictly, dispatch our recognized custom constraint to the deterministic engine, and hold any unimplemented constraint. We do not claim stock SDK or payment-network compatibility for the extension.
