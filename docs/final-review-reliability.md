@@ -1,0 +1,13 @@
+# Live reliability release review
+
+The independent technical reviewer read the live-reliability revision and ran the provider-independent suite. No purchase-authorization bypass was found. Five Important issues were reproduced and fixed; independent browser acceptance remains a separate gate.
+
+1. A malformed candidate could leave both a typed Florida clarification and the old unsupported marker. The compiler now reconciles only a matching typed clarification/legacy marker, retaining substantive baggage and return requirements. Regression reproduces the duplicate marker and verifies one representation after repair.
+2. Rapid suggestion clicks could launch two paid clarification pipelines at the same revision. The UI now locks all reply controls against an intent-level in-flight guard. The server also serializes interpretation within each session before any model reservation. Concurrent API tests verify one provider call and a 409 for the duplicate; the browser race regression verifies one request.
+3. New session creation retained stale unavailable status, and a delayed old status could overwrite the new one. Status requests now bind to a session generation. Reset invalidates old requests and force-fetches availability for the new session. The browser regression verifies fresh availability despite a delayed old unavailable response.
+4. USA, NYC and CHI were accepted as three-letter airports. They now remain ambiguities during extraction and are refused as actual airport choices during approval. Explicit airport codes such as LHR/CDG/LIS remain supported. Airport evidence also uses word boundaries, so “relax” cannot serve as a quotation for LAX.
+5. False booleans could turn “no need/no preference/without caring about breakfast” into a requirement that breakfast must be absent. These no-requirement phrases now cause the proposed field to be omitted/rejected instead of becoming a stronger absence rule. Tests cover all three forms.
+
+All fixes use synthetic/provider-independent regressions. Browser race fixtures are explicitly development coverage; they are not presented as live UAT or substituted model inference.
+
+The final fix verdict and hosted acceptance evidence will be recorded after verification.

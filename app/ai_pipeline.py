@@ -21,6 +21,7 @@ from app.ai_grounding import (
     clarification_guidance,
     preserve_candidate_clarifications,
     preserve_valid_candidate,
+    remove_resolved_field_markers,
     valid_candidate_clarifications,
     valid_candidate_fields,
     validate_extraction,
@@ -331,7 +332,10 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
     for guidance in candidate_guidance:
         if guidance not in final['explanation']:
             final['explanation'] = f"{final['explanation'].rstrip()} {guidance}".strip()
-    final['unsupported'] = _merge_or_raise(candidate_flags, final['unsupported'], stage='coverage_audit')
+    clarifications = final.get('clarifications', [])
+    candidate_flags = remove_resolved_field_markers(candidate_flags, clarifications, source_text)
+    audited_flags = remove_resolved_field_markers(final['unsupported'], clarifications, source_text)
+    final['unsupported'] = _merge_or_raise(candidate_flags, audited_flags, stage='coverage_audit')
     _record_outcome('coverage_audit', 'passed', traces[-1].get('response_id') if traces else None)
     return {**final, 'mode': 'live', 'model': os.environ.get('AZURE_OPENAI_DEPLOYMENT'),
             'pipeline': variant, 'trace': traces}

@@ -15,6 +15,12 @@ def envelope(fields, sources, *, unsupported=None):
     }
 
 
+def test_airport_code_cannot_be_grounded_in_an_unrelated_word():
+    with pytest.raises(GroundingFailure):
+        validate_extraction('flight','A place to relax under $300',
+                            envelope({'destination_airports':['LAX']},{'destination_airports':'relax'}))
+
+
 def envelope5(fields, sources, *, clarifications=None, unsupported=None):
     result = envelope(fields, sources, unsupported=unsupported)
     result["clarifications"] = [] if clarifications is None else clarifications
@@ -71,6 +77,7 @@ def test_clarification_source_and_profile_field_are_checked():
                 clarifications=[{"field": "destination_airports", "source_quote": "Texas", "reason": "ambiguous"}],
             ),
         )
+
     with pytest.raises(ValueError):
         validate_extraction(
             "flight", "arrive in the morning under $300",
@@ -141,6 +148,20 @@ def test_explicit_iata_code_is_accepted_when_customer_said_it():
     )
     assert result["fields"]["origin_airports"] == ["LHR"]
     assert result["fields"]["destination_airports"] == ["CDG"]
+
+
+@pytest.mark.parametrize("token", ["NYC", "CHI", "USA"])
+def test_broad_three_letter_location_tokens_are_not_airports(token):
+    result = validate_extraction(
+        "flight",
+        f"Fly to {token} under $300",
+        envelope(
+            {"destination_airports": [token], "max_total_cents": 29999},
+            {"destination_airports": token, "max_total_cents": "under $300"},
+        ),
+    )
+    assert "destination_airports" not in result["fields"]
+    assert result["clarifications"][0]["source_quote"] == token
 
 
 def test_unknown_city_becomes_a_clarification_need():
@@ -248,6 +269,7 @@ def test_no_to_a_boolean_question_is_not_false_and_misbinding_is_rejected():
                 {"role": "user", "content": "No", "reply_to": {"field": "nonstop", "question": question}},
             ],
         )
+
     with pytest.raises(GroundingFailure):
         validate_extraction(
             "flight",
@@ -273,6 +295,23 @@ def test_no_to_a_boolean_question_is_not_false_and_misbinding_is_rejected():
                 {"role": "user", "content": "under $300"},
                 {"role": "user", "content": "Yes", "reply_to": {"field": "refundable", "question": "Must the fare be refundable?"}},
             ],
+        )
+
+
+@pytest.mark.parametrize("phrase", [
+    "no need for breakfast",
+    "no preference for breakfast",
+    "without caring about breakfast",
+])
+def test_unpreferred_boolean_phrases_do_not_ground_false(phrase):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "hotel",
+            f"Tampa under $300 {phrase}",
+            envelope(
+                {"breakfast": False, "max_total_cents": 29999},
+                {"breakfast": phrase, "max_total_cents": "under $300"},
+            ),
         )
 
 

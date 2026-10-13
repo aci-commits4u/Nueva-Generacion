@@ -44,6 +44,7 @@ _AMBIGUOUS_LOCATIONS = {
     "united states",
     "usa",
     "chicago",
+    "chi",
     "new york",
     "new york city",
     "nyc",
@@ -70,7 +71,14 @@ def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, l
     for raw in value:
         token = raw.strip()
         lower = token.casefold()
-        if _IATA.fullmatch(token.upper()):
+        # Metropolitan and country abbreviations are broad locations, not
+        # airport authority codes in this reviewed profile. Check them before
+        # the syntactic three-letter IATA test so NYC/CHI/USA remain choices
+        # for clarification while explicit LHR/CDG/LIS still work.
+        if lower in _AMBIGUOUS_LOCATIONS:
+            ambiguous = True
+            unresolved.append(token)
+        elif _IATA.fullmatch(token.upper()):
             code = token.upper()
             aliases = [name for name, codes in _AIRPORT_ALIASES.items() if code in codes]
             if not re.search(rf"\b{re.escape(code)}\b", quote, re.I) and not any(
@@ -80,9 +88,6 @@ def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, l
             airports.append(code)
         elif lower in _AIRPORT_ALIASES:
             airports.extend(_AIRPORT_ALIASES[lower])
-        elif lower in _AMBIGUOUS_LOCATIONS:
-            ambiguous = True
-            unresolved.append(token)
         else:
             # A customer-named city that is outside the reviewed alias map is
             # a clarification need, not permission to invent an airport.
@@ -237,10 +242,10 @@ def _date_in_quote(value: str, quote: str) -> bool:
 def _airport_quote_supports(value: list[str], quote: str) -> bool:
     lower = quote.casefold()
     for airport in value:
-        if airport.casefold() in lower:
+        if re.search(r'\b'+re.escape(airport.casefold())+r'\b',lower):
             continue
         aliases = [name for name, codes in _AIRPORT_ALIASES.items() if airport in codes]
-        if not any(alias in lower for alias in aliases):
+        if not any(re.search(r'\b'+re.escape(alias)+r'\b',lower) for alias in aliases):
             return False
     return True
 
@@ -299,8 +304,14 @@ def _boolean_quote_supports(key: str, value: bool, quote: str, *, domain: str = 
             return not bool(re.search(r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care\s+about)?\s*non[- ]?stop\b", q) or
                                 re.search(r"\b(?:no|without|not)\s+non[- ]?stop\b", q))
         return not bool(re.search(r"\b(?:don't|do not|doesn't|does not|no|without|not)\b", q))
-    # False means an explicit absence requirement. "I don't care" is not one.
-    if re.search(r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care)\b", q):
+    # False means an explicit absence requirement. Phrases such as "no need",
+    # "no preference", and "without caring" decline a requirement instead.
+    if re.search(
+        r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care)\b"
+        r"|\bno\s+(?:need|requirement|preference)\b"
+        r"|\bwithout\s+(?:caring|care)\s+about\b",
+        q,
+    ):
         return False
     if key == "nonstop":
         return bool(re.search(r"\b(?:no|without|not|avoid)\s+non[- ]?stop\b", q))
@@ -450,6 +461,45 @@ def bounded_unsupported(data: object, message: str | None = None) -> list[str]:
             if isinstance(item, str) and item.strip() and len(item) <= 2500
             and not (legacy and message is not None and _field_clarification_match(item, message))][:20]
     return list(dict.fromkeys(values))[:20]
+
+
+def remove_resolved_field_markers(items: list[str], clarifications: list[dict],
+                                  message: str) -> list[str]:
+    """Drop only a typed missing-field marker resolved by a real clarification.
+
+    Five-key envelopes must carry both the marker and structured clarification
+    through audit, so removal is allowed only when field and quoted customer
+    words agree. Conditions such as baggage and round trip never match this
+    narrow migration pattern.
+    """
+    if not items or not clarifications:
+        return list(items)
+    result: list[str] = []
+    for item in items:
+        match = _field_clarification_match(item, message)
+        if not match:
+            result.append(item)
+            continue
+        field = f"{match.group(1).casefold()}_airports"
+        location = (match.group(2) or "").strip()
+        if not location:
+            # Without a location in the legacy marker there is no source
+            # overlap to prove that a structured clarification resolves it.
+            result.append(item)
+            continue
+        resolved = False
+        for clarification in clarifications:
+            if not isinstance(clarification, dict) or clarification.get("field") != field:
+                continue
+            quote = clarification.get("source_quote")
+            if not isinstance(quote, str):
+                continue
+            if _contains(location, quote) or _contains(quote, location):
+                resolved = True
+                break
+        if not resolved:
+            result.append(item)
+    return list(dict.fromkeys(result))[:20]
 
 
 def valid_candidate_fields(data: object, domain: str, message: str,

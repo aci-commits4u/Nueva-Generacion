@@ -13,6 +13,20 @@ const samples = {
  general:'Find an ethically sourced, comfortable chair under $300.'
 };
 let aiStatusRequest=null;
+let aiStatusRequestToken=0;
+let sessionGeneration=0;
+const clarificationRequests=new Set();
+function invalidateSessionStatus(){
+ sessionGeneration++;
+ aiStatusRequestToken++;
+ aiStatusRequest=null;
+ state.aiStatus=null;
+ state.aiStatusLoading=false;
+}
+function setClarificationControls(intentId,disabled){
+ if(state.stage!==2||state.draft?.id!==intentId)return;
+ document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply]').forEach(control=>{control.disabled=disabled;control.toggleAttribute('aria-busy',disabled);});
+}
 function notice(message='',tone='warning'){
  const el=$('#notice');
  el.hidden=!message;el.textContent=message;el.dataset.tone=tone;
@@ -79,16 +93,24 @@ function renderAvailability(){
  const submit=$('#intake-form button[type="submit"]');
  if(submit&&submit.dataset.busy!=='true')submit.disabled=state.mode==='live'&&!liveAvailable();
 }
-async function refreshAIStatus(silent=true){
- if(aiStatusRequest)return aiStatusRequest;
+async function refreshAIStatus(silent=true,options={}){
+ const generation=options.generation??sessionGeneration,force=options.force===true;
+ if(generation!==sessionGeneration)return state.aiStatus;
+ if(!force&&aiStatusRequest?.generation===generation)return aiStatusRequest.promise;
+ const token=++aiStatusRequestToken;
  state.aiStatusLoading=true;renderAvailability();
- aiStatusRequest=api('/api/ai/status').then(status=>{state.aiStatus=status;return status;}).catch(error=>{
-  const e=errorFromUnknown(error,'/api/ai/status');
-  state.aiStatus={configured:false,available:false,reason:{code:e.status===404?'ai_status_unavailable':'ai_status_error',message:'Live availability could not be confirmed.'}};
-  if(!silent)notice('Live availability could not be confirmed. Your request is preserved; choose the explicit offline parser or review the current draft.');
-  return state.aiStatus;
- }).finally(()=>{state.aiStatusLoading=false;aiStatusRequest=null;renderAvailability();});
- return aiStatusRequest;
+ const promise=api('/api/ai/status').then(status=>{
+  if(generation===sessionGeneration&&token===aiStatusRequestToken)state.aiStatus=status;
+  return status;
+ }).catch(error=>{
+  const e=errorFromUnknown(error,'/api/ai/status'),fallback={configured:false,available:false,reason:{code:e.status===404?'ai_status_unavailable':'ai_status_error',message:'Live availability could not be confirmed.'}};
+  if(generation===sessionGeneration&&token===aiStatusRequestToken){state.aiStatus=fallback;if(!silent)notice('Live availability could not be confirmed. Your request is preserved; choose the explicit offline parser or review the current draft.');}
+  return fallback;
+ }).finally(()=>{
+  if(generation===sessionGeneration&&token===aiStatusRequestToken){state.aiStatusLoading=false;if(aiStatusRequest?.token===token)aiStatusRequest=null;renderAvailability();}
+ });
+ aiStatusRequest={generation,token,promise};
+ return promise;
 }
 function errorMessage(error){
  const e=errorFromUnknown(error);
@@ -205,14 +227,29 @@ function renderIntake(){
  const syncMode=()=>{state.mode=$('#ai-mode').value;$('#intake-availability').dataset.mode=state.mode;renderAvailability();const submit=$('#intake-form button[type="submit"]');submit.disabled=state.mode==='live'&&!liveAvailable();};
  $('#ai-mode').onchange=syncMode;
  syncMode();
- $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation;if(state.mode==='live'){await refreshAIStatus(true);if(!liveAvailable())throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(state.aiStatus),error:{code:statusReason(state.aiStatus)?.code||'ai_status_unavailable',message:knownReasonCopy(state.aiStatus),retry_after_seconds:statusReason(state.aiStatus)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
+ $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation,generation=sessionGeneration;if(state.mode==='live'){const status=await refreshAIStatus(true,{generation});if(generation!==sessionGeneration)return;if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
 }
 function renderConversation(){
  const d=state.draft;$('#workspace').innerHTML=conversationMarkup(d,escapeHTML);
  if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
  renderAvailability();
+ setClarificationControls(d.id,clarificationRequests.has(d.id));
  $('#review-now').onclick=()=>transition(3);
- const send=text=>busy($('#clarify-form button'),async()=>{const navigation=state.navigation;if(d.mode==='live'){await refreshAIStatus(true);if(!liveAvailable())throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(state.aiStatus),error:{code:statusReason(state.aiStatus)?.code||'ai_status_unavailable',message:knownReasonCopy(state.aiStatus),retry_after_seconds:statusReason(state.aiStatus)?.retry_after_seconds||null}});}const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;state.clarifyEdit=null;state.draft=draft;render();},'Interpreting your clarification…');
+ const send=text=>{
+  if(clarificationRequests.has(d.id))return;
+  const navigation=state.navigation,generation=sessionGeneration,inputSnapshot=$('#clarify-text')?.value??'';
+  clarificationRequests.add(d.id);state.clarifyEdit={id:d.id,revision:d.revision,value:inputSnapshot};setClarificationControls(d.id,true);
+  return busy($('#clarify-form button'),async()=>{
+   if(d.mode==='live'){
+    const status=await refreshAIStatus(true,{generation});
+    if(generation!==sessionGeneration)return;
+    if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});
+   }
+   const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});
+   if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;
+   state.clarifyEdit=null;state.draft=draft;render();
+  },'Interpreting your clarification…').finally(()=>{clarificationRequests.delete(d.id);setClarificationControls(d.id,false);});
+ };
  $('#clarify-form').onsubmit=e=>{e.preventDefault();send($('#clarify-text').value);};
  document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>send(b.dataset.reply));
 }
@@ -333,15 +370,22 @@ $('#new-request').onclick=e=>{
  startDemo();
  busy(e.currentTarget,async()=>{
   const navigation=state.navigation;
+  invalidateSessionStatus();renderAvailability();
   $('#workspace').innerHTML='<p class="loading" role="status">Opening a fresh request…</p>';$('#intent-panel').hidden=true;
   const tabs=[...document.querySelectorAll('[data-domain]')];tabs.forEach(b=>b.disabled=true);
-  try{await api('/api/session/reset',{});await api('/api/session');if(currentRequest(navigation))render();}
+  try{
+   await api('/api/session/reset',{});
+   const session=await api('/api/session');
+   invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;
+   await refreshAIStatus(true,{generation:sessionGeneration,force:true});
+   if(currentRequest(navigation))render();
+  }
   catch(error){if(currentRequest(navigation))render();throw error;}
   finally{tabs.forEach(b=>b.disabled=false);}
  },'Opening a fresh request…');
 };
 (async()=>{
- try{const session=await api('/api/session');state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true)]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
+ try{const session=await api('/api/session');invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true,{generation:sessionGeneration,force:true})]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){state.draft=await api('/api/intents/'+saved.id);state.domain=state.draft.domain;state.mode=state.draft.mode;
  if(state.draft.latest_purchase){state.receipt=state.draft.latest_purchase;state.stage=5;}else if(state.draft.approved){state.offers=state.draft.offer_views;for(const d of state.draft.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;

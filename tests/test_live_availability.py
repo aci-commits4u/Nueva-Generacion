@@ -182,3 +182,34 @@ def test_broad_geography_cannot_be_approved_as_an_airport(client):
     assert response.status_code==422
     saved=client.get(f"/api/intents/{draft['id']}").json()
     assert not saved['reviewed'] and not saved.get('approved')
+
+
+def test_simultaneous_clarifications_call_provider_once(client,monkeypatch):
+    from threading import Event
+    from tests.test_conversation import fake
+    monkeypatch.setattr('app.foundry_client.extract',fake)
+    draft=client.post('/api/intents',json={'message':'Nonstop under $300','mode':'live'}).json()
+    entered,release=Event(),Event()
+    calls=[]
+    def delayed(*args,**kwargs):
+        calls.append(True);entered.set()
+        assert release.wait(5)
+        return fake(*args,**kwargs)
+    monkeypatch.setattr('app.foundry_client.extract',delayed)
+    path=f"/api/intents/{draft['id']}/clarify"
+    body={'revision':draft['revision'],'message':'Depart from EWR'}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first=pool.submit(client.post,path,json=body)
+        assert entered.wait(5)
+        second=client.post(path,json=body)
+        release.set()
+        assert first.result().status_code==200
+    assert second.status_code==409 and len(calls)==1
+
+
+def test_failed_interpretation_releases_session_slot(client,monkeypatch,budget):
+    def failed(*args,**kwargs):raise AIServiceError('ai_provider','Live AI unavailable.')
+    monkeypatch.setattr('app.foundry_client.extract',failed)
+    assert client.post('/api/intents',json={'message':'Florida under $300','mode':'live'}).status_code==503
+    assert '_ai_pending' not in budget.read(client.cookies['ij_session'])
+    assert client.post('/api/intents',json={'message':'nonstop under $300','mode':'offline'}).status_code==200

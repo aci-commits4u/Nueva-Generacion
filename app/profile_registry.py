@@ -30,7 +30,7 @@ def validate_fields(profile, fields):
             raise ValueError(f'Invalid value for {key}')
         if key in {'origin_airports','destination_airports'}:
             import re
-            if any(not re.fullmatch(r'[A-Z]{3}',airport) for airport in value):
+            if any(not re.fullmatch(r'[A-Z]{3}',airport) or airport in {'USA','NYC','CHI'} for airport in value):
                 raise ValueError('Choose three-letter airport codes, such as EWR or MCO; city and region names need clarification.')
         if key.endswith('date'):
             from datetime import date

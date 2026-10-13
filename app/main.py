@@ -6,6 +6,8 @@ import time
 from datetime import datetime,timezone
 from pathlib import Path
 from urllib.parse import urlsplit
+from contextlib import contextmanager
+from functools import wraps
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent/'.env')
 from fastapi import FastAPI,HTTPException,Request,Response
@@ -57,6 +59,34 @@ def session_id(request):
     if time.time()-get_store().read(sid)['created']>28800:
         raise HTTPException(401,'Demo session expired. Reload to start again.')
     return sid
+
+
+@contextmanager
+def interpretation_slot(sid):
+    """Prevent concurrent UI/retry requests paying for the same active turn."""
+    token=uid()
+    def claim(state):
+        pending=state.get('_ai_pending')
+        if pending and time.time()-pending['started_at']<75:
+            raise HTTPException(409,'A request is already being interpreted. Wait for its response before sending another detail.')
+        state['_ai_pending']={'token':token,'started_at':time.time()}
+    get_store().mutate(sid,claim)
+    try:
+        yield
+    finally:
+        def release(state):
+            if state.get('_ai_pending',{}).get('token')==token:
+                state.pop('_ai_pending',None)
+        get_store().mutate(sid,release)
+
+
+def serialize_interpretation(fn):
+    @wraps(fn)
+    def wrapped(*args,**kwargs):
+        request=kwargs['request']
+        with interpretation_slot(session_id(request)):
+            return fn(*args,**kwargs)
+    return wrapped
 
 def event(s,kind,data):
     events=s.setdefault('events',[])
@@ -163,6 +193,7 @@ def profile(domain:str):
     except ValueError as e: raise HTTPException(404,str(e))
 
 @app.post('/api/intents')
+@serialize_interpretation
 def intake(body:IntentRequest,request:Request):
     sid=session_id(request)
     s=get_store().read(sid)
@@ -194,6 +225,7 @@ def get_intent(id:str,request:Request):
     return conversation_view({**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None})
 
 @app.post('/api/intents/{id}/clarify')
+@serialize_interpretation
 def clarify(id:str,body:ClarifyRequest,request:Request):
     sid=session_id(request)
     d=required(get_store().read(sid),'drafts',id)

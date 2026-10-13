@@ -159,6 +159,21 @@ def test_audit_retains_structured_clarification_until_customer_resolves_it(monke
  assert r['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
 
 
+def test_audit_reconciles_typed_location_marker_with_structured_clarification(monkeypatch):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  p=proposed5()
+  p['fields'].pop('nonstop');p['sources'].pop('nonstop')
+  p['unsupported']=['destination unspecified (Florida)', 'round trip']
+  p['clarifications']=[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
+  return p,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight','Florida under $300 round trip','s',variant='audited')
+ assert r['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
+ assert r['unsupported']==['round trip']
+
+
 def test_invalid_candidate_quarantine_keeps_structured_clarification(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
