@@ -75,3 +75,17 @@ def test_sqlite_mutation_preserves_concurrent_reservations(tmp_path):
         store.mutate('budget',update)
     with ThreadPoolExecutor(max_workers=6) as pool: list(pool.map(increment,range(30)))
     assert store.read('budget')['count']==30
+
+
+def test_full_decision_allowance_and_receipt_fit_hosted_entity(client):
+    from app.store import encode_entity,decode_entity
+    d,o=prepare(client)
+    for _ in range(25): v=decision(client,d,o[0])
+    r=client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'capacity-regression'})
+    assert r.status_code==200,r.text
+    state=get_store().read(client.cookies.get('ij_session'))
+    entity=encode_entity('capacity-test',state)
+    binary=[value for key,value in entity.items() if key.startswith('blob_')]
+    assert binary and all(isinstance(x,bytes) and len(x)<=60000 for x in binary)
+    assert sum(map(len,binary))<900000
+    assert decode_entity(entity)==state

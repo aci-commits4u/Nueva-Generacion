@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import time
+import math
 from datetime import datetime
 from functools import lru_cache
 from verifiable_intent import (IssuerCredential, UserMandate, CheckoutMandate, PaymentMandate, MandateMode, PaymentAmountConstraint, CheckoutLineItemsConstraint, CheckoutL3Mandate, PaymentL3Mandate, FinalCheckoutMandate, FinalPaymentMandate, create_layer1, create_layer2_autonomous, create_layer3_checkout, create_layer3_payment, verify_chain)
@@ -101,7 +102,7 @@ def normalize_offer(o):
             raise ValueError('Invalid complete itinerary')
         if first is None: first=dep
         prev=s; last=arr
-    facts.update(origin=segments[0]['origin'],destination=segments[-1]['destination'],departure_date=first.date().isoformat(),departure_local=first.strftime('%H:%M'),duration_minutes=int((last-first).total_seconds()/60),connection_count=len(segments)-1)
+    facts.update(origin=segments[0]['origin'],destination=segments[-1]['destination'],departure_date=first.date().isoformat(),departure_local=first.strftime('%H:%M'),duration_minutes=math.ceil((last-first).total_seconds()/60),connection_count=len(segments)-1)
     facts.pop('nonstop',None)
     stops=o.get('technical_stops')
     if type(stops) is int and stops>=0:
@@ -132,7 +133,7 @@ def verify(bundle,approved):
             raise ValueError('Payment and merchant checkout binding differ')
         custom_count=0
         for pair in result.pair_results:
-            for mandate in (pair.checkout_mandate,pair.payment_mandate):
+            for role,mandate in (('checkout',pair.checkout_mandate),('payment',pair.payment_mandate)):
                 for i,c in enumerate(mandate.get('constraints',[])):
                     typ=c.get('type')
                     if typ==p['custom_constraint_type']:
@@ -149,7 +150,10 @@ def verify(bundle,approved):
                         checked=check_constraints([resolved],{'line_items':o.get('line_items',[])},mode=StrictnessMode.STRICT,is_open_mandate=True)
                         status='pass' if checked.satisfied else 'fail';message='Native product and quantity policy evaluated against signed checkout.'
                     elif typ=='mandate.payment.reference':
-                        status='pass';message='Reference checked by VI chain verification and exact checkout/payment hash binding.'
+                        count=sum(x.get('type')==typ for x in mandate.get('constraints',[]))
+                        ok=role=='payment' and count==1 and bool(pair.pairing_key) and c.get('conditional_transaction_id')==pair.pairing_key
+                        status='pass' if ok else 'missing'
+                        message='Payment reference matches the exact signed checkout disclosure.' if ok else 'Unsupported or mismatched reference instance; checkout is held.'
                     elif typ=='mandate.payment.amount_range':
                         checked=check_constraints([c],payment,mode=StrictnessMode.STRICT,is_open_mandate=True)
                         status='pass' if checked.satisfied and o.get('currency')=='USD' else 'fail'

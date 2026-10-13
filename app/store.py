@@ -3,7 +3,27 @@ import json
 import os
 import sqlite3
 import time
+import zlib
 from functools import lru_cache
+
+
+def encode_entity(key,state):
+    """Keep atomic session writes below Azure's 1 MiB entity and 64 KiB property caps."""
+    raw=json.dumps(state,separators=(',',':'),ensure_ascii=True).encode('ascii')
+    if len(raw)>4000000: raise ValueError('Session capacity reached; start a fresh demo session.')
+    packed=zlib.compress(raw,level=6)
+    if len(packed)>900000: raise ValueError('Session capacity reached; start a fresh demo session.')
+    entity={'PartitionKey':'intent-judge-v1','RowKey':key,'encoding':'zlib-json-v1'}
+    entity.update({f'blob_{i//60000:03d}':packed[i:i+60000] for i in range(0,len(packed),60000)})
+    return entity
+
+
+def decode_entity(entity):
+    if entity.get('encoding')=='zlib-json-v1':
+        packed=b''.join(entity[k] for k in sorted(entity) if k.startswith('blob_'))
+        return json.loads(zlib.decompress(packed))
+    # Existing preview sessions migrate on their next conditional write.
+    return json.loads(''.join(entity[k] for k in sorted(entity) if k.startswith('data_')))
 
 class SQLiteStore:
     def __init__(self,path):
@@ -38,8 +58,7 @@ class AzureTableStore:
         from azure.core.exceptions import ResourceNotFoundError
         try:
             e=self.table.get_entity('intent-judge-v1',key)
-            raw=''.join(e[k] for k in sorted(e) if k.startswith('data_'))
-            return json.loads(raw),e.metadata['etag']
+            return decode_entity(e),e.metadata['etag']
         except ResourceNotFoundError: return {},None
     def read(self,key): return self._read(key)[0]
     def mutate(self,key,fn):
@@ -49,11 +68,7 @@ class AzureTableStore:
         for _ in range(12):
             state,etag=self._read(key)
             result=fn(state)
-            raw=json.dumps(state,separators=(',',':'),ensure_ascii=True)
-            if len(raw)>750000: raise RuntimeError('Session capacity reached; start a new demo session.')
-            e={'PartitionKey':'intent-judge-v1','RowKey':key}
-            # Table string values are UTF-16; ASCII chunks stay below 64 KiB.
-            e.update({f'data_{i//24000:03d}':raw[i:i+24000] for i in range(0,len(raw),24000)})
+            e=encode_entity(key,state)
             try:
                 if etag:
                     self.table.update_entity(e,mode=UpdateMode.REPLACE,etag=etag,match_condition=MatchConditions.IfNotModified)

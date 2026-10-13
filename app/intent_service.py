@@ -6,7 +6,7 @@ from app.profile_registry import get_profile, digest
 
 def offline_extract(domain,message):
     fields={};sources={}; unsupported=[]
-    for key,pat,value in [('nonstop',r'non[ -]?stop',True),('refundable',r'\brefundable\b',True),('breakfast',r'\bbreakfast\b',True),('accessible',r'\baccessible\b',True)]:
+    for key,pat,value in [('nonstop',r'non[ -]?stop',True),('refundable',r'\b(?:refundable|free cancellation)\b',True),('breakfast',r'\bbreakfast\b',True),('accessible',r'\baccessible\b',True)]:
         m=re.search(pat,message,re.I)
         if m and key in get_profile(domain)['fields']: fields[key]=value;sources[key]=m.group()
     money=re.search(r'(under|below|at most|max(?:imum)?|budget(?: of)?)\s*\$?\s*(\d+(?:\.\d{1,2})?)',message,re.I)
@@ -22,7 +22,14 @@ def offline_extract(domain,message):
         if len(dates)>1: fields['checkout_date']=dates[1];sources['checkout_date']=dates[1]
         for city in ['Orlando','Miami','New York','Chicago','Boston']:
             if city.lower() in message.lower(): fields['city']=city;sources['city']=city
-    if domain=='general' or re.search(r'quiet|ethical|comfortable|near |direct|layover|baggage|bag\b|round.?trip|return flight|morning|evening',message,re.I):
+    # Only consumed spans and a small grammar of neutral connecting words are
+    # understood. Preserve every other word, number, negation, or condition.
+    remainder=message
+    for source in sources.values():
+        remainder=re.sub(re.escape(source),' ',remainder,count=1,flags=re.I)
+    grammar=r'\b(?:book|find|me|a|an|the|please|from|to|on|in|with|and|flight|hotel)\b'
+    remainder=re.sub(grammar,' ',remainder,flags=re.I)
+    if domain=='general' or re.search(r'[^\s.,;!?]',remainder):
         unsupported=[message]
     return {'fields':fields,'sources':sources,'unsupported':unsupported,'explanation':'Emergency parsing supports a small set of explicit phrases. Review the entire original request and every field; it does not infer arbitrary intent.','mode':'offline','model':None}
 

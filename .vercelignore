@@ -1,0 +1,11 @@
+.env*
+.venv/
+.git/
+.superpowers/
+.playwright-cli/
+artifacts/
+docs/
+tests/
+scripts/
+*.sqlite3
+requirements-dev.txt

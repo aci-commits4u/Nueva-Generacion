@@ -56,3 +56,16 @@ def test_nonstop_needs_disclosed_technical_stops():
 def test_discontinuous_signed_route_blocks():
     a=approval(); o=offer(); o['segments'].append({'origin':'JFK','destination':'MIA','departure':'2026-11-12T13:00:00-05:00','arrival':'2026-11-12T15:00:00-05:00'})
     assert verify(issue(a,sign_offer(o)),a)['valid'] is False
+
+
+def test_extra_checkout_reference_cannot_receive_unchecked_pass():
+    a=approval()
+    v=verify(issue(a,sign_offer(offer()),extra_constraints=[{'type':'mandate.payment.reference','conditional_transaction_id':'wrong-reference'}]),a)
+    assert v['native_ok'] is False
+    assert any(x['type']=='mandate.payment.reference' and x['status']!='pass' for x in v['ledger'])
+
+
+def test_fractional_duration_is_never_rounded_down():
+    a=approval();o=offer();o['segments'][0]['arrival']='2026-11-12T11:00:59-05:00'
+    v=verify(issue(a,sign_offer(o)),a)
+    assert v['facts']['duration_minutes']==121

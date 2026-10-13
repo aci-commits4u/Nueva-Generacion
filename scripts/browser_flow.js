@@ -1,5 +1,5 @@
 async page => {
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const view=page.viewportSize().width<760?'mobile':'desktop';const mode=await page.getByLabel('Interpretation mode').inputValue();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.getByRole('button',{name:'Clarify my request',exact:true}).click();
  await page.getByRole('heading',{name:'Make the important details explicit.'}).waitFor({timeout:60000});
  await page.getByRole('button',{name:'No preference for unanswered optional details'}).click();
@@ -8,7 +8,14 @@ async page => {
  await page.getByRole('heading',{name:'Permission is only the beginning.'}).waitFor({timeout:60000});
  const text=await page.locator('#workspace').innerText();
  if(!text.includes('Intent-checked')||!text.includes('On hold'))throw new Error('Expected matching and held offers');
- await page.screenshot({path:'artifacts/comparison-desktop.png',fullPage:true});
+ await page.screenshot({path:'artifacts/comparison-'+view+'.png',fullPage:true});
+ const explainResponse=page.waitForResponse(r=>r.url().endsWith('/explain'));
+ await page.locator('[data-explain]').last().click();
+ const explained=await explainResponse;
+ if(explained.status()!==200||explained.request().method()!=='POST')throw new Error('Explanation failed: '+explained.status());
+ const narrative=await explained.json();
+ if(narrative.mode!==mode)throw new Error('Explanation silently changed interpretation mode');
+ await page.locator('.ai-explanation:not([hidden])').waitFor();
  await page.getByRole('button',{name:'Demonstrate the purchase gate'}).click();
  await page.locator('#notice').filter({hasText:'Purchase held'}).waitFor({timeout:30000});
  await page.getByRole('button',{name:'Review this difference'}).click();
@@ -22,7 +29,7 @@ async page => {
  await (await download).saveAs('artifacts/evidence-browser.json');
  await page.getByRole('button',{name:'Prepare a dispute review'}).click();
  await page.locator('#dispute-result').filter({hasText:'Final decision: dispute analyst'}).waitFor({timeout:30000});
- await page.screenshot({path:'artifacts/receipt-desktop.png',fullPage:true});
+ await page.screenshot({path:'artifacts/receipt-'+view+'.png',fullPage:true});
  if(errors.length)throw new Error(errors.join('; '));
- return {flow:'live Foundry → explicit approval → merchant signature and VI check → 409 gate → exact exception → simulated booking → evidence download → analyst review',result:'PASS',pageErrors:errors};
+ return {flow:'Foundry → explicit approval → merchant signature and VI check → AI explanation → 409 gate → exact exception → simulated booking → evidence download → analyst review',mode,explanationModel:narrative.model,result:'PASS',pageErrors:errors};
 }

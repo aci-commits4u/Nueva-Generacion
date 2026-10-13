@@ -50,3 +50,9 @@ def test_offline_general_keeps_unknown_conditions():
     d=offline_extract('general','Find a comfortable ethically sourced chair under $300')
     assert d['mode']=='offline'
     assert d['unsupported']
+
+
+@pytest.mark.parametrize('addition',['for two passengers','with wheelchair assistance','with a purple seat','and never before 9 AM','but not nonstop'])
+def test_offline_preserves_unrecognized_substantive_text(addition):
+    message='Nonstop flight EWR to MCO on 2026-11-12 under $300 '+addition
+    assert offline_extract('flight',message)['unsupported']==[message]
