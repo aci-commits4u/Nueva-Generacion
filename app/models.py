@@ -37,3 +37,7 @@ class PurchaseRequest(StrictModel):
 class DisputeRequest(StrictModel):
     purchase_id: str
     reason: str = Field(min_length=3,max_length=1000)
+
+class ClarifyRequest(StrictModel):
+    revision: int
+    message: str = Field(min_length=2,max_length=1500)

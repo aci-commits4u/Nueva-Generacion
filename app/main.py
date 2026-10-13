@@ -11,13 +11,14 @@ load_dotenv(Path(__file__).resolve().parent.parent/'.env')
 from fastapi import FastAPI,HTTPException,Request,Response
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
-from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest
+from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest
 from app.profile_registry import get_profile,validate_fields,digest
 from app.rules_engine import evaluate
 from app.store import get_store
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
+from app.conversation import context,questions,provenance
 from demo.fixtures import offers_for
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -75,6 +76,16 @@ async def boundaries(request,call_next):
         response.headers['Cache-Control']='no-store'
     return response
 
+@app.get('/api/quality')
+def quality():
+    from app.quality import overview
+    return overview()
+
+@app.get('/api/internal/quality-check')
+def quality_check(request:Request):
+    from app.quality import canary
+    return canary(request.headers.get('authorization'))
+
 @app.get('/api/health')
 def health():
     return {'status':'ok','live_ai_configured':bool(os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT')),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
@@ -113,7 +124,7 @@ def intake(body:IntentRequest,request:Request):
         from app.foundry_client import extract
         try: extraction=extract(body.domain,body.message,sid)
         except ValueError as exc: raise HTTPException(503,str(exc))
-    d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now()})
+    d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now(),'messages':[{'role':'user','content':body.message,'timestamp':now()}],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
     def save(state):
         if len(state['drafts'])>=3: raise HTTPException(429,'Scenario limit reached.')
         state['drafts'][d['id']]=d;event(state,'intent_extracted',{'intent_id':d['id'],'revision':1,'mode':d['mode']})
@@ -126,6 +137,33 @@ def get_intent(id:str,request:Request):
     decisions=[{k:v for k,v in obj.items() if k not in {'bundle','original_bundle','approved'}} for obj in s['decisions'].values() if obj['intent_id']==id]
     purchases=[p['receipt'] for p in s['purchases'].values() if any(v['id']==p['receipt']['decision_id'] for v in decisions)]
     return {**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None}
+
+@app.post('/api/intents/{id}/clarify')
+def clarify(id:str,body:ClarifyRequest,request:Request):
+    sid=session_id(request)
+    d=required(get_store().read(sid),'drafts',id)
+    if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
+    messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
+    if len(messages)>=3: raise HTTPException(409,'Review the captured requirements to continue; this demo allows two AI follow-ups.')
+    messages=messages+[{'role':'user','content':body.message,'timestamp':now()}]
+    text=context(messages)
+    if len(text)>5000: raise HTTPException(422,'Conversation is too long for this demo.')
+    if d['mode']=='offline': extraction=offline_extract(d['domain'],text)
+    else:
+        from app.foundry_client import extract
+        try: extraction=extract(d['domain'],text,sid)
+        except ValueError as exc: raise HTTPException(503,str(exc))
+    def save(state):
+        current=required(state,'drafts',id)
+        if current['revision']!=body.revision: raise HTTPException(409,'Another edit arrived during interpretation. Reload your latest draft.')
+        unsupported=list(dict.fromkeys(current['unsupported']+extraction['unsupported']))
+        revision=current['revision']+1
+        current.update(fields=extraction['fields'],sources=extraction['sources'],unsupported=unsupported,explanation=extraction['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],extraction['fields']))
+        current.setdefault('ai_runs',[]).append(provenance(extraction,revision))
+        current.pop('approved',None);current.pop('offer_views',None)
+        refresh(current);event(state,'intent_clarified',{'intent_id':id,'revision':revision,'digest':current['digest']})
+        return current
+    return get_store().mutate(sid,save)
 
 @app.post('/api/intents/{id}/answers')
 def answers(id:str,body:AnswerRequest,request:Request):
