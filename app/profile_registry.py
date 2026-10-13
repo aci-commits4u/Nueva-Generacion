@@ -15,6 +15,15 @@ def get_profile(domain):
     p['digest']=digest(p)
     return p
 
+def normalise_review_fields(domain,fields):
+    """Canonicalize case-only task values, preserving reviewed meaning."""
+    result=dict(fields)
+    if domain=='flight':
+        if isinstance(result.get('cabin'),str):result['cabin']=result['cabin'].strip().casefold()
+        if isinstance(result.get('trip_type'),str) and result['trip_type'].strip().casefold() in {'one way','one-way','one_way'}:
+            result['trip_type']='one_way'
+    return result
+
 def validate_fields(profile, fields):
     if len(fields)>30:
         raise ValueError('Too many requirements')
@@ -28,6 +37,8 @@ def validate_fields(profile, fields):
         valid = (t=='integer' and type(value) is int and value>=0) or (t=='boolean' and type(value) is bool) or (t=='string' and type(value) is str and 0<len(value)<=120) or (t=='strings' and type(value) is list and 0<len(value)<=20 and all(type(v) is str and len(v)<=120 for v in value)) or (t=='window' and type(value) is list and len(value)==2 and all(valid_time(v) for v in value))
         if not valid:
             raise ValueError(f'Invalid value for {key}')
+        if f.get('enum') and value not in f['enum']:
+            raise ValueError(f'Unsupported choice for {key}')
         if key in {'origin_airports','destination_airports'}:
             import re
             if any(not re.fullmatch(r'[A-Z]{3}',airport) or airport in {'USA','NYC','CHI'} for airport in value):

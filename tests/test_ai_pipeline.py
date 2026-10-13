@@ -174,6 +174,23 @@ def test_audit_retains_grounded_unknown_clarification_as_unsupported(monkeypatch
  assert r['unsupported']==['arrive before dinner']
 
 
+def test_pipeline_reconciles_merged_one_way_marker_after_audit(monkeypatch):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  return {
+   'fields':{'trip_type':'one_way','max_total_cents':29999},
+   'sources':{'trip_type':'only need the outbound','max_total_cents':'under $300'},
+   'unsupported':['one way'] if stage=='extract' else [],
+   'clarifications':[],
+   'explanation':'Review the trip type and price.',
+  },{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight','I only need the outbound this time under $300','s',variant='audited')
+ assert r['fields']['trip_type']=='one_way'
+ assert r['unsupported']==[]
+
+
 def test_audit_reconciles_typed_location_marker_with_structured_clarification(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)

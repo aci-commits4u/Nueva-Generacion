@@ -14,7 +14,7 @@ from fastapi import FastAPI,HTTPException,Request,Response
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest
-from app.profile_registry import get_profile,validate_fields,digest
+from app.profile_registry import get_profile,validate_fields,normalise_review_fields,digest
 from app.rules_engine import evaluate
 from app.store import get_store,ai_capacity
 from app.ai_errors import AIServiceError
@@ -22,7 +22,7 @@ from app.ai_config import selected_pipeline,selected_reasoning_effort
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
-from app.conversation import context,user_text,questions,provenance,merge_unsupported
+from app.conversation import context,user_text,questions,provenance,merge_unsupported,declined_preferences
 from demo.fixtures import offers_for
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -217,7 +217,7 @@ def intake(body:IntentRequest,request:Request):
     d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now(),'messages':[{'role':'user','content':body.message,'timestamp':now()}],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
     d['ai_runs']=[provenance(extraction,1,d['messages'])]
     d['clarifications']=extraction.get('clarifications',[])
-    d['questions']=questions(body.domain,d['fields'],d['clarifications'])
+    d['questions']=questions(body.domain,d['fields'],d['clarifications'],d['messages'])
     try: d['unsupported']=merge_unsupported(d['unsupported'])
     except ValueError as exc: raise HTTPException(422,str(exc))
     refresh(d)
@@ -270,8 +270,12 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
                       'original_quote':item['source_quote'],'proposed_value':current['fields'][item['field']],
                       'new_source_quote':current['sources'].get(item['field']),
                       'authority':'unapproved draft; customer review still required'})
-        current['clarifications']=list(by_field.values())
-        current['questions']=questions(d['domain'],current['fields'],current['clarifications'])
+        declined=declined_preferences(d['domain'],messages)
+        for field,quote in declined.items():
+            if field in by_field:
+                event(state,'preference_declined_in_conversation',{'intent_id':id,'revision':revision,'field':field,'source_quote':quote,'authority':'unapproved; explicit structured review still required'})
+        current['clarifications']=[item for item in by_field.values() if item['field'] not in declined or item['field'] in current['fields']]
+        current['questions']=questions(d['domain'],current['fields'],current['clarifications'],messages)
         current.setdefault('ai_runs',[]).append(provenance(extraction,revision,messages))
         current.pop('approved',None);current.pop('offer_views',None)
         refresh(current);event(state,'intent_clarified',{'intent_id':id,'revision':revision,'digest':current['digest']})
@@ -286,6 +290,7 @@ def answers(id:str,body:AnswerRequest,request:Request):
         d=required(s,'drafts',id)
         if not body.confirmation or body.revision!=d['revision']: raise HTTPException(409,'Confirm your review of the current draft revision.')
         p=get_profile(d['domain'])
+        body.fields=normalise_review_fields(d['domain'],body.fields)
         try: validate_fields(p,body.fields)
         except ValueError as e: raise HTTPException(422,str(e))
         if set(body.fields)!=set(p['fields']): raise HTTPException(409,'Review every field, including explicit no preference.')

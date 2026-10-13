@@ -52,14 +52,10 @@ function formatDuration(seconds){
 function statusReason(status){return status?.reason&&typeof status.reason==='object'?status.reason:null;}
 function liveAvailable(status=state.aiStatus){return Boolean(status&&status.available===true&&status.configured!==false);}
 function statusBalance(status){
- const parts=[];
- const daily=status?.remaining_interpretations??status?.remaining_calls;
- const session=status?.session_remaining_calls;
- if(Number.isFinite(Number(daily)))parts.push(`${Number(daily)} live interpretation${Number(daily)===1?'':'s'} left`);
- if(Number.isFinite(Number(session)))parts.push(`${Number(session)} left in this session`);
- const reset=formatReset(status?.reset_at||statusReason(status)?.reset_at);
- if(reset)parts.push(`available again ${reset}`);
- return parts.join(' · ');
+ const remaining=status?.remaining_interpretations;
+ if(remaining===null||remaining===undefined||!Number.isFinite(Number(remaining)))return '';
+ const count=Math.max(0,Number(remaining));
+ return `${count} live interpretation${count===1?'':'s'} available in this session`;
 }
 function knownReasonCopy(status){
  const reason=statusReason(status),code=reason?.code;
@@ -218,7 +214,7 @@ function renderSummary(){
  const entries=Object.entries(p.fields);
  const unresolved=entries.filter(([k])=>d.fields[k]===undefined).length;
  const captured=entries.length-unresolved;
- const valueFor=(key,value)=>value===null?'No preference':escapeHTML(key==='max_total_cents'?fmtMoney(value):Array.isArray(value)?value.join(' – '):typeof value==='boolean'?value?'Required':'Must be absent':value);
+ const valueFor=(key,value)=>value===null?'No preference':escapeHTML(displayValue({check_id:key},value));
  const rows=entries.map(([k,f])=>{const open=d.fields[k]===undefined,clarification=clarificationFor(d,k),clarificationNote=open&&clarification?.source_quote&&clarification.source_quote!==d.sources[k]?`<small class="clarification-source">From your words: “${escapeHTML(clarification.source_quote)}”</small>`:'';return `<div class="summary-rule${open?' unresolved':''}"><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in price':f.label)}</b><span>${open?'<em>Still open</em>':valueFor(k,d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}${clarificationNote}</div>`;}).join('');
  $('#intent-content').innerHTML=`<span class="eyebrow">${d.approved?'APPROVED BY YOU':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':'Captured values stay visible while you clarify.'}</p><div class="summary-counts"><span><b>${captured}</b> captured</span><span><b>${unresolved}</b> unresolved</span></div><div class="summary-rules">${rows}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">You approve the rules; signed merchant facts are checked before checkout.</p>`;
 }
@@ -273,6 +269,7 @@ function fieldMarkup(key,spec){
  const d=state.draft,v=d.fields[key],clarification=clarificationFor(d,key);const id='field-'+key;
  let input;
  if(spec.type==='boolean')input=`<select id="${id}" name="${key}" autocomplete="off" data-field="${key}"><option value="">Choose…</option><option value="true" ${v===true?'selected':''}>Yes — must be included</option><option value="false" ${v===false?'selected':''}>No — must be absent</option></select>`;
+ else if(Array.isArray(spec.enum))input=`<select id="${id}" name="${key}" autocomplete="off" data-field="${key}"><option value="">Choose…</option>${spec.enum.map(value=>`<option value="${escapeHTML(value)}" ${v===value?'selected':''}>${escapeHTML(displayValue({check_id:key},value))}</option>`).join('')}</select>`;
  else if(spec.type==='window')input=`<div class="time-inputs"><input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="time" value="${escapeHTML(v?.[0]||'')}" aria-label="Start of local departure window"><input id="${id}-end" type="time" value="${escapeHTML(v?.[1]||'')}" aria-label="End of local departure window"></div>`;
  else{const value=v===undefined||v===null?'':key==='max_total_cents'?(v/100).toFixed(2):Array.isArray(v)?v.join(', '):v;input=`<input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="${key.endsWith('date')?'date':spec.type==='integer'?'number':'text'}" ${spec.type==='integer'?`min="0" step="${key==='max_total_cents'?'0.01':'1'}" ${key==='max_total_cents'?'inputmode="decimal"':''}`:''} value="${escapeHTML(value)}" ${spec.required?'required':''} ${spec.type==='strings'?'placeholder="Airport codes, separated by commas"':''}>`;}
  const moneyNote=key==='max_total_cents'?'<span class="money-helper">Enter a USD amount. It is checked precisely against the approved limit.</span>':'';
@@ -313,6 +310,7 @@ function renderReview(){
 function displayValue(check,value){
  if(value===null||value===undefined)return 'Not disclosed';
  if(check.check_id==='max_total_cents')return fmtMoney(value);
+ if(check.check_id==='trip_type'&&value==='one_way')return 'One-way';
  if(typeof value==='boolean')return value?'Yes':'No';
  return Array.isArray(value)?value.join(' – '):String(value);
 }
@@ -322,7 +320,7 @@ function renderOffers(){
  $('#workspace').innerHTML=`<section><div class="section-head comparison-head"><span class="eyebrow">03 / VERIFIED FACTS. DETERMINISTIC CHECKS.</span><h1 class="page-title">Two offers. One approved intent.</h1><p>Compare each signed offer with the rules you approved. An authorized price can still come with a detail you didn't want.</p></div><div class="offer-grid">${state.offers.map((o,i)=>{
  const d=state.decisions[o.id],f=o.facts,accepted=d.accepted;
  const route=domain==='flight'?`${f.origin} → ${f.destination}`:domain==='hotel'?f.city:f.title;
- const human=domain==='flight'?`${f.connection_count===0?'Nonstop':f.connection_count+' connections'} · ${f.cabin} · ${f.departure_date}`:domain==='hotel'?`${f.checkin_date} → ${f.checkout_date} · ${f.breakfast?'Breakfast included':'Room only'}`:'General profile · unsupported conditions hold checkout';
+ const human=domain==='flight'?`${f.trip_type==='one_way'?'One-way · ':''}${f.connection_count===0?'Nonstop':f.connection_count+' connections'} · ${f.cabin} · ${f.departure_date}`:domain==='hotel'?`${f.checkin_date} → ${f.checkout_date} · ${f.breakfast?'Breakfast included':'Room only'}`:'General profile · unsupported conditions hold checkout';
  const business=d.checks.filter(c=>!c.integrity&&!c.check_id.startsWith('native_'));
  return `<article class="offer"><span class="eyebrow">${i===0?'THE FIRST OFFER':'THE LOWER-PRICE OPTION'}</span><div class="status ${d.status==='PASS'?'':d.status==='BLOCK'?'block':'hold'}">${d.status==='PASS'?'✓ Intent-checked':accepted?'! Differences accepted':d.status==='BLOCK'?'× Blocked':'! On hold'}</div><div class="route">${escapeHTML(route)}</div><p class="facts-summary">${domain==='flight'?`${escapeHTML(f.departure_local)} departure · ${f.duration_minutes} minutes total`:escapeHTML(f.title)}</p><div class="price">${fmtMoney(f.total_cents)}</div><p class="facts-summary">${escapeHTML(human)}</p><div class="check-list">${business.map(checkMarkup).join('')}</div><div class="offer-controls">${d.status==='PASS'||accepted?`<button class="primary" data-purchase="${o.id}">Simulate purchase →</button>`:`<button class="secondary" data-review="${o.id}" ${d.status==='BLOCK'?'disabled':''}>Review ${business.filter(c=>c.status!=='pass').length===1?'this difference':'the differences'} →</button><button class="text-button" data-test-gate="${o.id}">Demonstrate the purchase gate ↗</button>`}</div><p class="vi-note"><b>${d.native_vi_passed?'VI chain + native rules pass':'VI native policy needs attention'}.</b> ${d.status==='PASS'?'Approved domain requirements also match.':'Our domain checks explain why checkout is held.'}</p><button class="text-button" data-explain="${o.id}">${state.draft.mode==='live'?'Ask Foundry to explain':'Explain the checks'} ↗</button><div class="ai-explanation" id="explanation-${o.id}" hidden></div><details><summary>View signature & verification record</summary><p class="hash">Offer hash: ${escapeHTML(o.offer_hash)}</p><p class="small">${d.ledger.map(l=>escapeHTML(l.type)+' — '+escapeHTML(l.status)).join('<br>')}</p><p class="small">${f.segments?f.segments.map(s=>escapeHTML(s.origin)+' → '+escapeHTML(s.destination)).join('<br>'):''}</p><p class="small">Every purchase rechecks the signature, expiry, approval, native rules, and specific exceptions.</p></details></article>`;
  }).join('')}</div><p class="comparison-foot">Merchant-signed offers <span class="dot">·</span> Exact offer-bound consent <span class="dot">·</span> Evidence you can download. This is a configurable synthetic demonstration, not live inventory.</p></section>`;

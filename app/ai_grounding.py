@@ -57,6 +57,31 @@ _MONTHS = {name.lower(): index for index, name in enumerate(
 ) if name}
 _MONTHS.update({name[:3].lower(): index for name, index in _MONTHS.items()})
 
+_CABIN_CANONICAL = {
+    "basic economy": "basic_economy",
+    "economy": "economy",
+    "premium economy": "premium_economy",
+    "business": "business",
+    "first": "first",
+    "first class": "first",
+}
+_CABIN_SOURCE_CATEGORIES = (
+    ("basic economy", "basic_economy"),
+    ("premium economy", "premium_economy"),
+    ("economy plus", "economy_plus"),
+    ("business class", "business"),
+    ("first class", "first"),
+    ("economy", "economy"),
+    ("business", "business"),
+    ("first", "first"),
+)
+_ONE_WAY_QUOTE = re.compile(
+    r"\bone[-\u2010-\u2015 ]way\b"
+    r"|\bonly\s+(?:(?:need|want|book|require)\s+)?(?:the\s+)?outbound\b"
+    r"|\boutbound\s+only\b",
+    re.I,
+)
+
 
 # Provider JSON sometimes changes typography while copying a source quote.  The
 # mapping is deliberately limited to punctuation and space characters with the
@@ -153,6 +178,83 @@ def _restore_source_spans(data: dict, message: str) -> dict:
     return result
 
 
+def _cabin_label(value: str) -> str:
+    """Normalize a cabin label for comparison without changing source text."""
+    return " ".join(
+        value.strip().translate(_SOURCE_TYPOGRAPHY).casefold()
+        .replace("_", " ").replace("-", " ").split()
+    )
+
+
+def _target_phrase_negated(text: str, start: int, end: int) -> bool:
+    """Check polarity immediately surrounding one matched target phrase."""
+    prefix = text[max(0, start - 100):start]
+    suffix = text[end:end + 60]
+    if re.search(
+        r"(?:\b(?:do|does|did)\s+not|\b(?:don't|doesn't|didn't))\s+"
+        r"(?:want|need|require|prefer)\s+(?:a|an|the)?\s*$"
+        r"|\bno\s+(?:preference\s+(?:for|on)?|need\s+(?:for)?|"
+        r"requirement\s+(?:for)?|)\s*$"
+        r"|\bwithout\s+(?:a|an|the)?\s*$"
+        r"|\bnot\s+(?:a|an|the)?\s*$",
+        prefix,
+    ):
+        return True
+    return bool(re.match(
+        r"^\s*(?:(?:is|was)\s+not\s+|(?:isn't|wasn't)\s+|not\s+)+"
+        r"(?:required|needed|wanted|preferred|necessary|unwanted|unnecessary)\b",
+        suffix,
+    ))
+
+
+def _canonical_cabin(domain: str, value: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise GroundingFailure("cabin must be a nonempty supported category")
+    label = _cabin_label(value)
+    profile_field = get_profile(domain)["fields"].get("cabin", {})
+    choices = profile_field.get("choices") or profile_field.get("enum") or profile_field.get("values")
+    if isinstance(choices, list) and choices:
+        for choice in choices:
+            if type(choice) is str and _cabin_label(choice) == label:
+                return choice.strip().casefold()
+        raise GroundingFailure("cabin value is not a supported category")
+    if label not in _CABIN_CANONICAL:
+        raise GroundingFailure("cabin value is not a supported category")
+    return _CABIN_CANONICAL[label]
+
+
+def _cabin_quote_supports(value: str, quote: str, domain: str) -> bool:
+    canonical = _canonical_cabin(domain, value)
+    target = _cabin_label(canonical)
+    normalized = _cabin_label(quote)
+    occupied: list[tuple[int, int, str]] = []
+    for label, category in sorted(_CABIN_SOURCE_CATEGORIES, key=lambda item: -len(item[0])):
+        pattern = re.compile(rf"(?<!\w){re.escape(label)}(?!\w)")
+        for match in pattern.finditer(normalized):
+            if any(match.start() < end and match.end() > start for start, end, _ in occupied):
+                continue
+            occupied.append((match.start(), match.end(), category))
+    for start, end, category in occupied:
+        if category == target and not _target_phrase_negated(normalized, start, end):
+            return True
+    return False
+
+
+def _one_way_quote_supports(quote: str) -> bool:
+    if not isinstance(quote, str):
+        return False
+    normalized = _cabin_label(quote)
+    return any(
+        not _target_phrase_negated(normalized, match.start(), match.end())
+        for match in _ONE_WAY_QUOTE.finditer(normalized)
+    )
+
+
+def one_way_quote_supported(quote: str) -> bool:
+    """Public source matcher for offline/profile adapters."""
+    return _one_way_quote_supports(quote)
+
+
 def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, list[str]]:
     if type(value) is not list or not value or any(type(item) is not str for item in value):
         raise GroundingFailure(f"{key} must contain airport codes or specific city names")
@@ -245,6 +347,22 @@ def _normalise_fields(domain: str, data: dict, message: str) -> dict:
     sources = result["sources"]
     guidance: list[str] = []
     for key in list(fields):
+        if key == "cabin":
+            quote = sources.get(key, "")
+            if type(quote) is not str or not quote or not _contains(quote, message):
+                raise GroundingFailure("cabin source quotation is not in customer text")
+            fields[key] = _canonical_cabin(domain, fields[key])
+            continue
+        if key == "trip_type":
+            quote = sources.get(key, "")
+            if type(quote) is not str or not quote or not _contains(quote, message):
+                raise GroundingFailure("trip_type source quotation is not in customer text")
+            value = fields[key]
+            if (type(value) is not str or value.strip().casefold().replace("-", "_").replace(" ", "_") != "one_way"
+                    or not _one_way_quote_supports(quote)):
+                raise GroundingFailure("trip_type must be a source-grounded one-way value")
+            fields[key] = "one_way"
+            continue
         if key not in {"origin_airports", "destination_airports"}:
             continue
         quote = sources.get(key, "")
@@ -266,6 +384,33 @@ def _normalise_fields(domain: str, data: dict, message: str) -> dict:
             fields[key] = normalised
     result["explanation"] = _append_guidance(result["explanation"], guidance)
     return result
+
+
+def _reconcile_one_way_unsupported(data: dict) -> dict:
+    """Remove only an exact duplicate one-way marker after grounding it."""
+    result = deepcopy(data)
+    if result["fields"].get("trip_type") != "one_way":
+        return result
+    quote = result["sources"].get("trip_type")
+    if not isinstance(quote, str) or not _one_way_quote_supports(quote):
+        return result
+    result["unsupported"] = [
+        item for item in result["unsupported"]
+        if not (_is_standalone_one_way_marker(item) and _one_way_quote_supports(item))
+    ]
+    return result
+
+
+def _is_standalone_one_way_marker(value: str) -> bool:
+    if type(value) is not str:
+        return False
+    normalized = value.strip().translate(_SOURCE_TYPOGRAPHY).casefold().rstrip(".!?;:,")
+    return bool(_ONE_WAY_QUOTE.fullmatch(normalized))
+
+
+def reconcile_one_way_unsupported(data: dict) -> dict:
+    """Reconcile merged flags after pipeline preservation without widening scope."""
+    return _reconcile_one_way_unsupported(data)
 
 
 def clarification_guidance(data: object, message: str) -> list[str]:
@@ -478,8 +623,11 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         if not supported:
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "cabin":
-        if not isinstance(value, str) or value.casefold().replace("_", " ") not in quote.casefold():
+        if not _cabin_quote_supports(value, quote, domain):
             raise GroundingFailure("cabin value is not supported by its source quotation")
+    elif key == "trip_type":
+        if value != "one_way" or not _one_way_quote_supports(quote):
+            raise GroundingFailure("trip_type value is not supported by its source quotation")
     elif isinstance(value, str):
         if value.casefold() not in quote.casefold():
             aliases = [name for name, codes in _AIRPORT_ALIASES.items() if value in codes]
@@ -820,6 +968,7 @@ def validate_extraction(domain: str, message: str, data: dict,
         canonical, domain, message, source_messages=source_messages
     )
     canonical = _recover_unknown_clarifications(canonical, domain, message)
+    canonical = _reconcile_one_way_unsupported(canonical)
     if (len(canonical["unsupported"]) > 20
             or any(type(value) is not str or not value.strip() or len(value) > 2500
                    for value in canonical["unsupported"])):

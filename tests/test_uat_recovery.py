@@ -76,3 +76,54 @@ def test_offline_explanation_names_each_uncheckable_condition():
     result=evaluate(get_profile('flight'),{}, {},['round trip','land before dinner'])
     text=explain(result,'unused','offline')['text']
     assert 'round trip' in text and 'land before dinner' in text
+
+
+def test_declined_optional_question_is_not_repeated_but_still_needs_review(client,monkeypatch):
+    def proposal(*args,**kwargs):
+        return {'fields':{'origin_airports':['EWR'],'destination_airports':['TPA'],'departure_date':'2026-11-07','max_total_cents':29999,'max_connections':1},'sources':{},'unsupported':[],'explanation':'Review your choices.','mode':'live','model':'test'}
+    monkeypatch.setattr('app.foundry_client.extract',proposal)
+    d=client.post('/api/intents',json={'mode':'live','message':'Newark to Tampa November 7, 2026, under $300, one connection okay.'}).json()
+    assert d['questions'][0]['field']=='nonstop'
+    d=client.post(f"/api/intents/{d['id']}/clarify",json={'revision':d['revision'],'message':'No—one connection is okay; I do not require nonstop. Leave departure time, trip duration, and refundability as no preference.'}).json()
+    fields={q['field'] for q in d['questions']}
+    assert not fields.intersection({'nonstop','departure_window','max_duration_minutes','refundable'})
+    assert 'nonstop' not in d['fields']  # Conversation routing is not signed consent.
+    assert client.post(f"/api/intents/{d['id']}/approve",json={'revision':d['revision'],'digest':d['digest'],'confirmation':True}).status_code==409
+
+
+def test_question_decline_cannot_hide_missing_required_details():
+    from app.conversation import questions
+    q=questions('flight',{},messages=[{'role':'user','content':'No preference on departure date, departure time, or nonstop.'}])
+    assert 'departure_date' in {item['field'] for item in q}
+    assert 'departure_window' not in {item['field'] for item in q}
+
+
+def test_hotel_accessibility_declines_advance_without_guessing_positive_requirements():
+    from app.conversation import questions,declined_preferences
+    for reply in ['No accessibility requirement; a standard room is fine.','Accessible room: no preference.']:
+        assert 'accessible' not in {q['field'] for q in questions('hotel',{},messages=[{'role':'user','content':reply}])}
+    choices=declined_preferences('flight',[{'role':'user','content':'I do not require nonstop but I require refundable.'}])
+    assert 'nonstop' in choices and 'refundable' not in choices
+
+
+def test_one_way_and_cabin_case_match_signed_offer_after_explicit_review(client):
+    d=client.post('/api/intents',json={'mode':'offline','message':'Nonstop flight EWR to MCO on 2026-11-12 under $300'}).json()
+    fields={k:None for k in client.get('/api/profiles/flight').json()['fields']}
+    fields.update(origin_airports=['EWR'],destination_airports=['MCO'],departure_date='2026-11-12',max_total_cents=29999,nonstop=True,trip_type='One-way',cabin='Economy')
+    r=client.post(f"/api/intents/{d['id']}/answers",json={'revision':d['revision'],'fields':fields,'unsupported':[],'confirmation':True})
+    assert r.status_code==200,r.text
+    d=r.json();assert d['fields']['cabin']=='economy' and d['fields']['trip_type']=='one_way'
+    offers=client.post(f"/api/intents/{d['id']}/approve",json={'revision':d['revision'],'digest':d['digest'],'confirmation':True}).json()['offers']
+    v=decision(client,d,offers[0]);assert v['status']=='PASS',v
+    assert offers[0]['facts']['trip_type']=='one_way'
+    assert client.post('/api/purchase',json={'decision_id':v['id'],'idempotency_key':'one-way-cabin-case'}).status_code==200
+
+
+def test_offline_explicit_one_way_preserves_other_conditions_and_negative_direction():
+    from app.intent_service import offline_extract
+    message='I only need the outbound from EWR to MCO on 2026-11-12 under $300'
+    result=offline_extract('flight',message)
+    assert result['fields']['trip_type']=='one_way' and not result['unsupported']
+    assert offline_extract('flight',message+' with checked bag')['unsupported']
+    negative=offline_extract('flight','I do not want a one-way flight from EWR to MCO on 2026-11-12 under $300')
+    assert 'trip_type' not in negative['fields'] and negative['unsupported']

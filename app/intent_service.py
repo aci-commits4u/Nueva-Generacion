@@ -13,6 +13,10 @@ def offline_extract(domain,message):
     if money:
         fields['max_total_cents']=int(Decimal(money.group(2))*100)-(1 if money.group(1).lower() in {'under','below'} else 0);sources['max_total_cents']=money.group()
     if domain=='flight':
+        from app.ai_grounding import one_way_quote_supported
+        one_way=re.search(r'\bone[- ]way\b|\bonly\s+(?:need|want|book|require)\s+(?:the\s+)?outbound\b|\bonly outbound\b|\boutbound only\b',message,re.I)
+        if one_way and one_way_quote_supported(message):
+            fields['trip_type']='one_way';sources['trip_type']=one_way.group()
         # UI replies name one airport at a time; do not wait for a full route
         # or assign the first two capitalized tokens to arbitrary roles.
         for key,pattern in [
@@ -38,7 +42,7 @@ def offline_extract(domain,message):
     remainder=message
     for source in sources.values():
         remainder=re.sub(re.escape(source),' ',remainder,count=1,flags=re.I)
-    grammar=r'\b(?:book|find|me|a|an|the|please|from|to|on|in|with|and|flight|hotel|depart|arrive|at)\b'
+    grammar=r'\b(?:book|find|me|i|a|an|the|please|from|to|on|in|with|and|flight|hotel|depart|arrive|at)\b'
     remainder=re.sub(grammar,' ',remainder,flags=re.I)
     if domain=='general' or re.search(r'[^\s.,;!?]',remainder):
         unsupported=[message]

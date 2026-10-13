@@ -86,6 +86,7 @@ def issue(approved,checkout_jwt,extra_constraints=(),native_max=None):
 
 def normalize_offer(o):
     facts={k:v for k,v in o.items() if k not in {'segments','description'}}
+    if isinstance(facts.get('cabin'),str):facts['cabin']=facts['cabin'].strip().casefold()
     if o.get('all_in') is not True:
         facts.pop('total_cents',None)
     if type(o.get('total_cents')) is not int or o['total_cents']<0:

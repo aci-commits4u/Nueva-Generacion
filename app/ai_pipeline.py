@@ -21,6 +21,7 @@ from app.ai_grounding import (
     clarification_guidance,
     preserve_candidate_clarifications,
     preserve_valid_candidate,
+    reconcile_one_way_unsupported,
     recovery_records,
     remove_resolved_field_markers,
     valid_candidate_clarifications,
@@ -296,6 +297,7 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
         final = validate_extraction(domain, source_text, candidate,
                                     source_messages=source_messages)
         final['unsupported'] = _merge_or_raise(candidate_flags, final['unsupported'], stage='extract')
+        final = reconcile_one_way_unsupported(final)
         _record_outcome('extract', 'passed', traces[-1].get('response_id') if traces else None)
         return {**final, 'mode': 'live', 'model': os.environ.get('AZURE_OPENAI_DEPLOYMENT'),
                 'pipeline': variant, 'trace': traces}
@@ -343,6 +345,7 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
     candidate_flags = remove_resolved_field_markers(candidate_flags, clarifications, source_text)
     audited_flags = remove_resolved_field_markers(final['unsupported'], clarifications, source_text)
     final['unsupported'] = _merge_or_raise(candidate_flags, audited_flags, stage='coverage_audit')
+    final = reconcile_one_way_unsupported(final)
     _record_outcome('coverage_audit', 'passed', traces[-1].get('response_id') if traces else None)
     return {**final, 'mode': 'live', 'model': os.environ.get('AZURE_OPENAI_DEPLOYMENT'),
             'pipeline': variant, 'trace': traces}

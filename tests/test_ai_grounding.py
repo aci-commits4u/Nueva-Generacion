@@ -1,7 +1,10 @@
 """Deterministic regressions for the live proposal grounding boundary."""
 
+from copy import deepcopy
+
 import pytest
 
+import app.ai_grounding as grounding
 from app.ai_grounding import GroundingFailure, validate_extraction
 from app.profile_registry import get_profile
 
@@ -261,6 +264,114 @@ def test_specific_city_is_normalized_to_a_known_airport():
 
     assert result["fields"]["origin_airports"] == ["EWR"]
     assert result["fields"]["destination_airports"] == ["TPA"]
+
+
+def test_cabin_is_canonicalized_while_source_quote_stays_exact():
+    result = validate_extraction(
+        "flight",
+        "Economy is fine under $300.",
+        envelope5(
+            {"cabin": "Economy", "max_total_cents": 29999},
+            {"cabin": "Economy", "max_total_cents": "under $300"},
+        ),
+    )
+
+    assert result["fields"]["cabin"] == "economy"
+    assert result["sources"]["cabin"] == "Economy"
+
+
+@pytest.mark.parametrize("message", [
+    "I do not want economy.",
+    "I don’t want economy.",
+    "Premium economy is preferred.",
+])
+def test_cabin_economy_does_not_match_specific_or_negated_categories(message):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            message,
+            envelope5({"cabin": "economy"}, {"cabin": message}),
+        )
+
+
+def test_cabin_positive_category_survives_unrelated_no_preference():
+    result = validate_extraction(
+        "flight",
+        "Economy is fine; I have no preference on departure time or refundability.",
+        envelope5({"cabin": "Economy"}, {"cabin": "Economy"}),
+    )
+    assert result["fields"]["cabin"] == "economy"
+
+
+def test_one_way_trip_type_requires_explicit_source_and_reconciles_only_duplicate_marker(monkeypatch):
+    original_get_profile = grounding.get_profile
+
+    def profile_with_trip_type(domain):
+        profile = deepcopy(original_get_profile(domain))
+        if domain == "flight":
+            profile["fields"]["trip_type"] = {
+                "type": "string", "op": "eq", "fact": "trip_type",
+                "label": "Trip type", "question": "One way or round trip?",
+            }
+        return profile
+
+    monkeypatch.setattr(grounding, "get_profile", profile_with_trip_type)
+    result = validate_extraction(
+        "flight",
+        "I only need the outbound this time; under $300; round trip is unsupported.",
+        envelope5(
+            {"trip_type": "ONE-WAY", "max_total_cents": 29999},
+            {"trip_type": "only need the outbound", "max_total_cents": "under $300"},
+            unsupported=["only need the outbound", "round trip"],
+        ),
+    )
+
+    assert result["fields"]["trip_type"] == "one_way"
+    assert result["unsupported"] == ["round trip"]
+
+
+@pytest.mark.parametrize("message", [
+    "I do not want a one-way flight.",
+    "I don’t want a one-way flight.",
+    "I have no preference on one-way.",
+])
+def test_negated_one_way_phrase_cannot_set_trip_type(message):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            message,
+            envelope5({"trip_type": "one_way"}, {"trip_type": message}),
+        )
+
+
+def test_one_way_phrase_survives_unrelated_refundability_no_preference():
+    result = validate_extraction(
+        "flight",
+        "I need a one-way flight; I have no preference on refundability.",
+        envelope5({"trip_type": "one_way"}, {"trip_type": "one-way"}),
+    )
+    assert result["fields"]["trip_type"] == "one_way"
+
+
+def test_one_way_cannot_be_inferred_from_unrelated_outbound_word(monkeypatch):
+    original_get_profile = grounding.get_profile
+
+    def profile_with_trip_type(domain):
+        profile = deepcopy(original_get_profile(domain))
+        if domain == "flight":
+            profile["fields"]["trip_type"] = {"type": "string", "op": "eq", "fact": "trip_type"}
+        return profile
+
+    monkeypatch.setattr(grounding, "get_profile", profile_with_trip_type)
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            "Outbound flight under $300.",
+            envelope5(
+                {"trip_type": "one_way", "max_total_cents": 29999},
+                {"trip_type": "outbound", "max_total_cents": "under $300"},
+            ),
+        )
 
 
 def test_explicit_iata_code_is_accepted_when_customer_said_it():

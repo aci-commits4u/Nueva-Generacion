@@ -1,6 +1,6 @@
 {
   "id": "flight",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "custom_constraint_type": "urn:intent-judge:flight-requirements",
   "fields": {
     "max_total_cents": {
@@ -91,6 +91,16 @@
       "label": "Refundable fare",
       "question": "Must the fare be refundable?",
       "exception_allowed": true,
+      "required": false
+    },
+    "trip_type": {
+      "type": "string",
+      "op": "eq",
+      "fact": "trip_type",
+      "label": "Trip type (one-way)",
+      "question": "Do you require a one-way itinerary? Round trips are not supported by this demo.",
+      "enum": ["one_way"],
+      "exception_allowed": false,
       "required": false
     }
   },
