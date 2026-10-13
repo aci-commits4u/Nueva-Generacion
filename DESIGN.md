@@ -34,3 +34,10 @@ The desktop reference is a three-column composition: ~230px navigation, flexible
 The default flow is request → conversation with ranked profile questions → explicit review → signed comparison → receipt/evidence. AI traces are secondary disclosures. The quality page contains measured synthetic results and actual daily canary status, never decorative accuracy numbers. Every optional no preference remains an explicit customer choice.
 
 Specific flagged-condition removal is an explicit customer action in review, bound to the current revision and stored in the event chain. AI follow-ups cannot discard earlier flags. This avoids an unresolved ambiguity becoming permanently uneditable while preserving the original conversation and consent history. Victor confirmed the conversational direction during implementation.
+
+
+## Review and release decisions
+
+The independent review's four Important findings were reproduced and fixed: bind short replies to stored interface questions; validate source quotations against customer text only; preserve immutable per-revision interpretation snapshots; reject flag accumulation that cannot fit a review; and surface interrupted canaries without replaying paid inference. The model default mismatch was promoted to Important because quality checks must exercise the same selected pipeline. The shared audited default costs two calls per interpretation.
+
+All autonomous rulings and their tradeoffs are preserved in docs/conversation-build-ledger.md. Existing gpt-oss120b was retained to measure architecture effects without adding a paid deployment (another model could outperform it). Swiss/charcoal/teal direction may need aesthetic iteration. Proven review/receipt handlers were kept alongside the new modules (the controller remains larger). Specific customer removals make false flags editable while preserving the original request (traveler review error remains possible). Accuracy claims stay bounded to the synthetic gold cases, deployment is separately exercised, real commerce is outside this demo, and unchanged baseline keeps its prior review scope. No minor findings remain deferred.

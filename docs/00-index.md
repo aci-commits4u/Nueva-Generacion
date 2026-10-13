@@ -34,3 +34,5 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 [Adopting a domain](13-adopting-a-domain.md) explains the actual executable profile format, trusted fact adapters and current registration boundaries.
 
 [Evaluated conversation and continuous quality](15-ai-evaluation-and-conversation.md) documents the conversational revision, actual pipeline comparisons, holdout results, CI and bounded live monitoring.
+
+[Conversational final review](final-review-conversation.md) and [revision ledger](conversation-build-ledger.md) record the independent findings, test-driven fixes, choices and hosted release verification.

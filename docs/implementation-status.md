@@ -48,3 +48,12 @@ A fresh-context independent review reported no Critical findings. All four Impor
 Hotel production also completed live Foundry intake, profile review, a held lower-price room, explicit breakfast and cancellation acceptances, and a simulated receipt. General mode was separately tested in explicitly selected offline mode: its unsupported ethical/comfort conditions held both offers and the backend refused purchase.
 
 At the final live evaluation checkpoint, the shared ledger recorded 14 reserved calls ($1.40 conservative reservation), 8,473 input tokens and 2,979 output tokens. Applying the observed global model meters estimates about $0.0031 in recorded inference charges, excluding storage, initial untracked diagnostics and unrelated Azure activity. No emergency allowance was enabled.
+
+
+## Conversational release verification
+
+Source `50cce98` is deployed as `dpl_AanJqeeqf1ZXhFq6DbkSvN6wWyqe` at the same public URL. GitHub [run38463770631](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38463770631) passed all regression and syntax steps. Hosted live multi-turn audited interpretation, approval, PASS/HOLD,409 refusal, exact exception, simulated receipt, evidence download and reload passed without JavaScript errors. Evidence digest and issuer signature were checked independently, including historical source mappings and question binding. Hosted mobile390px hotel flow in explicit offline mode, keyboard focus, dialog Escape and quality-page reload passed without overflow.
+
+The first live quality canary passed; unauthenticated production scheduler calls returned401 and authenticated replay returned the stored result. Vercel registered the daily07:00UTC cron against this production deployment. Future scheduled executions have not yet occurred at release time.
+
+At release the durable ledger had99 call reservations ($9.90 conservatively reserved), 60 experiment calls,2 monitoring calls and36 interactive calls for the UTC day. The lifetime200-call/$20 allowance was not reset or increased. [Revision ledger](conversation-build-ledger.md) records the complete decisions and verification.
