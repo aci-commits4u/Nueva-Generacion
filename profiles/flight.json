@@ -1,0 +1,98 @@
+{
+  "id": "flight",
+  "version": "1.0.0",
+  "custom_constraint_type": "urn:intent-judge:flight-requirements",
+  "fields": {
+    "max_total_cents": {
+      "type": "integer",
+      "op": "lte",
+      "fact": "total_cents",
+      "label": "All-in total (USD cents)",
+      "question": "Maximum all-in price in USD?",
+      "required": true,
+      "native": true
+    },
+    "origin_airports": {
+      "type": "strings",
+      "op": "in",
+      "fact": "origin",
+      "label": "Departure airports",
+      "question": "Which departure airports are acceptable?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "destination_airports": {
+      "type": "strings",
+      "op": "in",
+      "fact": "destination",
+      "label": "Arrival airports",
+      "question": "Which arrival airports are acceptable?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "departure_date": {
+      "type": "string",
+      "op": "eq",
+      "fact": "departure_date",
+      "label": "Departure date",
+      "question": "What exact date will you travel?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "nonstop": {
+      "type": "boolean",
+      "op": "eq",
+      "fact": "nonstop",
+      "label": "Nonstop flight",
+      "question": "Must the flight have zero connections and zero technical stops?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "max_connections": {
+      "type": "integer",
+      "op": "lte",
+      "fact": "connection_count",
+      "label": "Maximum connections",
+      "question": "How many connections can you accept?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "departure_window": {
+      "type": "window",
+      "op": "window",
+      "fact": "departure_local",
+      "label": "Local departure window",
+      "question": "What airport-local departure window is acceptable?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "max_duration_minutes": {
+      "type": "integer",
+      "op": "lte",
+      "fact": "duration_minutes",
+      "label": "Maximum trip duration",
+      "question": "Maximum duration in minutes?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "cabin": {
+      "type": "string",
+      "op": "eq",
+      "fact": "cabin",
+      "label": "Cabin",
+      "question": "Which cabin do you require?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "refundable": {
+      "type": "boolean",
+      "op": "eq",
+      "fact": "refundable",
+      "label": "Refundable fare",
+      "question": "Must the fare be refundable?",
+      "exception_allowed": true,
+      "required": false
+    }
+  },
+  "currency": "USD"
+}

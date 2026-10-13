@@ -1,0 +1,80 @@
+{
+  "id": "hotel",
+  "version": "1.0.0",
+  "custom_constraint_type": "urn:intent-judge:hotel-requirements",
+  "fields": {
+    "max_total_cents": {
+      "type": "integer",
+      "op": "lte",
+      "fact": "total_cents",
+      "label": "All-in total (USD cents)",
+      "question": "Maximum all-in price in USD?",
+      "required": true,
+      "native": true
+    },
+    "city": {
+      "type": "string",
+      "op": "eq",
+      "fact": "city",
+      "label": "City",
+      "question": "Which city?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "checkin_date": {
+      "type": "string",
+      "op": "eq",
+      "fact": "checkin_date",
+      "label": "Check-in date",
+      "question": "Exact check-in date?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "checkout_date": {
+      "type": "string",
+      "op": "eq",
+      "fact": "checkout_date",
+      "label": "Check-out date",
+      "question": "Exact check-out date?",
+      "exception_allowed": true,
+      "required": true
+    },
+    "breakfast": {
+      "type": "boolean",
+      "op": "eq",
+      "fact": "breakfast",
+      "label": "Breakfast included",
+      "question": "Must breakfast be included?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "refundable": {
+      "type": "boolean",
+      "op": "eq",
+      "fact": "refundable",
+      "label": "Free cancellation",
+      "question": "Must free cancellation be included?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "accessible": {
+      "type": "boolean",
+      "op": "eq",
+      "fact": "accessible",
+      "label": "Accessible room",
+      "question": "Must the room be accessible?",
+      "exception_allowed": true,
+      "required": false
+    },
+    "rooms": {
+      "type": "integer",
+      "op": "eq",
+      "fact": "rooms",
+      "label": "Number of rooms",
+      "question": "How many rooms?",
+      "exception_allowed": true,
+      "required": false
+    }
+  },
+  "currency": "USD"
+}

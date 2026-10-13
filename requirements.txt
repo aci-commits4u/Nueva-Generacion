@@ -1,0 +1,7 @@
+fastapi>=0.115,<1
+pydantic>=2.10,<3
+uvicorn>=0.34,<1
+openai>=1.75,<3
+azure-data-tables>=12.6,<13
+python-dotenv>=1,<2
+verifiable-intent @ git+https://github.com/agent-intent/verifiable-intent.git@356c29635f1c44df7de02edb58699ca9f29bece6

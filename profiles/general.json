@@ -1,0 +1,17 @@
+{
+  "id": "general",
+  "version": "1.0.0",
+  "custom_constraint_type": "urn:intent-judge:general-requirements",
+  "fields": {
+    "max_total_cents": {
+      "type": "integer",
+      "op": "lte",
+      "fact": "total_cents",
+      "label": "All-in total (USD cents)",
+      "question": "Maximum all-in price in USD?",
+      "required": true,
+      "native": true
+    }
+  },
+  "currency": "USD"
+}
