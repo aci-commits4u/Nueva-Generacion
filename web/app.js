@@ -17,6 +17,8 @@ async function busy(button,fn,label='Working…'){
 }
 function transition(stage){state.stage=stage;notice();render();window.scrollTo({top:0,behavior:'instant'});history.replaceState(null,'',stage===1?'/'+'?domain='+state.domain:'/?intent='+encodeURIComponent(state.draft.id));$('#workspace').focus({preventScroll:true});}
 function render(){
+ $('.progress').hidden=state.stage===6;
+ $('#quality').classList.toggle('selected',state.stage===6);
  document.querySelectorAll('[data-stage]').forEach(el=>el.classList.toggle('active',Number(el.dataset.stage)===(state.stage<=2?1:state.stage===3?2:3)));
  document.querySelectorAll('[data-domain]').forEach(el=>el.classList.toggle('selected',el.dataset.domain===state.domain));
  $('#context-title').textContent=state.stage===6?'Quality observatory':state.domain[0].toUpperCase()+state.domain.slice(1)+' request';

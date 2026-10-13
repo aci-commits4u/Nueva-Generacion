@@ -46,11 +46,11 @@ Missing fields must be omitted, never filled with defaults or null. Never invent
     return data
 
 
-def extract(domain,message,session):
+def extract(domain,message,session,source_text=None):
     if os.getenv('MOCK_LLM')=='1':
         raise ValueError('Live AI is disabled in this environment. Select the explicitly labeled offline mode to continue.')
     from app.ai_pipeline import run_pipeline
-    return run_pipeline(domain,message,session)
+    return run_pipeline(domain,message,session,source_text=source_text)
 
 
 def explain(result,session,mode='live'):

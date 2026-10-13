@@ -7,9 +7,18 @@ from datetime import datetime,timezone
 from pathlib import Path
 from fastapi import HTTPException
 from app.store import get_store
+from app.ai_config import selected_pipeline
 from evals.scoring import score_case
 
 ROOT=Path(__file__).resolve().parent.parent
+
+
+def display_report(report):
+    if report and report.get('status')=='running':
+        age=(datetime.now(timezone.utc)-datetime.fromisoformat(report['started_at'])).total_seconds()
+        if age>75:
+            return {**report,'status':'unavailable','reason':'The scheduled worker was interrupted. Paid inference will not be replayed for this day.'}
+    return report
 
 
 def overview():
@@ -18,8 +27,9 @@ def overview():
         report=json.loads(file.read_text())
         rows=report['rows']
         benchmarks.append({'variant':report['variant'],'split':report['split'],'cases':report['cases'],'passed':report['passed'],'median_ms':round(statistics.median(r['duration_ms'] for r in rows)),'model_calls':sum(len(r['result'].get('trace',[])) for r in rows),'model':report['model'],'created_at':report['created_at']})
-    current=get_store().read('quality-latest')
-    return {'pipeline':os.getenv('AI_PIPELINE_VERSION','audited'),'benchmarks':benchmarks,'monitor':current.get('report'),'limitations':'Small synthetic benchmark, not a guarantee of complete understanding. The audited development run missed a direct-flight ambiguity (11/12); the untouched holdout passed 6/6. Customer review and deterministic enforcement remain mandatory.'}
+    today=datetime.now(timezone.utc).date().isoformat()
+    current=get_store().read('quality-'+today) or get_store().read('quality-latest')
+    return {'pipeline':selected_pipeline(),'benchmarks':benchmarks,'monitor':display_report(current.get('report')),'limitations':'Small synthetic benchmark, not a guarantee of complete understanding. The audited development run missed a direct-flight ambiguity (11/12); the untouched holdout passed 6/6. Customer review and deterministic enforcement remain mandatory.'}
 
 
 def canary(authorization):
@@ -32,15 +42,18 @@ def canary(authorization):
     cases=json.loads((ROOT/'evals/cases.json').read_text())['cases']
     case=cases[date.toordinal()%len(cases)]
     def claim(state):
-        if state.get('report'):return False,state['report']
+        if state.get('report'):
+            state['report']=display_report(state['report'])
+            return False,state['report']
         report={'date':date.isoformat(),'case_id':case['id'],'status':'running','started_at':datetime.now(timezone.utc).isoformat()}
         state.update(owner=owner,report=report)
         return True,report
     claimed,report=get_store().mutate(key,claim)
+    get_store().mutate('quality-latest',lambda state:state.update(report=report))
     if not claimed:return report
     try:
         from app.ai_pipeline import run_pipeline
-        result=run_pipeline(case['domain'],case['message'],key,variant=os.getenv('AI_PIPELINE_VERSION','audited'),purpose='monitor')
+        result=run_pipeline(case['domain'],case['message'],key,variant=selected_pipeline(),purpose='monitor')
         score=score_case(case,result)
         report.update(status='passed' if score['passed'] else 'failed',score=score,stages=len(result.get('trace',[])))
     except Exception:

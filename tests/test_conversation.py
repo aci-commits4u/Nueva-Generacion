@@ -2,7 +2,7 @@
 from tests.test_enforcement import client,prepare,decision
 
 
-def fake(domain,message,session):
+def fake(domain,message,session,**kw):
  return {'fields':{'nonstop':True,'max_total_cents':29999},'sources':{'nonstop':'Nonstop','max_total_cents':'under $300'},'unsupported':[],'explanation':'Choose your airports.','mode':'live','model':'test','pipeline':'audited','trace':[{'stage':'extract','duration_ms':1}]}
 
 
@@ -48,7 +48,7 @@ def test_concurrent_edit_during_inference_does_not_overwrite_current_draft(clien
  d=client.post('/api/intents',json={'message':'Nonstop under $300','mode':'live'}).json()
  from app.store import get_store
  sid=client.cookies['ij_session']
- def racing(*a):
+ def racing(*a,**kw):
   get_store().mutate(sid,lambda s:s['drafts'][d['id']].update(revision=2))
   return fake(*a)
  monkeypatch.setattr('app.foundry_client.extract',racing)
@@ -81,3 +81,44 @@ def test_only_explicit_specific_review_can_remove_a_flagged_condition(client):
  events=get_store().read(client.cookies['ij_session'])['events']
  assert events[-2]['kind']=='condition_removed_by_traveler'
  assert events[-2]['data']['conditions']==d['unsupported']
+
+
+def test_short_answer_is_bound_to_the_displayed_question(client,monkeypatch):
+ captured=[]
+ def extraction(domain,message,session,**kw):
+  captured.append((message,kw));return fake(domain,message,session)
+ monkeypatch.setattr('app.foundry_client.extract',extraction)
+ d=client.post('/api/intents',json={'message':'Nonstop under $300','mode':'live'}).json()
+ question=d['questions'][0]
+ r=client.post(f"/api/intents/{d['id']}/clarify",json={'revision':1,'message':'Yes'})
+ assert r.status_code==200,r.text
+ assert question['question'] in captured[-1][0]
+ assert question['question'] not in captured[-1][1]['source_text']
+ assert r.json()['messages'][-1]['reply_to']['field']==question['field']
+
+
+def test_interpretation_snapshot_keeps_original_sources(client,monkeypatch):
+ def extraction(domain,message,session,**kw):
+  r=fake(domain,message,session)
+  if '350' in message:r['fields']['max_total_cents']=35000;r['sources']['max_total_cents']='up to $350'
+  return r
+ monkeypatch.setattr('app.foundry_client.extract',extraction)
+ d=client.post('/api/intents',json={'message':'Nonstop under $300','mode':'live'}).json()
+ r=client.post(f"/api/intents/{d['id']}/clarify",json={'revision':1,'message':'Actually, up to $350'})
+ assert r.status_code==200,r.text
+ runs=r.json()['ai_runs']
+ assert runs[0]['sources']['max_total_cents']=='under $300'
+ assert runs[1]['sources']['max_total_cents']=='up to $350'
+ assert runs[0]['fields']['max_total_cents']==29999
+
+
+def test_excessive_flags_reject_turn_without_destroying_reviewable_draft(client,monkeypatch):
+ count=[0]
+ def extraction(domain,message,session,**kw):
+  r=fake(domain,message,session);count[0]+=1;r['unsupported']=[f'condition {count[0]}-{i}' for i in range(20)];return r
+ monkeypatch.setattr('app.foundry_client.extract',extraction)
+ d=client.post('/api/intents',json={'message':'Nonstop under $300','mode':'live'}).json()
+ r=client.post(f"/api/intents/{d['id']}/clarify",json={'revision':1,'message':'From EWR please'})
+ assert r.status_code==422,r.text
+ saved=client.get(f"/api/intents/{d['id']}").json()
+ assert saved['revision']==1 and len(saved['unsupported'])==20

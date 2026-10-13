@@ -4,6 +4,8 @@ import os
 import time
 from openai import OpenAI
 from app.profile_registry import get_profile
+from app.ai_config import selected_pipeline
+from app.conversation import merge_unsupported
 from app.store import reserve_ai_call, record_usage
 from app.foundry_client import validate_extraction
 
@@ -39,21 +41,23 @@ def call_json(stage, domain, message, variant, candidate=None):
     return data, trace
 
 
-def run_pipeline(domain, message, session, variant=None, purpose='interactive'):
-    variant = variant or os.getenv('AI_PIPELINE_VERSION','guided')
+def run_pipeline(domain, message, session, variant=None, purpose='interactive',source_text=None):
+    variant = variant or selected_pipeline()
+    source_text = message if source_text is None else source_text
     if variant not in {'baseline','guided','audited'}: raise ValueError('Unknown AI pipeline')
     if os.getenv('MOCK_LLM') == '1': raise ValueError('Live AI is disabled. Select emergency offline mode explicitly.')
     traces = []
     try:
         reserve_ai_call(session, purpose=purpose)
         candidate, trace = call_json('extract',domain,message,variant)
-        candidate = validate_extraction(domain,message,candidate)
+        candidate = validate_extraction(domain,source_text,candidate)
+        candidate['unsupported']=merge_unsupported(candidate['unsupported'])
         traces.append(trace)
         if variant == 'audited':
             reserve_ai_call(session, purpose=purpose)
             audited, trace = call_json('coverage_audit',domain,message,variant,candidate)
-            audited = validate_extraction(domain,message,audited)
-            audited['unsupported'] = list(dict.fromkeys(candidate['unsupported'] + audited['unsupported']))
+            audited = validate_extraction(domain,source_text,audited)
+            audited['unsupported'] = merge_unsupported(candidate['unsupported'],audited['unsupported'])
             candidate = audited
             traces.append(trace)
     except Exception as exc:

@@ -18,7 +18,7 @@ from app.store import get_store
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
-from app.conversation import context,questions,provenance
+from app.conversation import context,user_text,questions,provenance,merge_unsupported
 from demo.fixtures import offers_for
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -125,6 +125,10 @@ def intake(body:IntentRequest,request:Request):
         try: extraction=extract(body.domain,body.message,sid)
         except ValueError as exc: raise HTTPException(503,str(exc))
     d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now(),'messages':[{'role':'user','content':body.message,'timestamp':now()}],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
+    d['ai_runs']=[provenance(extraction,1,d['messages'])]
+    try: d['unsupported']=merge_unsupported(d['unsupported'])
+    except ValueError as exc: raise HTTPException(422,str(exc))
+    refresh(d)
     def save(state):
         if len(state['drafts'])>=3: raise HTTPException(429,'Scenario limit reached.')
         state['drafts'][d['id']]=d;event(state,'intent_extracted',{'intent_id':d['id'],'revision':1,'mode':d['mode']})
@@ -145,21 +149,23 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
     if len(messages)>=3: raise HTTPException(409,'Review the captured requirements to continue; this demo allows two AI follow-ups.')
-    messages=messages+[{'role':'user','content':body.message,'timestamp':now()}]
+    reply_to=(d.get('questions') or questions(d['domain'],d['fields']) or [None])[0]
+    messages=messages+[{'role':'user','content':body.message,'timestamp':now(),'reply_to':reply_to}]
     text=context(messages)
-    if len(text)>5000: raise HTTPException(422,'Conversation is too long for this demo.')
-    if d['mode']=='offline': extraction=offline_extract(d['domain'],text)
+    if len(user_text(messages))>5000: raise HTTPException(422,'Conversation is too long for this demo.')
+    if d['mode']=='offline': extraction=offline_extract(d['domain'],user_text(messages))
     else:
         from app.foundry_client import extract
-        try: extraction=extract(d['domain'],text,sid)
+        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages))
         except ValueError as exc: raise HTTPException(503,str(exc))
     def save(state):
         current=required(state,'drafts',id)
         if current['revision']!=body.revision: raise HTTPException(409,'Another edit arrived during interpretation. Reload your latest draft.')
-        unsupported=list(dict.fromkeys(current['unsupported']+extraction['unsupported']))
+        try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
+        except ValueError as exc: raise HTTPException(422,str(exc))
         revision=current['revision']+1
         current.update(fields=extraction['fields'],sources=extraction['sources'],unsupported=unsupported,explanation=extraction['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],extraction['fields']))
-        current.setdefault('ai_runs',[]).append(provenance(extraction,revision))
+        current.setdefault('ai_runs',[]).append(provenance(extraction,revision,messages))
         current.pop('approved',None);current.pop('offer_views',None)
         refresh(current);event(state,'intent_clarified',{'intent_id':id,'revision':revision,'digest':current['digest']})
         return current

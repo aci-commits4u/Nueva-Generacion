@@ -32,3 +32,19 @@ def test_budget_failure_does_not_become_mock_pass(client,monkeypatch):
  monkeypatch.setattr('app.ai_pipeline.run_pipeline',limited)
  r=client.get('/api/internal/quality-check',headers={'Authorization':'Bearer test-canary-secret'})
  assert r.status_code==200 and r.json()['status']=='unavailable'
+
+
+def test_interrupted_canary_becomes_visible_without_paid_replay(client,monkeypatch):
+ monkeypatch.setenv('CRON_SECRET','test-canary-secret')
+ from app.store import get_store
+ from datetime import datetime,timezone,timedelta
+ date=datetime.now(timezone.utc).date().isoformat()
+ report={'date':date,'case_id':'synthetic-case','status':'running','started_at':(datetime.now(timezone.utc)-timedelta(minutes=5)).isoformat()}
+ get_store().mutate('quality-'+date,lambda s:s.update(owner='lost-worker',report=report))
+ get_store().mutate('quality-latest',lambda s:s.update(report={'date':'2026-01-01','status':'passed'}))
+ def forbidden(*a,**k):raise AssertionError('Replay must not spend')
+ monkeypatch.setattr('app.ai_pipeline.run_pipeline',forbidden)
+ public=client.get('/api/quality').json()
+ assert public['monitor']['date']==date and public['monitor']['status']=='unavailable'
+ replay=client.get('/api/internal/quality-check',headers={'Authorization':'Bearer test-canary-secret'})
+ assert replay.json()['status']=='unavailable'
