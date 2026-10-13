@@ -58,8 +58,99 @@ _MONTHS = {name.lower(): index for index, name in enumerate(
 _MONTHS.update({name[:3].lower(): index for name, index in _MONTHS.items()})
 
 
+# Provider JSON sometimes changes typography while copying a source quote.  The
+# mapping is deliberately limited to punctuation and space characters with the
+# same textual role; it does not remove punctuation, collapse whitespace, or
+# perform token/semantic matching.  The original customer span is restored
+# after a match so review provenance remains the customer's exact wording.
+_SOURCE_TYPOGRAPHY = str.maketrans({
+    "\u2018": "'",  # left single quotation mark
+    "\u2019": "'",  # right single quotation mark
+    "\u201a": "'",  # single low-9 quotation mark
+    "\u201b": "'",  # single high-reversed-9 quotation mark
+    "\u201c": '"',  # left double quotation mark
+    "\u201d": '"',  # right double quotation mark
+    "\u201e": '"',  # double low-9 quotation mark
+    "\u201f": '"',  # double high-reversed-9 quotation mark
+    "\u02bc": "'",  # modifier letter apostrophe
+    "\uff07": "'",  # fullwidth apostrophe
+    "\u2010": "-",  # hyphen
+    "\u2011": "-",  # non-breaking hyphen
+    "\u2012": "-",  # figure dash
+    "\u2013": "-",  # en dash
+    "\u2014": "-",  # em dash
+    "\u2015": "-",  # horizontal bar
+    "\u2212": "-",  # minus sign used as a text dash
+    "\u00a0": " ",  # no-break space
+    "\u2000": " ",  # en quad
+    "\u2001": " ",  # em quad
+    "\u2002": " ",  # en space
+    "\u2003": " ",  # em space
+    "\u2004": " ",  # three-per-em space
+    "\u2005": " ",  # four-per-em space
+    "\u2006": " ",  # six-per-em space
+    "\u2007": " ",  # figure space
+    "\u2008": " ",  # punctuation space
+    "\u2009": " ",  # thin space
+    "\u200a": " ",  # hair space
+    "\u202f": " ",  # narrow no-break space
+})
+
+
+def _source_span(quote: str, text: str) -> str | None:
+    """Return the original text span for a typography-equivalent quote.
+
+    Index bookkeeping is kept alongside the normalized text so callers can
+    retain exact customer punctuation.  Matching still requires a contiguous
+    source substring; spelling changes, paraphrases, and omitted words do not
+    qualify.
+    """
+    if type(quote) is not str or type(text) is not str:
+        return None
+    normalized_quote = quote.translate(_SOURCE_TYPOGRAPHY).casefold()
+    if not normalized_quote:
+        return "" if quote == "" else None
+    normalized_text_parts: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    for index, character in enumerate(text):
+        normalized_character = character.translate(_SOURCE_TYPOGRAPHY).casefold()
+        normalized_text_parts.append(normalized_character)
+        starts.extend([index] * len(normalized_character))
+        ends.extend([index + 1] * len(normalized_character))
+    normalized_text = "".join(normalized_text_parts)
+    start = normalized_text.find(normalized_quote)
+    if start < 0:
+        return None
+    end = start + len(normalized_quote)
+    if end > len(starts):
+        return None
+    return text[starts[start]:ends[end - 1]]
+
+
 def _contains(quote: str, text: str) -> bool:
-    return quote.casefold() in text.casefold()
+    return _source_span(quote, text) is not None
+
+
+def _restore_source_spans(data: dict, message: str) -> dict:
+    """Restore source-linked strings to exact customer spans when safe."""
+    result = deepcopy(data)
+    sources = result.get("sources")
+    if isinstance(sources, dict):
+        for key, quote in list(sources.items()):
+            span = _source_span(quote, message)
+            if span is not None:
+                sources[key] = span
+    clarifications = result.get("clarifications")
+    if isinstance(clarifications, list):
+        for item in clarifications:
+            if not isinstance(item, dict):
+                continue
+            quote = item.get("source_quote")
+            span = _source_span(quote, message)
+            if span is not None:
+                item["source_quote"] = span
+    return result
 
 
 def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, list[str]]:
@@ -294,6 +385,12 @@ def _boolean_quote_supports(key: str, value: bool, quote: str, *, domain: str = 
     }.get(key, ())
     if not terms or not any(re.search(pattern, q) for pattern in terms):
         return False
+    if re.search(
+        r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care)\b"
+        r"|\bno\s+(?:need|requirement|preference)\b"
+        r"|\bwithout\s+(?:caring|care)\s+about\b",q,
+    ):
+        return False
     # Soft preferences are useful review context but are not hard constraints.
     if value and re.search(r"\b(?:preferably|ideally|if\s+possible|would\s+prefer|prefer)\b", q):
         return False
@@ -390,6 +487,265 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
                 raise GroundingFailure(f"{key} value is not supported by its source quotation")
 
 
+_DATEISH_QUOTE = re.compile(
+    r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
+    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b"
+    r"|\b(?:today|tomorrow|tonight|friday|saturday|sunday|weekend|"
+    r"next\s+week|first\s+week|early|mid|late)\b"
+    r"|\b\d{1,2}\s*[/.-]\s*\d{1,2}\b",
+    re.I,
+)
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+_NO_REQUIREMENT_BOOLEAN = re.compile(
+    r"\b(?:don't|do not|doesn't|does not)\s+(?:require|need|care)\b"
+    r"|\bno\s+(?:need|requirement|preference)\b"
+    r"|\bwithout\s+(?:a\s+)?(?:caring|care|preference)\b"
+    r"|\bnot\s+(?:required|needed|necessary)\b",
+    re.I,
+)
+_UNSUPPORTED_BOOLEAN = re.compile(
+    r"\b(?:overnight|red[- ]eye|layover|stopover)\b", re.I
+)
+_AMBIGUOUS_WINDOW = re.compile(
+    r"\b(?:morning|afternoon|evening|early|late)\b|\b(?:before|after)\s+dinner\b",
+    re.I,
+)
+_ARRIVAL_WINDOW = re.compile(r"\b(?:arrive|arrival|land|landing)\b", re.I)
+_EXPLICIT_CLOCK = re.compile(
+    r"\b(?:[01]?\d|2[0-3]):[0-5]\d\s*(?:am|pm)?\b"
+    r"|\b(?:1[0-2]|0?[1-9])\s*(?:am|pm)\b",
+    re.I,
+)
+
+
+def _yearless_date_quote(quote: str) -> bool:
+    """Identify a date-like customer phrase whose year is genuinely absent."""
+    return bool(
+        isinstance(quote, str)
+        and not _YEAR.search(quote)
+        and _DATEISH_QUOTE.search(quote)
+    )
+
+
+def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
+                                    source_messages: list[dict] | None = None) -> dict:
+    """Compile a narrow set of uncertain fields into reviewable evidence.
+
+    This deliberately handles only uncertainty that can be proven from the
+    source phrase. Wrong explicit values, bad quotes, and unsupported types
+    still fail deterministic validation and remain subject to audit repair.
+    """
+    result = deepcopy(data)
+    fields = result["fields"]
+    sources = result["sources"]
+    profile_fields = get_profile(domain)["fields"]
+    guidance: list[str] = []
+    for key in list(fields):
+        quote = sources.get(key)
+        if not isinstance(quote, str) or not quote or not _contains(quote, message):
+            continue
+        if key not in profile_fields:
+            # Preserve an actual condition the selected profile cannot express
+            # instead of treating a model-invented field as authoritative.
+            fields.pop(key, None)
+            sources.pop(key, None)
+            if quote not in result["unsupported"]:
+                result["unsupported"].append(quote)
+            continue
+        if key.endswith("date") and _yearless_date_quote(quote):
+            fields.pop(key, None)
+            sources.pop(key, None)
+            clarification = {"field": key, "source_quote": quote, "reason": "ambiguous"}
+            if not any(item.get("field") == key for item in result["clarifications"]):
+                result["clarifications"].append(clarification)
+            guidance.append(f"Please specify the year for {key.replace('_', ' ')}.")
+            continue
+        if (key == "departure_window" and _AMBIGUOUS_WINDOW.search(quote)
+                and not _EXPLICIT_CLOCK.search(quote)):
+            fields.pop(key, None)
+            sources.pop(key, None)
+            if _ARRIVAL_WINDOW.search(quote):
+                if quote not in result["unsupported"]:
+                    result["unsupported"].append(quote)
+            else:
+                clarification = {
+                    "field": key, "source_quote": quote, "reason": "ambiguous"
+                }
+                if not any(item.get("field") == key for item in result["clarifications"]):
+                    result["clarifications"].append(clarification)
+                guidance.append("Please specify exact departure times.")
+            continue
+        if key == "max_duration_minutes" and _UNSUPPORTED_BOOLEAN.search(quote):
+            # Overnight/red-eye language is a substantive itinerary condition,
+            # not evidence for a numeric duration field.
+            fields.pop(key, None)
+            sources.pop(key, None)
+            if quote not in result["unsupported"]:
+                result["unsupported"].append(quote)
+            continue
+        if key not in {"nonstop", "refundable", "breakfast", "accessible"}:
+            continue
+        if (_NO_REQUIREMENT_BOOLEAN.search(quote)
+                or _reply_binding(key, fields[key], quote, domain, source_messages) == "no"):
+            # A no-preference answer is an intentional omission, never a
+            # stored false requirement and never an unsupported condition.
+            fields.pop(key, None)
+            sources.pop(key, None)
+            result["clarifications"] = [
+                item for item in result["clarifications"] if item.get("field") != key
+            ]
+            result["unsupported"] = [item for item in result["unsupported"] if item != quote]
+            continue
+        if (_UNSUPPORTED_BOOLEAN.search(quote)
+                and not _boolean_quote_supports(
+                    key, fields[key], quote, domain=domain, source_messages=source_messages
+                )):
+            # Preserve an uncheckable condition as the exact customer phrase
+            # rather than laundering it into a false boolean.
+            fields.pop(key, None)
+            sources.pop(key, None)
+            if quote not in result["unsupported"]:
+                result["unsupported"].append(quote)
+            continue
+    # A provider may quarantine an arrival-time or overnight condition as a
+    # clarification for a nearby supported field. Preserve the exact customer
+    # phrase as unsupported because these conditions have no reviewed field.
+    retained_clarifications: list[dict] = []
+    for item in result["clarifications"]:
+        if not isinstance(item, dict):
+            retained_clarifications.append(item)
+            continue
+        field = item.get("field")
+        quote = item.get("source_quote")
+        if (field not in {"departure_window", "max_duration_minutes"}
+                or not isinstance(quote, str)
+                or not _contains(quote, message)):
+            retained_clarifications.append(item)
+            continue
+        misclassified_arrival = (
+            field == "departure_window" and _ARRIVAL_WINDOW.search(quote)
+        )
+        misclassified_overnight = (
+            field == "max_duration_minutes" and _UNSUPPORTED_BOOLEAN.search(quote)
+        )
+        if not (misclassified_arrival or misclassified_overnight):
+            retained_clarifications.append(item)
+            continue
+        if quote not in result["unsupported"]:
+            result["unsupported"].append(quote)
+    result["clarifications"] = retained_clarifications
+    result["explanation"] = _append_guidance(result["explanation"], guidance)
+    return result
+
+
+def _recover_unknown_clarifications(data: dict, domain: str, message: str) -> dict:
+    """Quarantine grounded clarifications for fields outside this profile.
+
+    Profiles intentionally expose only reviewed fields. A provider can still
+    name a real customer condition using a field from another domain. Preserve
+    that condition as unsupported only when the record itself is structurally
+    valid and its quote is an exact customer span; malformed or ungrounded
+    records remain validation failures.
+    """
+    result = deepcopy(data)
+    profile_fields = get_profile(domain)["fields"]
+    retained: list[dict] = []
+    for item in result["clarifications"]:
+        if type(item) is not dict or set(item) != {"field", "source_quote", "reason"}:
+            retained.append(item)
+            continue
+        field = item["field"]
+        quote = item["source_quote"]
+        reason = item["reason"]
+        if (type(field) is not str or not field.strip() or field in profile_fields
+                or type(quote) is not str or not quote.strip() or len(quote) > 2500
+                or type(reason) is not str or reason not in CLARIFICATION_REASONS):
+            retained.append(item)
+            continue
+        source_span = _source_span(quote, message)
+        if source_span is None:
+            retained.append(item)
+            continue
+        # A condition already represented as unsupported cannot also be
+        # reclassified through an unknown clarification field. Keeping this
+        # duplicate for normal validation prevents two competing records for
+        # one customer clause.
+        if any(_contains(source_span, existing) or _contains(existing, source_span)
+               for existing in result["unsupported"]):
+            # The existing unsupported phrase is retained as the canonical
+            # record; this duplicate clarification is safely coalesced.
+            continue
+        if source_span not in result["unsupported"]:
+            result["unsupported"].append(source_span)
+    result["clarifications"] = retained
+    return result
+
+
+def grounded_unknown_clarifications(data: object, domain: str,
+                                    message: str) -> list[str]:
+    """Return safe unknown-field clarification phrases for audit retention."""
+    if not isinstance(data, dict) or not isinstance(data.get("clarifications"), list):
+        return []
+    profile_fields = get_profile(domain)["fields"]
+    existing = data.get("unsupported") if isinstance(data.get("unsupported"), list) else []
+    result: list[str] = []
+    for item in data["clarifications"]:
+        if type(item) is not dict or set(item) != {"field", "source_quote", "reason"}:
+            continue
+        field = item["field"]
+        quote = item["source_quote"]
+        reason = item["reason"]
+        if (type(field) is not str or not field.strip() or field in profile_fields
+                or type(quote) is not str or not quote.strip() or len(quote) > 2500
+                or type(reason) is not str or reason not in CLARIFICATION_REASONS):
+            continue
+        source_span = _source_span(quote, message)
+        if source_span is None:
+            continue
+        if any(_contains(source_span, item) or _contains(item, source_span)
+               for item in existing if isinstance(item, str)):
+            continue
+        if source_span not in result:
+            result.append(source_span)
+    return result[:20]
+
+
+def recovery_records(data: object, domain: str, message: str,
+                     source_messages: list[dict] | None = None) -> list[dict]:
+    """Describe deterministic recovery in trace-safe identifiers only."""
+    if not isinstance(data, dict) or not isinstance(data.get("fields"), dict):
+        return []
+    sources = data.get("sources") if isinstance(data.get("sources"), dict) else {}
+    profile_fields = get_profile(domain)["fields"]
+    records: list[dict] = []
+    for key, value in data["fields"].items():
+        quote = sources.get(key)
+        if not isinstance(quote, str) or not quote or not _contains(quote, message):
+            continue
+        reason = None
+        if key not in profile_fields:
+            reason = "unsupported_profile_field"
+        elif key.endswith("date") and _yearless_date_quote(quote):
+            reason = "year_missing"
+        elif (key == "departure_window" and _AMBIGUOUS_WINDOW.search(quote)
+              and not _EXPLICIT_CLOCK.search(quote)):
+            reason = "arrival_window_unsupported" if _ARRIVAL_WINDOW.search(quote) else "window_ambiguous"
+        elif key in {"nonstop", "refundable", "breakfast", "accessible"}:
+            no_requirement = _NO_REQUIREMENT_BOOLEAN.search(quote)
+            trusted_no = _reply_binding(key, value, quote, domain, source_messages) == "no"
+            if no_requirement or trusted_no:
+                reason = "no_requirement"
+            elif (_UNSUPPORTED_BOOLEAN.search(quote)
+                  and not _boolean_quote_supports(
+                      key, value, quote, domain=domain, source_messages=source_messages
+                  )):
+                reason = "unsupported_boolean_condition"
+        if reason:
+            records.append({"field": key, "reason": reason})
+    return records
+
+
 def _validate_clarifications(data: dict, domain: str, message: str) -> None:
     clarifications = data.get("clarifications")
     if type(clarifications) is not list or len(clarifications) > 20:
@@ -416,6 +772,25 @@ def _validate_clarifications(data: dict, domain: str, message: str) -> None:
             raise EnvelopeFailure("a clarified field must be omitted until the customer resolves it")
 
 
+def _validate_clarification_structure(data: dict) -> None:
+    """Reject malformed clarification records before recovery inspects them."""
+    clarifications = data.get("clarifications")
+    if type(clarifications) is not list or len(clarifications) > 20:
+        raise EnvelopeFailure("clarifications must be a bounded list")
+    for item in clarifications:
+        if type(item) is not dict or set(item) != {"field", "source_quote", "reason"}:
+            raise EnvelopeFailure("clarifications must contain field, source_quote, and reason")
+        field = item["field"]
+        quote = item["source_quote"]
+        reason = item["reason"]
+        if type(field) is not str or not field.strip():
+            raise EnvelopeFailure("clarification field must be a nonempty string")
+        if type(quote) is not str or not quote.strip() or len(quote) > 2500:
+            raise EnvelopeFailure("clarification source quote must be a bounded string")
+        if type(reason) is not str or reason not in CLARIFICATION_REASONS:
+            raise EnvelopeFailure("clarification reason is not supported")
+
+
 def validate_extraction(domain: str, message: str, data: dict,
                         source_messages: list[dict] | None = None) -> dict:
     """Return a canonical, grounded draft or raise a typed local failure."""
@@ -429,6 +804,8 @@ def validate_extraction(domain: str, message: str, data: dict,
         raise EnvelopeFailure("fields and sources must be objects")
     if type(data["unsupported"]) is not list or len(data["unsupported"]) > 20:
         raise EnvelopeFailure("unsupported conditions must be a bounded list")
+    if type(data["clarifications"]) is not list or len(data["clarifications"]) > 20:
+        raise EnvelopeFailure("clarifications must be a bounded list")
     if any(type(value) is not str or not value.strip() or len(value) > 2500 for value in data["unsupported"]):
         raise EnvelopeFailure("unsupported conditions must be nonempty strings")
     if type(data["explanation"]) is not str or not data["explanation"].strip() or len(data["explanation"]) > 1500:
@@ -436,7 +813,17 @@ def validate_extraction(domain: str, message: str, data: dict,
     # Old four-key provider responses may carry a legacy freeform marker. New
     # five-key responses must classify supported clarification explicitly.
     canonical = _remove_field_clarification_flags(data, message) if legacy else deepcopy(data)
+    canonical = _restore_source_spans(canonical, message)
+    _validate_clarification_structure(canonical)
     canonical = _normalise_fields(domain, canonical, message)
+    canonical = _recover_safe_field_uncertainty(
+        canonical, domain, message, source_messages=source_messages
+    )
+    canonical = _recover_unknown_clarifications(canonical, domain, message)
+    if (len(canonical["unsupported"]) > 20
+            or any(type(value) is not str or not value.strip() or len(value) > 2500
+                   for value in canonical["unsupported"])):
+        raise EnvelopeFailure("unsupported conditions must be a bounded list")
     _validate_clarifications(canonical, domain, message)
     try:
         validate_fields(get_profile(domain), canonical["fields"])
@@ -451,7 +838,8 @@ def validate_extraction(domain: str, message: str, data: dict,
     return canonical
 
 
-def bounded_unsupported(data: object, message: str | None = None) -> list[str]:
+def bounded_unsupported(data: object, message: str | None = None,
+                        domain: str | None = None) -> list[str]:
     """Extract only safe first-stage flags for retention during audit repair."""
     legacy = isinstance(data, dict) and "clarifications" not in data
     if not isinstance(data, dict) or not isinstance(data.get("unsupported"), list):
@@ -460,6 +848,10 @@ def bounded_unsupported(data: object, message: str | None = None) -> list[str]:
         values = [item.strip() for item in data["unsupported"]
             if isinstance(item, str) and item.strip() and len(item) <= 2500
             and not (legacy and message is not None and _field_clarification_match(item, message))][:20]
+    if domain is not None and message is not None:
+        for item in grounded_unknown_clarifications(data, domain, message):
+            if item not in values:
+                values.append(item)
     return list(dict.fromkeys(values))[:20]
 
 
@@ -520,6 +912,7 @@ def valid_candidate_clarifications(data: object, domain: str, message: str) -> l
     """Keep valid clarification records even when another candidate field fails."""
     if not isinstance(data, dict) or not isinstance(data.get("clarifications"), list):
         return []
+    data = _restore_source_spans(data, message)
     profile = get_profile(domain)
     fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
     valid: list[dict] = []

@@ -10,4 +10,8 @@ The independent technical reviewer read the live-reliability revision and ran th
 
 All fixes use synthetic/provider-independent regressions. Browser race fixtures are explicitly development coverage; they are not presented as live UAT or substituted model inference.
 
-The final fix verdict and hosted acceptance evidence will be recorded after verification.
+The reviewer then reproduced three additional Important problems: affirmative no-requirement phrases could still become a true boolean; review/approval could race a pending clarification; and concurrent explanations could pay twice before caching. Source compilation now omits declined requirements, an expiring session lease blocks changing intent from review/approval/purchase, and duplicate explanatory calls receive 409 before a provider call. Regressions exercise these paths with actual threads and purchase gates.
+
+After the blind UAT failures, the final grounding review reproduced two Important problems in the recovery code: malformed clarification items could raise an untyped `AttributeError`, and a date number could be mistaken for an explicit clock. Both were fixed and independently rechecked. Clarification record structure is validated before recovery, and explicit clocks require HH:MM or an AM/PM suffix.
+
+Final bounded technical verdict: no remaining material bug in the reviewed recovery/provenance changes. Root verification: 156 provider-independent tests pass with one upstream warning; eight fresh-context local browser regression suites pass. The same literal UAT request subsequently completed a real two-stage Foundry interpretation, retaining grounded airports/price/connections, a yearless-date clarification and unsupported itinerary requirements. This developer reproduction is separate from the independent hosted acceptance gate, whose final results are recorded in `17-live-reliability-and-uat.md`.

@@ -111,7 +111,10 @@ def extract(domain,message,session,source_text=None,source_messages=None):
 def explain(result,session,mode='live'):
     """Explain an already computed result; never return a replacement decision."""
     if mode=='offline':
-        return {'text':' '.join(c['label']+': '+c['message'] for c in result['checks'] if c['status']!='pass') or 'All approved requirements match the verified offer.','mode':'offline'}
+        return {'text':' '.join(
+            (f'“{c["requirement"]}”: ' if c['check_id'].startswith('unsupported_') else c['label']+': ')+c['message']
+            for c in result['checks'] if c['status']!='pass'
+        ) or 'All approved requirements match the verified offer.','mode':'offline'}
     try:
         reasoning_effort = selected_reasoning_effort()
     except ValueError as exc:

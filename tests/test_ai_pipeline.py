@@ -159,6 +159,21 @@ def test_audit_retains_structured_clarification_until_customer_resolves_it(monke
  assert r['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
 
 
+def test_audit_retains_grounded_unknown_clarification_as_unsupported(monkeypatch):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  p=proposed5()
+  if stage=='extract':
+   p['clarifications']=[{'field':'arrival_window','source_quote':'arrive before dinner','reason':'preference'}]
+  return p,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight','nonstop under $300; arrive before dinner','s',variant='audited')
+ assert r['fields']['nonstop'] is True
+ assert r['clarifications']==[]
+ assert r['unsupported']==['arrive before dinner']
+
+
 def test_audit_reconciles_typed_location_marker_with_structured_clarification(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
@@ -172,6 +187,38 @@ def test_audit_reconciles_typed_location_marker_with_structured_clarification(mo
  r=run_pipeline('flight','Florida under $300 round trip','s',variant='audited')
  assert r['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
  assert r['unsupported']==['round trip']
+
+
+def test_audit_recovers_yearless_date_without_losing_grounded_fields(monkeypatch):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  p=proposed5()
+  p['fields']={
+   'origin_airports':['EWR'], 'destination_airports':['TPA'],
+   'departure_date':'2026-11-07', 'max_total_cents':29999,
+   'max_connections':1,
+  }
+  p['sources']={
+   'origin_airports':'Newark', 'destination_airports':'Tampa',
+   'departure_date':'Nov 7–10', 'max_total_cents':'under $300',
+   'max_connections':'one connection',
+  }
+  p['unsupported']=['round trip']
+  return p,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline(
+  'flight',
+  'I am visiting Tampa from Newark Nov 7–10 under $300 round trip with one connection',
+  's',variant='audited',
+ )
+ assert r['fields']['origin_airports']==['EWR']
+ assert r['fields']['destination_airports']==['TPA']
+ assert r['fields']['max_connections']==1
+ assert 'departure_date' not in r['fields']
+ assert r['clarifications']==[{'field':'departure_date','source_quote':'Nov 7–10','reason':'ambiguous'}]
+ assert r['unsupported']==['round trip']
+ assert r['trace'][0]['grounding_recoveries']==[{'field':'departure_date','reason':'year_missing'}]
 
 
 def test_invalid_candidate_quarantine_keeps_structured_clarification(monkeypatch):
@@ -193,6 +240,35 @@ def test_invalid_candidate_quarantine_keeps_structured_clarification(monkeypatch
  r=run_pipeline('flight','Florida under $300','s',variant='audited')
  assert captured['candidate']['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
  assert r['clarifications']==[{'field':'destination_airports','source_quote':'Florida','reason':'ambiguous'}]
+
+
+def test_audit_repairs_malformed_candidate_clarification(monkeypatch):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  p=proposed5()
+  if stage=='extract':p['clarifications']=['bad']
+  return p,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight','nonstop under $300','s',variant='audited')
+ assert r['fields']['nonstop'] is True
+ assert r['clarifications']==[]
+
+
+def test_malformed_final_clarification_is_typed_interpretation_error(monkeypatch):
+ from app.ai_errors import AIServiceError
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ def call(stage,*a,**k):
+  p=proposed5()
+  if stage=='coverage_audit':p['clarifications']=['bad']
+  return p,{'stage':stage,'duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ with pytest.raises(AIServiceError) as exc:
+  run_pipeline('flight','nonstop under $300','s',variant='audited')
+ assert exc.value.code=='ai_interpretation'
+ assert exc.value.status_code==502
+ assert exc.value.stage=='coverage_audit'
 
 
 def test_audited_run_reserves_both_stages_atomically(monkeypatch):

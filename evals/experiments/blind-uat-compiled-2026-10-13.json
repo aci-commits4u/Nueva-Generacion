@@ -1,0 +1,148 @@
+{
+  "case": "blind-uat-exact-request",
+  "message": "I\u2019m visiting Tampa from Newark the first weekend of November, Nov 7\u201310. Keep the round trip under $300 total; one connection is okay, but I don\u2019t want an overnight itinerary, and I\u2019d prefer to land before dinner.",
+  "stages": [
+    {
+      "stage": "extract",
+      "proposal": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "Newark"
+          ],
+          "destination_airports": [
+            "Tampa"
+          ],
+          "max_connections": 1
+        },
+        "sources": {
+          "max_total_cents": "under $300 total",
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa",
+          "max_connections": "one connection is okay"
+        },
+        "unsupported": [
+          "round trip",
+          "overnight itinerary",
+          "prefer to land before dinner"
+        ],
+        "clarifications": [
+          {
+            "field": "departure_date",
+            "source_quote": "Nov 7\u201110",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Extracted budget, airports, and connection limit. Round\u2011trip, overnight avoidance, and landing\u2011before\u2011dinner are unsupported criteria. The date range needs clarification to a single departure date."
+      }
+    },
+    {
+      "stage": "coverage_audit",
+      "proposal": {
+        "fields": {
+          "max_total_cents": 29999,
+          "origin_airports": [
+            "Newark"
+          ],
+          "destination_airports": [
+            "Tampa"
+          ],
+          "max_connections": 1
+        },
+        "sources": {
+          "max_total_cents": "under $300 total",
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa",
+          "max_connections": "one connection is okay"
+        },
+        "unsupported": [
+          "round trip",
+          "overnight itinerary",
+          "prefer to land before dinner"
+        ],
+        "clarifications": [
+          {
+            "field": "departure_date",
+            "source_quote": "Nov 7\u201110",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "All explicit requirements are captured; ambiguous date range is flagged for clarification; unsupported items are listed as they cannot be expressed in the schema."
+      }
+    }
+  ],
+  "result": {
+    "fields": {
+      "max_total_cents": 29999,
+      "origin_airports": [
+        "EWR"
+      ],
+      "destination_airports": [
+        "TPA"
+      ],
+      "max_connections": 1
+    },
+    "sources": {
+      "max_total_cents": "under $300 total",
+      "origin_airports": "Newark",
+      "destination_airports": "Tampa",
+      "max_connections": "one connection is okay"
+    },
+    "unsupported": [
+      "round trip",
+      "overnight itinerary",
+      "prefer to land before dinner"
+    ],
+    "clarifications": [
+      {
+        "field": "departure_date",
+        "source_quote": "Nov 7\u201310",
+        "reason": "ambiguous"
+      }
+    ],
+    "explanation": "All explicit requirements are captured; ambiguous date range is flagged for clarification; unsupported items are listed as they cannot be expressed in the schema.",
+    "mode": "live",
+    "model": "gpt-oss-120b",
+    "pipeline": "audited",
+    "trace": [
+      {
+        "stage": "extract",
+        "model": "gpt-oss-120b",
+        "duration_ms": 2098,
+        "tokens": {
+          "completion_tokens": 581,
+          "prompt_tokens": 1264,
+          "total_tokens": 1845,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "9a403d1b4e814a65a838275df1b50bcb",
+        "prompt_version": "intent-envelope-v2-coverage",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      {
+        "stage": "coverage_audit",
+        "model": "gpt-oss-120b",
+        "duration_ms": 2278,
+        "tokens": {
+          "completion_tokens": 543,
+          "prompt_tokens": 1635,
+          "total_tokens": 2178,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "623f23906e314b7db421f29d126999e3",
+        "prompt_version": "intent-envelope-v2-coverage",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      }
+    ]
+  },
+  "duration_ms": 5585,
+  "reserved_calls": 2
+}

@@ -61,15 +61,23 @@ def session_id(request):
     return sid
 
 
+def active_ai_request(state,kind=None,intent_id=None):
+    """An abandoned lease expires so it cannot permanently block review."""
+    pending=state.get('_ai_pending',{})
+    return bool(pending and time.time()-pending.get('started_at',0)<75
+                and (kind is None or pending.get('kind')==kind)
+                and (intent_id is None or pending.get('intent_id')==intent_id))
+
+
 @contextmanager
-def interpretation_slot(sid):
+def interpretation_slot(sid,kind='interpretation',intent_id=None):
     """Prevent concurrent UI/retry requests paying for the same active turn."""
     token=uid()
     def claim(state):
         pending=state.get('_ai_pending')
-        if pending and time.time()-pending['started_at']<75:
+        if active_ai_request(state):
             raise HTTPException(409,'A request is already being interpreted. Wait for its response before sending another detail.')
-        state['_ai_pending']={'token':token,'started_at':time.time()}
+        state['_ai_pending']={'token':token,'started_at':time.time(),'kind':kind,'intent_id':intent_id}
     get_store().mutate(sid,claim)
     try:
         yield
@@ -84,7 +92,8 @@ def serialize_interpretation(fn):
     @wraps(fn)
     def wrapped(*args,**kwargs):
         request=kwargs['request']
-        with interpretation_slot(session_id(request)):
+        kind='explanation' if fn.__name__=='explain_decision' else 'interpretation'
+        with interpretation_slot(session_id(request),kind,kwargs.get('id') if kind=='interpretation' else None):
             return fn(*args,**kwargs)
     return wrapped
 
@@ -103,7 +112,8 @@ def integrity(check_id,ok,message):
 def judge(s,d):
     draft=required(s,'drafts',d['intent_id'])
     approved=d['approved']
-    fresh=draft.get('approved')==approved
+    changing=active_ai_request(s,'interpretation',d['intent_id'])
+    fresh=draft.get('approved')==approved and not changing
     v=verify(d['bundle'],approved)
     gates=[integrity('approval_current',fresh,'The signed requirements must match your current approval.'),integrity('cryptographic_integrity',v['valid'],v.get('error','VI chain and merchant signature passed.'))]
     if v['valid']:
@@ -271,6 +281,8 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
 @app.post('/api/intents/{id}/answers')
 def answers(id:str,body:AnswerRequest,request:Request):
     def update(s):
+        if active_ai_request(s,'interpretation'):
+            raise HTTPException(409,'Wait for the current clarification before reviewing its requirements.')
         d=required(s,'drafts',id)
         if not body.confirmation or body.revision!=d['revision']: raise HTTPException(409,'Confirm your review of the current draft revision.')
         p=get_profile(d['domain'])
@@ -298,6 +310,8 @@ def answers(id:str,body:AnswerRequest,request:Request):
 def approve(id:str,body:ApprovalRequest,request:Request):
     sid=session_id(request)
     def action(s):
+        if active_ai_request(s,'interpretation'):
+            raise HTTPException(409,'Wait for the current clarification before approving requirements.')
         d=required(s,'drafts',id)
         if not body.confirmation or body.revision!=d['revision'] or body.digest!=d['digest'] or not d['reviewed']:
             raise HTTPException(409,'Approve the exact reviewed draft and digest.')
@@ -330,6 +344,7 @@ def check(body:CheckRequest,request:Request):
     return get_store().mutate(session_id(request),action)
 
 @app.post('/api/decisions/{id}/explain')
+@serialize_interpretation
 def explain_decision(id:str,request:Request):
     sid=session_id(request);s=get_store().read(sid);d=required(s,'decisions',id)
     result,v=judge(s,d)

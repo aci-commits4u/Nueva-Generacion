@@ -78,15 +78,141 @@ def test_clarification_source_and_profile_field_are_checked():
             ),
         )
 
+    result = validate_extraction(
+        "flight", "arrive in the morning under $300",
+        envelope5(
+            {"max_total_cents": 29999}, {"max_total_cents": "under $300"},
+            clarifications=[{"field": "arrival_window", "source_quote": "morning", "reason": "ambiguous"}],
+            unsupported=["arrive in the morning"],
+        ),
+    )
+    assert result["clarifications"] == []
+    assert result["unsupported"] == ["arrive in the morning"]
+
+
+def test_typographic_source_variants_restore_the_exact_customer_spans():
+    message = "I’m visiting Tampa on Nov 7–10; keep it under\u00a0$300."
+    result = validate_extraction(
+        "flight",
+        message,
+        envelope5(
+            {"max_total_cents": 29999},
+            {"max_total_cents": "under $300"},
+            clarifications=[{
+                "field": "departure_date",
+                "source_quote": "Nov 7‑10",
+                "reason": "ambiguous",
+            }],
+        ),
+    )
+
+    assert result["sources"]["max_total_cents"] == "under\u00a0$300"
+    assert result["clarifications"] == [{
+        "field": "departure_date",
+        "source_quote": "Nov 7–10",
+        "reason": "ambiguous",
+    }]
+
+
+def test_grounded_unknown_clarification_fields_become_unsupported_conditions():
+    result = validate_extraction(
+        "flight",
+        "Fly from Newark to Tampa under $300; arrive before dinner and return Nov 10.",
+        envelope5(
+            {
+                "origin_airports": ["EWR"],
+                "destination_airports": ["TPA"],
+                "max_total_cents": 29999,
+            },
+            {
+                "origin_airports": "Newark",
+                "destination_airports": "Tampa",
+                "max_total_cents": "under $300",
+            },
+            clarifications=[
+                {"field": "arrival_window", "source_quote": "arrive before dinner", "reason": "preference"},
+                {"field": "return_date", "source_quote": "return Nov 10", "reason": "ambiguous"},
+            ],
+        ),
+    )
+
+    assert result["fields"] == {
+        "origin_airports": ["EWR"],
+        "destination_airports": ["TPA"],
+        "max_total_cents": 29999,
+    }
+    assert result["clarifications"] == []
+    assert result["unsupported"] == ["arrive before dinner", "return Nov 10"]
+
+
+@pytest.mark.parametrize("clarification", [
+    {"field": "arrival_window", "source_quote": "not in the request", "reason": "ambiguous"},
+    {"field": "arrival_window", "source_quote": "arrive before dinner", "reason": "unsupported"},
+    {"field": "", "source_quote": "arrive before dinner", "reason": "ambiguous"},
+    {"field": "arrival_window", "source_quote": "arrive before dinner", "reason": 1},
+])
+def test_unknown_clarification_requires_grounded_well_formed_evidence(clarification):
     with pytest.raises(ValueError):
         validate_extraction(
-            "flight", "arrive in the morning under $300",
+            "flight",
+            "Fly from Newark to Tampa under $300; arrive before dinner.",
             envelope5(
-                {"max_total_cents": 29999}, {"max_total_cents": "under $300"},
-                clarifications=[{"field": "arrival_window", "source_quote": "morning", "reason": "ambiguous"}],
-                unsupported=["arrive in the morning"],
+                {
+                    "origin_airports": ["EWR"],
+                    "destination_airports": ["TPA"],
+                    "max_total_cents": 29999,
+                },
+                {
+                    "origin_airports": "Newark",
+                    "destination_airports": "Tampa",
+                    "max_total_cents": "under $300",
+                },
+                clarifications=[clarification],
             ),
         )
+
+
+@pytest.mark.parametrize("quote", [
+    "the first week of November, Nov 7‑10",  # changed word
+    "early November",                         # paraphrase
+    "I do want an overnight itinerary",       # changed negation
+])
+def test_source_restoration_rejects_words_paraphrases_and_negation_changes(quote):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            "I don’t want an overnight itinerary on Nov 7–10 under $300.",
+            envelope5(
+                {"max_total_cents": 29999},
+                {"max_total_cents": "under $300"},
+                clarifications=[{
+                    "field": "departure_date",
+                    "source_quote": quote,
+                    "reason": "ambiguous",
+                }],
+            ),
+        )
+
+
+def test_arrival_and_overnight_clarifications_become_unsupported_conditions():
+    result = validate_extraction(
+        "flight",
+        "I’d prefer to land before dinner, and I don’t want an overnight itinerary.",
+        envelope5(
+            {},
+            {},
+            clarifications=[
+                {"field": "departure_window", "source_quote": "I’d prefer to land before dinner", "reason": "preference"},
+                {"field": "max_duration_minutes", "source_quote": "I don’t want an overnight itinerary", "reason": "ambiguous"},
+            ],
+        ),
+    )
+
+    assert result["clarifications"] == []
+    assert result["unsupported"] == [
+        "I’d prefer to land before dinner",
+        "I don’t want an overnight itinerary",
+    ]
 
 
 def test_supported_clarification_does_not_launder_unavailable_requirement():
@@ -256,12 +382,12 @@ def test_yes_binds_only_to_the_trusted_profile_question():
 
 def test_no_to_a_boolean_question_is_not_false_and_misbinding_is_rejected():
     question = get_profile("flight")["fields"]["nonstop"]["question"]
-    with pytest.raises(GroundingFailure):
-        validate_extraction(
+    for value in (True, False):
+        result = validate_extraction(
             "flight",
             "under $300\nNo",
             envelope(
-                {"nonstop": True, "max_total_cents": 29999},
+                {"nonstop": value, "max_total_cents": 29999},
                 {"nonstop": "No", "max_total_cents": "under $300"},
             ),
             source_messages=[
@@ -269,20 +395,7 @@ def test_no_to_a_boolean_question_is_not_false_and_misbinding_is_rejected():
                 {"role": "user", "content": "No", "reply_to": {"field": "nonstop", "question": question}},
             ],
         )
-
-    with pytest.raises(GroundingFailure):
-        validate_extraction(
-            "flight",
-            "under $300\nNo",
-            envelope(
-                {"nonstop": False, "max_total_cents": 29999},
-                {"nonstop": "No", "max_total_cents": "under $300"},
-            ),
-            source_messages=[
-                {"role": "user", "content": "under $300"},
-                {"role": "user", "content": "No", "reply_to": {"field": "nonstop", "question": question}},
-            ],
-        )
+        assert "nonstop" not in result["fields"]
     with pytest.raises(GroundingFailure):
         validate_extraction(
             "flight",
@@ -303,16 +416,16 @@ def test_no_to_a_boolean_question_is_not_false_and_misbinding_is_rejected():
     "no preference for breakfast",
     "without caring about breakfast",
 ])
-def test_unpreferred_boolean_phrases_do_not_ground_false(phrase):
-    with pytest.raises(GroundingFailure):
-        validate_extraction(
-            "hotel",
-            f"Tampa under $300 {phrase}",
-            envelope(
-                {"breakfast": False, "max_total_cents": 29999},
-                {"breakfast": phrase, "max_total_cents": "under $300"},
-            ),
-        )
+def test_unpreferred_boolean_phrases_omit_the_field_instead_of_grounding_false(phrase):
+    result = validate_extraction(
+        "hotel",
+        f"Tampa under $300 {phrase}",
+        envelope(
+            {"breakfast": False, "max_total_cents": 29999},
+            {"breakfast": phrase, "max_total_cents": "under $300"},
+        ),
+    )
+    assert "breakfast" not in result["fields"]
 
 
 def test_natural_number_and_duration_units_are_grounded():
@@ -346,13 +459,128 @@ def test_explicit_am_pm_window_is_normalized_without_treating_morning_as_a_time(
         ),
     )
     assert result["fields"]["departure_window"] == ["09:30", "23:00"]
-    with pytest.raises(GroundingFailure):
+    morning = validate_extraction(
+        "flight",
+        "Leave in the morning under $300",
+        envelope(
+            {"departure_window": ["09:00", "12:00"], "max_total_cents": 29999},
+            {"departure_window": "morning", "max_total_cents": "under $300"},
+        ),
+    )
+    assert "departure_window" not in morning["fields"]
+    assert morning["clarifications"] == [{
+        "field": "departure_window", "source_quote": "morning", "reason": "ambiguous"
+    }]
+    date_like = validate_extraction(
+        "flight",
+        "Leave in the morning on Nov 7 under $300",
+        envelope5(
+            {"departure_window": ["09:00", "12:00"], "max_total_cents": 29999},
+            {"departure_window": "morning on Nov 7", "max_total_cents": "under $300"},
+        ),
+    )
+    assert date_like["clarifications"] == [{
+        "field": "departure_window", "source_quote": "morning on Nov 7", "reason": "ambiguous"
+    }]
+
+
+@pytest.mark.parametrize("clarifications", [
+    ["bad"],
+    [{"field": "departure_window", "source_quote": None, "reason": "ambiguous"}],
+    [{"field": "departure_window", "source_quote": "morning", "reason": "bad"}],
+])
+def test_malformed_clarification_records_fail_as_typed_validation_errors(clarifications):
+    with pytest.raises(ValueError):
         validate_extraction(
             "flight",
             "Leave in the morning under $300",
-            envelope(
-                {"departure_window": ["09:00", "12:00"], "max_total_cents": 29999},
-                {"departure_window": "morning", "max_total_cents": "under $300"},
+            envelope5(
+                {"max_total_cents": 29999},
+                {"max_total_cents": "under $300"},
+                clarifications=clarifications,
+            ),
+        )
+
+
+def test_yearless_date_range_becomes_a_source_linked_clarification():
+    result = validate_extraction(
+        "flight",
+        "I'm visiting Tampa from Newark the first weekend of November, Nov 7–10. "
+        "Keep the round trip under $300 total; one connection is okay, but I don't want an overnight itinerary.",
+        envelope5(
+            {
+                "origin_airports": ["EWR"],
+                "destination_airports": ["TPA"],
+                "departure_date": "2026-11-07",
+                "max_total_cents": 29999,
+                "max_connections": 1,
+            },
+            {
+                "origin_airports": "Newark",
+                "destination_airports": "Tampa",
+                "departure_date": "Nov 7–10",
+                "max_total_cents": "under $300",
+                "max_connections": "one connection",
+            },
+            unsupported=["round trip"],
+        ),
+    )
+    assert result["fields"]["origin_airports"] == ["EWR"]
+    assert result["fields"]["destination_airports"] == ["TPA"]
+    assert result["fields"]["max_connections"] == 1
+    assert "departure_date" not in result["fields"]
+    assert result["clarifications"] == [{
+        "field": "departure_date", "source_quote": "Nov 7–10", "reason": "ambiguous"
+    }]
+    assert result["unsupported"] == ["round trip"]
+
+
+def test_uncheckable_overnight_condition_is_preserved_without_false_nonstop():
+    result = validate_extraction(
+        "flight",
+        "under $300 and I don't want an overnight itinerary",
+        envelope(
+            {"nonstop": False, "max_total_cents": 29999},
+            {"nonstop": "I don't want an overnight itinerary", "max_total_cents": "under $300"},
+        ),
+    )
+    assert "nonstop" not in result["fields"]
+    assert result["unsupported"] == ["I don't want an overnight itinerary"]
+
+
+def test_unavailable_arrival_window_is_unsupported_not_a_departure_requirement():
+    result = validate_extraction(
+        "flight",
+        "I want to land before dinner under $300",
+        envelope5(
+            {"arrival_window": ["00:00", "18:00"], "max_total_cents": 29999},
+            {"arrival_window": "land before dinner", "max_total_cents": "under $300"},
+        ),
+    )
+    assert "arrival_window" not in result["fields"]
+    assert result["unsupported"] == ["land before dinner"]
+
+
+def test_yearless_recovery_does_not_accept_an_unrelated_source_quote():
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            "under $300",
+            envelope5(
+                {"departure_date": "2026-11-07", "max_total_cents": 29999},
+                {"departure_date": "under $300", "max_total_cents": "under $300"},
+            ),
+        )
+
+
+def test_invalid_explicit_money_value_is_not_recovered_as_uncertainty():
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            "under $300",
+            envelope5(
+                {"max_total_cents": 30000},
+                {"max_total_cents": "under $300"},
             ),
         )
 

@@ -1,0 +1,96 @@
+{
+  "case": "blind-uat-source-diagnosis",
+  "message": "I\u2019m visiting Tampa from Newark the first weekend of November, Nov 7\u201310. Keep the round trip under $300 total; one connection is okay, but I don\u2019t want an overnight itinerary, and I\u2019d prefer to land before dinner.",
+  "stages": [
+    {
+      "stage": "extract",
+      "proposal": {
+        "fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "max_total_cents": 29999,
+          "max_connections": 1
+        },
+        "sources": {
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa",
+          "max_total_cents": "under $300",
+          "max_connections": "one connection is okay"
+        },
+        "unsupported": [
+          "round trip"
+        ],
+        "clarifications": [
+          {
+            "field": "departure_date",
+            "source_quote": "the first weekend of November, Nov 7\u201110",
+            "reason": "ambiguous"
+          },
+          {
+            "field": "departure_window",
+            "source_quote": "prefer to land before dinner",
+            "reason": "preference"
+          },
+          {
+            "field": "max_duration_minutes",
+            "source_quote": "I don\u2019t want an overnight itinerary",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Extracted concrete fields with source quotes; ambiguous dates, landing time preference, and overnight avoidance need clarification; round\u2011trip requirement is unsupported by schema."
+      }
+    },
+    {
+      "stage": "coverage_audit",
+      "proposal": {
+        "fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "TPA"
+          ],
+          "max_total_cents": 29999,
+          "max_connections": 1
+        },
+        "sources": {
+          "origin_airports": "Newark",
+          "destination_airports": "Tampa",
+          "max_total_cents": "under $300",
+          "max_connections": "one connection is okay"
+        },
+        "unsupported": [
+          "round trip"
+        ],
+        "clarifications": [
+          {
+            "field": "departure_date",
+            "source_quote": "the first weekend of November, Nov 7\u201110",
+            "reason": "ambiguous"
+          },
+          {
+            "field": "departure_window",
+            "source_quote": "I\u2019d prefer to land before dinner",
+            "reason": "preference"
+          },
+          {
+            "field": "max_duration_minutes",
+            "source_quote": "I don\u2019t want an overnight itinerary",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "All concrete fields extracted with exact source quotes; ambiguous date, landing\u2011time preference, and overnight\u2011avoidance are listed as clarifications; round\u2011trip requirement is unsupported."
+      }
+    }
+  ],
+  "result": {
+    "error": "ai_interpretation",
+    "stage": "coverage_audit",
+    "validation_issue": "clarification source quotation is not in customer text"
+  },
+  "reserved_calls": 2
+}

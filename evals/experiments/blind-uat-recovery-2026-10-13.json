@@ -1,0 +1,12 @@
+{
+  "case": "blind-uat-exact-request",
+  "message": "I\u2019m visiting Tampa from Newark the first weekend of November, Nov 7\u201310. Keep the round trip under $300 total; one connection is okay, but I don\u2019t want an overnight itinerary, and I\u2019d prefer to land before dinner.",
+  "result": {
+    "error": "ai_interpretation",
+    "stage": "coverage_audit",
+    "request_id": "29983f143e28",
+    "validation_issue": "clarification source quotation is not in customer text"
+  },
+  "duration_ms": 4445,
+  "reserved_calls": 2
+}

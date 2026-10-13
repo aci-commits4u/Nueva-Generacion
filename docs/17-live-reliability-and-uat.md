@@ -67,6 +67,22 @@ The saved actual responses were also evaluated in the native Foundry project usi
 
 ## Verification before hosted acceptance
 
-118 provider-independent tests pass, including whole-pipeline reservation, simultaneous budget requests, rejected quota accounting, typed HTTP errors, source grounding, six follow-ups, clarification history, recorded review resolutions and airport-format approval guards. The six local browser regression suites also pass. These are development and regression results; the independent exploratory hosted acceptance results are recorded separately below after deployment.
+Provider-independent verification is repeated after the UAT-driven changes below. Earlier counts (118 tests and six browser suites) were intermediate development checks, not hosted acceptance. The current runner includes eight browser suites; the last two deliberately intercept API responses to exercise races and UI guards and are labelled regression fixtures, not live inference.
+
+## First hosted UAT failure and repair
+
+The first independent live pass on source `5860987` entered this unscripted request:
+
+> I’m visiting Tampa from Newark the first weekend of November, Nov 7–10. Keep the round trip under $300 total; one connection is okay, but I don’t want an overnight itinerary, and I’d prefer to land before dinner.
+
+It failed with `ai_interpretation` (reference `799e80dd260b`). The tester explicitly selected offline mode afterward; those later steps do not count as a successful live intake. The offline origin suggestion repeated its question. Unsupported-only offer differences exposed an unusable acceptance action, and the deterministic explanation repeated a generic message without identifying each condition. Both signed offers correctly held checkout for unresolved conditions; no purchase was created.
+
+Bounded developer reproductions retained the failures in `evals/experiments/`. Actual stage envelopes established two causes: a source quote changed the date's en dash into a non-breaking hyphen, and arrival/overnight conditions were assigned to fields that cannot enforce them. Another repetition proposed a clarification field outside the active profile. None of these failures is being erased from the record.
+
+The grounding compiler now restores only typography-equivalent contiguous spans to the exact original customer text. Changed words, paraphrases and negation changes still fail. A quoted yearless date becomes a clarification rather than an invented year. Grounded conditions outside the profile remain unsupported; they cannot become an unrelated departure or duration rule and disappear through a no-preference choice. Unsupported conditions still hold checkout.
+
+The offline parser now recognizes each explicit airport suggestion independently. UI review locks during pending clarification, and the backend refuses stale review/approval/purchase attempts while the same intent is changing. Duplicate explanatory requests are serialized and cached, and abandoned locks expire. Unsupported-only dialogs explain the hold without offering an empty acceptance. Deterministic explanations name each actual condition.
+
+Developer experiments temporarily permit a few additional evaluation-purpose calls locally under the unchanged global 200-call/$20 cap. No usage counters were reset, public evaluation capacity was not increased, and the $10 emergency allowance remains disabled. Final live UAT and ledger totals are recorded after the completed release below.
 
 Primary references: [Foundry cloud evaluation workflow](https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/cloud-evaluation), [native evaluation configuration](https://ai.azure.com/api-reference/evals/create-eval/), and [evaluating existing responses without target generation](https://ai.azure.com/api-reference/evals/create-eval-run/).

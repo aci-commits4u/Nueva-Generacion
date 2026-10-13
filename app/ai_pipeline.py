@@ -21,6 +21,7 @@ from app.ai_grounding import (
     clarification_guidance,
     preserve_candidate_clarifications,
     preserve_valid_candidate,
+    recovery_records,
     remove_resolved_field_markers,
     valid_candidate_clarifications,
     valid_candidate_fields,
@@ -266,6 +267,9 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
         candidate, trace = call_json('extract', domain, message, variant,
                                      source_text=source_text, source_messages=source_messages,
                                      reasoning_effort=reasoning_effort)
+        trace['grounding_recoveries'] = recovery_records(
+            candidate, domain, source_text, source_messages=source_messages
+        )
         traces.append(trace)
     except AIServiceError:
         raise
@@ -274,7 +278,7 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
                        'Live AI provider is unavailable. No fallback was used.',
                        stage='extract', retryable=True, cause=exc)
 
-    candidate_flags = bounded_unsupported(candidate, source_text)
+    candidate_flags = bounded_unsupported(candidate, source_text, domain=domain)
     candidate_guidance = clarification_guidance(candidate, source_text)
     candidate_clarifications = valid_candidate_clarifications(candidate, domain, source_text)
     candidate_valid = valid_candidate_fields(candidate, domain, source_text,
@@ -316,6 +320,9 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
             cause=exc,
         )
     traces.append(audit_trace)
+    audit_trace['grounding_recoveries'] = recovery_records(
+        audited, domain, source_text, source_messages=source_messages
+    )
     if candidate_valid:
         _record_outcome('extract', 'passed', traces[0].get('response_id') if traces else None)
     else:

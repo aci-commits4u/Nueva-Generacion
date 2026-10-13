@@ -26,6 +26,8 @@ function invalidateSessionStatus(){
 function setClarificationControls(intentId,disabled){
  if(state.stage!==2||state.draft?.id!==intentId)return;
  document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply]').forEach(control=>{control.disabled=disabled;control.toggleAttribute('aria-busy',disabled);});
+ const review=$('#review-now');
+ if(review){review.disabled=disabled;review.toggleAttribute('aria-busy',disabled);}
 }
 function notice(message='',tone='warning'){
  const el=$('#notice');
@@ -112,19 +114,19 @@ async function refreshAIStatus(silent=true,options={}){
  aiStatusRequest={generation,token,promise};
  return promise;
 }
-function errorMessage(error){
+function errorMessage(error,hasDraft=Boolean(state.draft)){
  const e=errorFromUnknown(error);
  const suffix=e.requestId?` Reference ${e.requestId}.`:'';
  if(e.status===0)return `The connection was interrupted. Your request is preserved; live availability is shown above.${suffix}`;
  if(e.code==='ai_daily_limit'||e.code==='ai_session_limit'||e.code==='ai_budget_limit')return `${knownReasonCopy({reason:e.publicError})} ${e.retryAfterSeconds?`Availability may return in about ${formatDuration(e.retryAfterSeconds)}.`:''} Your request is preserved.${suffix}`;
- if(e.code==='ai_configuration'||e.code==='ai_disabled'||e.code==='ai_provider'||e.code==='ai_timeout'||e.code==='ai_interpretation')return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. Choose the explicit offline parser or review the current draft.${suffix}`;
+ if(e.code==='ai_configuration'||e.code==='ai_disabled'||e.code==='ai_provider'||e.code==='ai_timeout'||e.code==='ai_interpretation'){const recovery=hasDraft?'Choose the explicit offline parser or review the current draft.':'Choose the explicit offline parser to continue.';return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. ${recovery}${suffix}`;}
  if(/\/api\/intents/.test(e.path||''))return `${e.message||'The request could not be completed.'} Your request is preserved.${suffix}`;
  return `${e.message||'The request could not be completed.'}${suffix}`;
 }
 async function reportError(error,navigation){
  const e=errorFromUnknown(error);
  if(String(e.code||'').startsWith('ai_')||/\/api\/intents/.test(e.path||''))await refreshAIStatus(true);
- if(navigation===state.navigation)notice(errorMessage(e));
+ if(navigation===state.navigation)notice(errorMessage(e,Boolean(state.draft)));
 }
 async function busy(button,fn,label='Working…'){
  const old=button?.textContent,navigation=state.navigation;if(button){button.disabled=true;button.dataset.busy='true';button.textContent=label;}notice();
@@ -234,7 +236,7 @@ function renderConversation(){
  if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
  renderAvailability();
  setClarificationControls(d.id,clarificationRequests.has(d.id));
- $('#review-now').onclick=()=>transition(3);
+ $('#review-now').onclick=()=>{if(!clarificationRequests.has(d.id))transition(3);};
  const send=text=>{
   if(clarificationRequests.has(d.id))return;
   const navigation=state.navigation,generation=sessionGeneration,inputSnapshot=$('#clarify-text')?.value??'';
@@ -336,11 +338,15 @@ function renderOffers(){
 function openExceptions(offerId){
  const d=state.decisions[offerId];state.exception=offerId;$('#exception-error').hidden=true;
  const checks=d.checks.filter(c=>c.status!=='pass');
+ const eligible=checks.filter(c=>c.exception_allowed===true);
  $('#exception-checks').innerHTML=checks.map(c=>`<div class="exception-line">${c.exception_allowed?`<label><input type="checkbox" name="exception" value="${escapeHTML(c.check_id)}" required><span>I accept <b>${escapeHTML(c.check_id==='max_total_cents'?'All-in price':c.label)}</b>: ${escapeHTML(displayValue(c,c.offer_value))}, although I approved ${escapeHTML(displayValue(c,c.requirement))}. ${c.status==='missing'?'I understand this fact was not disclosed.':''}</span></label>`:`<p><b>${escapeHTML(c.check_id==='max_total_cents'?'All-in price':c.label)}</b><br>${escapeHTML(c.message)} ${c.requirement==='mandate.payment.amount_range'?'Accepting the specific USD price creates a new native amount authorization.':'This condition cannot be waived.'}</p>`}</div>`).join('')+`<p class="hash">Acceptance is bound to offer ${escapeHTML(d.offer_hash)}.</p>`;
+ const accept=$('#exception-form button[type="submit"]');
+ accept.disabled=eligible.length===0;accept.hidden=eligible.length===0;accept.toggleAttribute('aria-disabled',eligible.length===0);
+ if(!eligible.length){$('#exception-error').textContent='This offer has no differences you can waive. Review the recorded conditions and close this dialog.';$('#exception-error').hidden=false;}
  $('#exception-dialog').showModal();
 }
 $('#exception-form').onsubmit=e=>{
- e.preventDefault();const d=state.decisions[state.exception];const selected=[...document.querySelectorAll('input[name="exception"]:checked')].map(x=>x.value);
+ e.preventDefault();const d=state.decisions[state.exception],eligible=(d?.checks||[]).filter(c=>c.status!=='pass'&&c.exception_allowed===true);if(!eligible.length){$('#exception-error').textContent='This offer has no differences you can waive. Review the recorded conditions and close this dialog.';$('#exception-error').hidden=false;return;}const selected=[...document.querySelectorAll('input[name="exception"]:checked')].map(x=>x.value);
  if(!selected.length){$('#exception-error').textContent='Select each specific difference you accept.';$('#exception-error').hidden=false;return;}
  busy(e.submitter,async()=>{
   const navigation=state.navigation;
