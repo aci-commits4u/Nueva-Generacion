@@ -34,7 +34,7 @@
 ### Task 2: Review and release
 **Files:** docs/16-product-walkthrough.md, DESIGN.md, docs/implementation-status.md, README.md.
 **Interfaces:** Consumes Task 1 UI and tests. Produces a reviewed public Vercel deployment on the existing stable alias.
-- [ ] Fresh review focuses on consent, misleading tutorial claims, navigation, and responsive/accessibility issues. Correct material findings and verify affected cases.
-- [ ] Deploy existing Vercel project; verify public overview, tutorial, explicit offline flow, health, quality, and artifact loading.
-- [ ] Update documentation with actual verification and limitations. Commit and push victor/perfected.
+- [x] Fresh review focuses on consent, misleading tutorial claims, navigation, and responsive/accessibility issues. Correct material findings and verify affected cases.
+- [x] Deploy existing Vercel project; verify public overview, tutorial, explicit offline flow, health, quality, and artifact loading.
+- [x] Update documentation with actual verification and limitations. Commit and push victor/perfected.
 Expected: production Ready, browser checks PASS, CI succeeds.

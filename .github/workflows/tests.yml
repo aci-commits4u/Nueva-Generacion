@@ -19,4 +19,4 @@ jobs:
         env:
           MOCK_LLM: '1'
           STORE_BACKEND: sqlite
-      - run: node --check web/app.js && node --check web/views/conversation.js
+      - run: for file in web/*.js web/views/*.js; do node --check "$file"; done

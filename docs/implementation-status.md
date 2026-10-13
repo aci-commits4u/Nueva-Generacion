@@ -1,6 +1,16 @@
 # Implementation and verification record
 
-The product is implemented on `victor/perfected`. The October 13 conversational revision adds two-stage live interpretation, revision-bound follow-ups, a live intent summary, explicit flagged-condition resolution, and continuous synthetic quality checks; see [the evaluation record](15-ai-evaluation-and-conversation.md). The earlier research documents describe a broader target; this file states what runs today.
+The product is implemented on `victor/perfected`. The current public release adds an overview that explains the pitch, a five-step tutorial, and help throughout the working demo; see [the walkthrough guide](16-product-walkthrough.md). The underlying conversational revision adds two-stage live interpretation, revision-bound follow-ups, a live intent summary, explicit flagged-condition resolution, and continuous synthetic quality checks; see [the evaluation record](15-ai-evaluation-and-conversation.md). The earlier research documents describe a broader target; this file states what runs today.
+
+## Current UI release — October 13
+
+Source `1a2cdf8` is deployed as `dpl_EMi2YA2LF9EjJh719WoGcvcj56Kc`, READY at **https://intent-judge-perfected.vercel.app**. The stable alias is public. [Source CI run 38471659344](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38471659344) passed; local regression remains 76 passing tests with one upstream deprecation warning.
+
+All six browser suites passed against both local development and the actual public deployment: overview/tutorial, delayed new-request reset, flight enforcement and exact exception, mobile hotel purchase/evidence, navigation and preserved review edits, and clarification/approval/purchase completion during tutorial navigation. The five-step tutorial made zero POST requests. The working-flow tests explicitly selected offline interpretation; no paid Foundry calls were made for this UI release. Live mode remains the default and health reports live AI configured, offline-only false, simulated commerce, and Azure storage. This verification does not claim another live model evaluation.
+
+Desktop and 390px mobile layouts were rendered and inspected. The mobile suite also checked keyboard focus, dialog Escape, evidence download and Quality reload. Public HTML, CSS, JavaScript modules, font and health returned HTTP 200. The daily 07:00 UTC quality cron is enabled and points to this deployment. Backend rules, signed approvals, merchant trust and AI budget limits are unchanged.
+
+Independent review reproduced and resolved navigation races, lost unsaved review edits, stale draft revisions after tutorial return and the slow session-reset boundary. Final review found no remaining Critical, Important or Minor issues; see [review evidence](final-review-ui.md) and [build ledger](ui-build-ledger.md).
 
 ## Working scope
 
@@ -31,9 +41,9 @@ Plain JSON instructions plus low reasoning are used for this existing model beca
 
 Anonymous synthetic sessions use HTTP-only cookies and origin checks. Shareable evidence uses pseudonyms, never session credentials. Keys are stable environment secrets on hosting. Public keys in evidence need an independently trusted source when establishing authenticity; a self-contained public key is not proof of issuer identity.
 
-The interface follows the two generated references in `docs/design/`: editorial serif headings, warm paper, rust actions, flat comparison rows, native CSS motion and reduced-motion support. Reference images are design artifacts, not used as screenshot backgrounds in the application.
+The current interface follows the product overview and walkthrough references in `docs/design/`: large Geist Sans typography, warm white, forest ink, lime matches, amber holds, flat comparison rows, native CSS motion and reduced-motion support. Earlier serif/rust and sidebar references are historical. Reference images are design artifacts, not used as screenshot backgrounds in the application.
 
-## Production verification
+## Original production verification (historical)
 
 Production is **https://intent-judge-perfected.vercel.app**, separate project `intent-judge-perfected` in `vmj-8946s-projects`. Application release commit `672ae70`; Vercel deployment `dpl_FHadaf66CnbSGrKNPAhwAFnWT9iU` is READY in production, using Python 3.12 and the FastAPI entry point. The stable production alias is publicly accessible; preview/unique deployment protection remains enabled.
 
