@@ -2,7 +2,7 @@ async page => {
  const origin=new URL(page.url()).origin;
  const statusAvailable={configured:true,available:true,reason:null,pipeline:'audited',model:'fixture',remaining_calls:10,session_remaining_calls:10,interpretation_calls:2,remaining_interpretations:5,reset_at:null};
  const statusUnavailable={...statusAvailable,available:false,reason:{code:'ai_session_limit',message:'This session has reached its live allowance.',retryable:false,retry_after_seconds:null}};
- const draft=(revision=1,question={field:'origin_airports',question:'Which departure airport should we use?'})=>({id:'fixture-intent',revision,domain:'flight',message:'Find a flight under $300.',fields:{max_total_cents:30000,origin_airports:['EWR'],destination_airports:['MCO'],departure_date:'2026-11-12',nonstop:true},sources:{max_total_cents:'under $300',origin_airports:'EWR',destination_airports:'MCO',departure_date:'2026-11-12',nonstop:'nonstop'},unsupported:[],clarifications:[],explanation:'Fixture draft for a browser race regression.',mode:'live',model:'fixture',messages:[{role:'user',content:'Find a flight under $300.'}],ai_runs:[],questions:[question],max_followups:6,followups_remaining:6});
+ const draft=(revision=1,question={field:'origin_airports',question:'Which departure airport should we use?',options:[{label:'Newark · EWR',value:'Depart from EWR.'}]})=>({id:'fixture-intent',revision,domain:'flight',message:'Find a flight under $300.',fields:{max_total_cents:30000,origin_airports:['EWR'],destination_airports:['MCO'],departure_date:'2026-11-12',nonstop:true},sources:{max_total_cents:'under $300',origin_airports:'EWR',destination_airports:'MCO',departure_date:'2026-11-12',nonstop:'nonstop'},unsupported:[],clarifications:[],explanation:'Fixture draft for a browser race regression.',mode:'live',model:'fixture',messages:[{role:'user',content:'Find a flight under $300.'}],ai_runs:[],questions:[question],max_followups:6,followups_remaining:6});
 
  // A provider failure must preserve a user's multi-airport choice. The
  // pending state locks every control, but the failed request leaves the
@@ -11,7 +11,7 @@ async page => {
  const multiFirstReady=new Promise(resolve=>{multiFirstStarted=resolve;});
  const multiFirstGate=new Promise(resolve=>{multiReleaseFirst=resolve;});
  const multiSecondReady=new Promise(resolve=>{multiSecondResolve=resolve;});
- const multiDraft=(revision=1)=>draft(revision,{field:'destination_airports',question:'Which arrival airports should we use?'});
+ const multiDraft=(revision=1)=>draft(revision,{field:'destination_airports',question:'Which arrival airports should we use?',options:[{label:'Orlando · MCO',value:'Arrive at MCO.'},{label:'Miami · MIA',value:'Arrive at MIA.'}]});
  await page.route('**/api/ai/status',async route=>{await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(statusAvailable)});});
  await page.route('**/api/intents',async route=>{await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(multiDraft())});});
  await page.route('**/api/intents/*/clarify',async route=>{
@@ -72,7 +72,7 @@ async page => {
  const clarifyGate=new Promise(resolve=>{releaseClarify=resolve;});
  await page.route('**/api/ai/status',async route=>{await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(statusAvailable)});});
  await page.route('**/api/intents',async route=>{await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft())});});
- await page.route('**/api/intents/*/clarify',async route=>{clarifyCalls++;clarifyStarted();await clarifyGate;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft(2,{field:'destination_airports',question:'Which arrival airport should we use?'}))});});
+ await page.route('**/api/intents/*/clarify',async route=>{clarifyCalls++;clarifyStarted();await clarifyGate;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft(2,{field:'destination_airports',question:'Which arrival airport should we use?',options:[{label:'Orlando · MCO',value:'Arrive at MCO.'}]}))});});
  await page.goto(origin+'/?domain=flight');
  await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  await page.getByLabel('What would you like to find?').fill('Find a flight under $300.');

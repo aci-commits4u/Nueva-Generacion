@@ -685,6 +685,11 @@ _MONEY_AMBIGUITY = re.compile(
     r"(?i)\b(?:around|about|roughly|approximately|flexible|prefer(?:ably)?|"
     r"ignore\s+(?:the\s+)?budget|if|unless|maybe)\b"
 )
+# Profiles enforce all-in USD.  A non-USD token in the source makes a bound
+# unsafe to compile, even if another clause happens to mention dollars.
+_NON_USD_CURRENCY = re.compile(
+    r"(?i)(?:€|£|¥|\b(?:EUR|GBP|JPY|CNY|RMB|CAD|AUD|INR|CHF|MXN|BRL|kr)\b)"
+)
 _MONEY_CORRECTION = re.compile(
     r"(?i)\b(?:actually|instead|correction|change(?:d)?|update(?:d)?|"
     r"rather|now)\b"
@@ -735,7 +740,9 @@ def _safe_money_clarification(quote: str, message: str) -> int | None:
     if (not isinstance(quote, str) or not isinstance(message, str)
             or not _contains(quote, message)
             or _MONEY_AMBIGUITY.search(quote.translate(_SOURCE_TYPOGRAPHY))
-            or _MONEY_AMBIGUITY.search(message.translate(_SOURCE_TYPOGRAPHY))):
+            or _MONEY_AMBIGUITY.search(message.translate(_SOURCE_TYPOGRAPHY))
+            or _NON_USD_CURRENCY.search(quote.translate(_SOURCE_TYPOGRAPHY))
+            or _NON_USD_CURRENCY.search(message.translate(_SOURCE_TYPOGRAPHY))):
         return None
     value = _money_cents(quote)
     if value is None or not _MONEY_BOUND.search(quote.translate(_SOURCE_TYPOGRAPHY)):
@@ -776,7 +783,7 @@ def _remove_money_clarification_explanation(text: str) -> str:
 
 def _recover_money_clarification(data: dict, domain: str, message: str) -> dict:
     """Promote only a safely compilable max-total clarification."""
-    if domain not in {"flight", "hotel"}:
+    if domain not in {"flight", "hotel", "general"}:
         return data
     result = deepcopy(data)
     if "max_total_cents" in result["fields"]:
@@ -909,7 +916,10 @@ def _reply_binding(key: str, value: bool, quote: str, domain: str,
     while the interface question supplies field context.  Arbitrary text and
     assistant wording never enter this binding path.
     """
-    if not source_messages or quote.strip().casefold() not in {"yes", "yes,", "yes please", "no", "no,", "no thanks"}:
+    if not source_messages or quote.strip().casefold() not in {
+        "yes", "yes,", "yes please", "no", "no,", "no thanks",
+        "no preference", "no preference.", "no preference,",
+    }:
         return None
     profile = get_profile(domain)
     field = profile.get("fields", {}).get(key)
@@ -923,7 +933,22 @@ def _reply_binding(key: str, value: bool, quote: str, domain: str,
         reply_to = item.get("reply_to")
         if not isinstance(reply_to, dict) or reply_to.get("field") != key:
             continue
-        if reply_to.get("question") != expected_question:
+        # Legacy/profile questions are trusted only when their exact static
+        # wording is the server's reviewed contract.  Adaptive questions are
+        # generated at runtime, so their stable server binding is validated by
+        # conversation.py; wording alone is never enough.  Preference-style
+        # questions may record a decline, but a short Yes must not silently
+        # become a hard boolean requirement.
+        adaptive = reply_to.get('origin') == 'ai'
+        if adaptive:
+            try:
+                from app.conversation import is_trusted_adaptive_question
+                trusted = is_trusted_adaptive_question(reply_to, domain=domain)
+            except (ImportError, TypeError):
+                trusted = False
+            if not trusted or reply_to.get('answer_semantics') != 'requirement_boolean':
+                return None
+        elif reply_to.get("question") != expected_question:
             continue
         return "yes" if quote.strip().casefold().startswith("yes") else "no"
     return None

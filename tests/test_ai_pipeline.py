@@ -123,13 +123,15 @@ def test_assistant_question_cannot_be_used_as_customer_source(monkeypatch):
   run_pipeline('flight','Customer: under $300\nQuestion: zero connections?\nCustomer: Yes','s',variant='guided',source_text='under $300\nYes')
 
 
-def test_unset_pipeline_uses_selected_audited_default(monkeypatch):
+def test_unset_pipeline_uses_selected_adaptive_default(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.delenv('AI_PIPELINE_VERSION',raising=False)
- monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:1)
+ reservations=[]
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:reservations.append((a,k)) or 2)
  monkeypatch.setattr('app.ai_pipeline.call_json',lambda stage,*a,**k:(proposed(),{'stage':stage,'duration_ms':1,'tokens':{}}))
  r=run_pipeline('flight','nonstop under $300','s')
- assert r['pipeline']=='audited' and len(r['trace'])==2
+ assert r['pipeline']=='adaptive' and len(r['trace'])==2
+ assert reservations==[(('s',2),{'purpose':'interactive'})]
 
 
 def test_audit_repairs_invalid_candidate_and_retains_bounded_flag(monkeypatch):
@@ -435,5 +437,32 @@ def test_trace_records_prompt_version_reasoning_effort_and_output_format(monkeyp
  monkeypatch.setattr('app.ai_pipeline.OpenAI',lambda **kwargs:fake)
  _,trace=call_json('extract','flight','under $300','guided')
  assert trace['prompt_version']
+ assert len(trace['prompt_sha256'])==64
  assert trace['reasoning_effort']=='low'
  assert trace['output_format']=='plain-json'
+
+
+def test_adaptive_payload_includes_default_merchant_context(monkeypatch):
+ from app.ai_pipeline import call_json
+ import json
+ monkeypatch.setenv('AZURE_OPENAI_ENDPOINT','https://synthetic.example')
+ monkeypatch.setenv('AZURE_OPENAI_API_KEY','synthetic-key')
+ monkeypatch.setenv('AZURE_OPENAI_DEPLOYMENT','synthetic-model')
+ captured={}
+ response=SimpleNamespace(
+  usage=None,
+  choices=[SimpleNamespace(
+   finish_reason='stop',
+   message=SimpleNamespace(content='{"fields":{},"sources":{},"unsupported":[],"clarifications":[],"explanation":"Review."}'),
+  )],
+  id='synthetic-response',
+ )
+ def create(**kwargs):
+  captured.update(kwargs)
+  return response
+ fake=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+ monkeypatch.setattr('app.ai_pipeline.OpenAI',lambda **kwargs:fake)
+ call_json('adaptive_plan','flight','Find a flight.','adaptive')
+ payload=json.loads(captured['messages'][1]['content'])
+ assert payload['merchant_context']['provenance']=='synthetic merchant context; informational only'
+ assert payload['merchant_context']['policies']['checkout_requires_customer_approval'] is True

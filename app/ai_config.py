@@ -1,7 +1,7 @@
 """One selected default for interactive inference and live evaluations."""
 import os
-DEFAULT_PIPELINE='audited'
-PROMPT_VERSION='intent-envelope-v4-stateful-choices'
+DEFAULT_PIPELINE='adaptive'
+PROMPT_VERSION='intent-envelope-v5-adaptive-tools'
 REASONING_EFFORTS={'low','medium','high'}
 
 def selected_pipeline():

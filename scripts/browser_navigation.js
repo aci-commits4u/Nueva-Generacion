@@ -18,6 +18,6 @@ async page => {
  await page.goto(intentUrl);await page.getByRole('heading',{name:'Two offers. One approved intent.'}).waitFor();
  const purchase=await delay('/api/purchase');await page.getByRole('button',{name:'Simulate purchase'}).click();await purchase.received;await page.locator('[data-domain="hotel"]').click();await purchase.release();
  if(!(await page.getByRole('heading',{name:'What should your agent know?'}).isVisible())||!(await page.locator('#notice').isHidden()))throw new Error('Stale purchase overwrote hotel or raised error');
- await page.goto(origin+'/');await page.getByRole('heading',{name:'Make sure your AI buys what you meant.'}).waitFor();await page.getByRole('link',{name:'Resume your latest demo'}).click();await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
+ await page.goto(origin+'/');await page.getByRole('heading',{name:'Before your agent buys, make your intent clear.'}).waitFor();await page.getByRole('link',{name:'Resume your latest demo'}).click();await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
  return {result:'PASS',staleIntakeIgnored:true,staleApprovalIgnored:true,stalePurchaseIgnored:true,reviewEditsPreserved:true,qualityEditsPreserved:true,completedPurchaseResumable:true};
 }

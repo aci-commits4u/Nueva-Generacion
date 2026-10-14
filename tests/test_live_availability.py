@@ -13,6 +13,7 @@ def budget(monkeypatch, tmp_path):
     monkeypatch.setenv('AI_DAILY_LIMIT', '10')
     monkeypatch.setenv('AI_SESSION_LIMIT', '8')
     monkeypatch.setenv('AI_EVAL_DAILY_LIMIT', '6')
+    monkeypatch.delenv('AI_EMERGENCY_BUDGET_CENTS', raising=False)
     get_store.cache_clear()
     yield get_store()
     get_store.cache_clear()
@@ -180,6 +181,78 @@ def test_malformed_money_ledger_grants_no_capacity(budget, monkeypatch):
             reserve_ai_calls('corrupt-ledger', 1)
         assert exc.value.code == 'ai_budget_limit'
         assert budget.read('corrupt-ledger').get('ai_calls', 0) == 0
+
+
+def test_emergency_allowance_is_explicit_and_transparent(budget, monkeypatch):
+    """The ordinary cap stays separate; only an explicit $2 extension adds headroom."""
+    from app.store import ai_capacity, reserve_ai_calls
+    monkeypatch.setenv('AI_EMERGENCY_BUDGET_CENTS', '200')
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    monkeypatch.setenv('AI_EVAL_DAILY_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=100, reserved_cents=2000, reserved_usd=20.00))
+
+    capacity = ai_capacity('emergency-traveler')
+    assert capacity['ordinary_allowance_cents'] == 2000
+    assert capacity['emergency_allowance_cents'] == 200
+    assert capacity['ordinary_used_cents'] == 2000
+    assert capacity['emergency_used_cents'] == 0
+    assert capacity['emergency_remaining_cents'] == 200
+    assert capacity['total_allowance_cents'] == 2200
+    assert capacity['monetary_remaining_calls'] == 100
+
+    reserve_ai_calls('emergency-traveler', 2, purpose='evaluation')
+    capacity = ai_capacity('emergency-traveler')
+    assert capacity['reserved_cents'] == 2004
+    assert capacity['ordinary_used_cents'] == 2000
+    assert capacity['emergency_used_cents'] == 4
+    assert capacity['emergency_remaining_cents'] == 196
+
+
+def test_emergency_allowance_is_bounded_and_malformed_values_fail_closed(budget, monkeypatch):
+    from app.store import ai_capacity, reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    monkeypatch.setenv('AI_EVAL_DAILY_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=100, reserved_cents=2000, reserved_usd=20.00))
+
+    monkeypatch.setenv('AI_EMERGENCY_BUDGET_CENTS', '999999')
+    bounded = ai_capacity('bounded-traveler')
+    assert bounded['emergency_allowance_cents'] == 1000
+    assert bounded['total_allowance_cents'] == 3000
+
+    monkeypatch.setenv('AI_EMERGENCY_BUDGET_CENTS', 'not-a-number')
+    closed = ai_capacity('malformed-emergency')
+    assert closed['emergency_allowance_cents'] == 0
+    assert closed['total_allowance_cents'] == 2000
+    assert closed['monetary_remaining_calls'] == 0
+    with pytest.raises(AIServiceError) as exc:
+        reserve_ai_calls('malformed-emergency', 1, purpose='evaluation')
+    assert exc.value.code == 'ai_budget_limit'
+
+
+def test_emergency_cap_never_overspends_under_concurrency(budget, monkeypatch):
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_EMERGENCY_BUDGET_CENTS', '200')
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    monkeypatch.setenv('AI_EVAL_DAILY_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=100, reserved_cents=2000, reserved_usd=20.00))
+
+    def reserve(i):
+        try:
+            reserve_ai_calls(f'emergency-{i}', 1, purpose='evaluation')
+            return True
+        except AIServiceError as exc:
+            assert exc.code == 'ai_budget_limit'
+            return False
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        results = list(pool.map(reserve, range(120)))
+    assert sum(results) == 100
+    ledger = budget.read('global-ai-budget')
+    assert ledger['reserved_cents'] == 2200
+    assert ledger['calls'] == 200
 
 
 @pytest.fixture

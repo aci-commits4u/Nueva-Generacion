@@ -26,7 +26,7 @@ from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
 from app.conversation import (context,user_text,questions,provenance,merge_unsupported,
-                               declined_preferences,merge_revision_state)
+                               declined_preferences,merge_revision_state,apply_adaptive_plan)
 from demo.fixtures import offers_for
 from app.airport_reference import search_airports,airport_reference_metadata
 
@@ -47,13 +47,21 @@ def live_configuration_ready():
     except ValueError: return False
     return bool(endpoint.scheme=='https' and endpoint.netloc and
                 os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT') and
-                selected_pipeline() in {'baseline','guided','audited'})
+                selected_pipeline() in {'baseline','guided','audited','adaptive'})
 
 
 def conversation_view(draft):
     return {**draft,'max_followups':MAX_FOLLOWUPS,
             'profile_current':draft.get('profile_digest')==get_profile(draft['domain'])['digest'],
             'followups_remaining':max(0,MAX_FOLLOWUPS-(len(draft.get('messages',[]))-1))}
+
+
+def attach_plan(draft, extraction):
+    """A plan that cannot retain every condition never becomes a saved draft."""
+    try:
+        return apply_adaptive_plan(draft,extraction)
+    except ValueError as exc:
+        raise HTTPException(422,'This request contains too many conditions to review safely. Your previous draft is preserved; split the request or review the saved draft.') from exc
 
 
 def require_current_profile(draft):
@@ -220,7 +228,7 @@ def health():
 def ai_status(request:Request):
     capacity=ai_capacity(session_id(request))
     pipeline=selected_pipeline()
-    calls=2 if pipeline=='audited' else 1
+    calls=2 if pipeline in {'audited','adaptive'} else 1
     configured=live_configuration_ready()
     reason=None
     if not configured:
@@ -238,6 +246,7 @@ def ai_status(request:Request):
             'pipeline':pipeline,'model':os.getenv('AZURE_OPENAI_DEPLOYMENT'),'interpretation_calls':calls,
             'remaining_calls':capacity['remaining_calls'],'session_remaining_calls':capacity['session_remaining_calls'],
             'remaining_interpretations':min(capacity['remaining_calls'],capacity['session_remaining_calls'])//calls,
+            'budget':{key:capacity[key] for key in ('reserved_cents','ordinary_allowance_cents','emergency_allowance_cents','emergency_used_cents','total_allowance_cents','emergency_enabled')},
             'reset_at':reset_at}
 
 @app.get('/api/session')
@@ -283,6 +292,7 @@ def intake(body:IntentRequest,request:Request):
     d['ai_runs']=[provenance(extraction,1,d['messages'])]
     d['clarifications']=extraction.get('clarifications',[])
     d['questions']=questions(body.domain,d['fields'],d['clarifications'],d['messages'])
+    attach_plan(d,extraction)
     try: d['unsupported']=merge_unsupported(d['unsupported'])
     except ValueError as exc: raise HTTPException(422,str(exc))
     refresh(d)
@@ -334,6 +344,8 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         'time_zone':body.time_zone,
         'trusted_reference_date':latest.get('reference_date'),
         'trusted_clock_context':trusted_clock_context(replay_messages),
+        'adaptive_plan':draft.get('adaptive_plan'),
+        'criteria':draft.get('criteria',[]),
     }
     if draft.get('mode')=='offline':
         extraction=offline_extract(draft['domain'],source_text)
@@ -392,6 +404,7 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
             questions=questions(current['domain'],merged['fields'],merged.get('clarifications'),replay_messages),
         )
         current['clarifications']=merged.get('clarifications',[])
+        attach_plan(current,extraction)
         current.setdefault('ai_runs',[]).append(provenance(extraction,revision,replay_messages))
         current.pop('approved',None)
         current.pop('offer_views',None)
@@ -421,7 +434,10 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
     if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,'Review the captured requirements to continue; this demo allows six AI follow-ups, and every field remains editable in review.')
-    reply_to=(d.get('questions') or questions(d['domain'],d['fields'],d.get('clarifications'),messages) or [None])[0]
+    pending_questions=d.get('questions',[])
+    if not pending_questions and 'adaptive_plan' not in d:
+        pending_questions=questions(d['domain'],d['fields'],d.get('clarifications'),messages)
+    reply_to=(pending_questions or [None])[0]
     turn_timestamp=now()
     time_zone=d.get('time_zone','UTC')
     messages=messages+[{'role':'user','content':body.message,'timestamp':turn_timestamp,
@@ -443,6 +459,8 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
             'time_zone':time_zone,
             'trusted_reference_date':messages[-1]['reference_date'],
             'trusted_clock_context':trusted_clock_context(messages),
+            'adaptive_plan':d.get('adaptive_plan'),
+            'criteria':d.get('criteria',[]),
         }
         try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages,current_draft=current_draft)
         except AIServiceError: raise
@@ -477,6 +495,7 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         for field,quote in declined.items():
             event(state,'preference_declined_in_conversation',{'intent_id':id,'revision':revision,'field':field,'source_quote':quote,'authority':'unapproved; explicit structured review still required'})
         current['questions']=questions(d['domain'],current['fields'],current['clarifications'],messages)
+        attach_plan(current,extraction)
         current.setdefault('ai_runs',[]).append(provenance(extraction,revision,messages))
         current.pop('approved',None);current.pop('offer_views',None)
         refresh(current);event(state,'intent_clarified',{'intent_id':id,'revision':revision,'digest':current['digest']})

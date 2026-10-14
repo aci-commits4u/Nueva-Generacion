@@ -16,6 +16,12 @@ from app.ai_errors import AIServiceError
 # what keeps a change in per-call reservation price from spending the team's
 # ordinary demo budget.
 ORDINARY_AI_BUDGET_CENTS = 2_000
+# The emergency allowance is deliberately opt-in.  It exists for an explicitly
+# authorized validation/deployment window; an exhausted ordinary allowance must
+# never silently unlock it.  Keep the code-side ceiling below the user's
+# authorized emergency maximum so a bad deployment setting cannot expand spend.
+EMERGENCY_AI_BUDGET_ENV = 'AI_EMERGENCY_BUDGET_CENTS'
+MAX_EMERGENCY_AI_BUDGET_CENTS = 1_000
 LEGACY_RESERVATION_CENTS = 10
 MIN_RESERVATION_CENTS = 2
 
@@ -132,6 +138,30 @@ def _reservation_rate_cents():
     return max(MIN_RESERVATION_CENTS, cents)
 
 
+def _emergency_budget_cents():
+    """Return the explicitly enabled emergency allowance in cents.
+
+    The ordinary $20 allowance remains the default and is intentionally
+    independent of this setting.  A malformed value fails closed to zero;
+    positive values above the code-side ceiling are bounded rather than
+    allowing an environment typo to expand the authorized spend.
+    """
+    raw = os.getenv(EMERGENCY_AI_BUDGET_ENV, '0')
+    try:
+        amount = Decimal(str(raw).strip())
+    except (InvalidOperation, ValueError):
+        return 0
+    if (not amount.is_finite() or amount < 0 or
+            amount != amount.to_integral_value()):
+        return 0
+    return min(MAX_EMERGENCY_AI_BUDGET_CENTS, int(amount))
+
+
+def _total_ai_budget_cents():
+    """Return the ordinary allowance plus the explicit emergency allowance."""
+    return ORDINARY_AI_BUDGET_CENTS + _emergency_budget_cents()
+
+
 def _reserved_cents(state):
     """Read the ledger without repricing historical reservations.
 
@@ -172,8 +202,10 @@ def _reserved_cents(state):
             malformed = True
 
     if malformed:
-        # A corrupt amount must never create new spendable headroom.
-        return ORDINARY_AI_BUDGET_CENTS
+        # A corrupt amount must never create new spendable headroom.  Value it
+        # at the complete currently configured cap so an explicitly enabled
+        # emergency allowance cannot turn a corrupt ledger into capacity.
+        return _total_ai_budget_cents()
     if parsed:
         return max(parsed)
 
@@ -215,8 +247,8 @@ def reserve_ai_calls(session, count, purpose='interactive'):
     def reserve(state):
         current_reserved = _reserved_cents(state)
         proposed_reserved = current_reserved + (count * reservation_cents)
-        if proposed_reserved > ORDINARY_AI_BUDGET_CENTS:
-            raise AIServiceError('ai_budget_limit', 'The demo AI spending allowance is reached. Live AI is paused to protect the remaining credit. You can still use the tutorial or explicitly choose offline mode.')
+        if proposed_reserved > _total_ai_budget_cents():
+            raise AIServiceError('ai_budget_limit', 'The configured AI spending allowance is reached. Live AI is paused to protect the remaining credit. You can still use the tutorial or explicitly choose offline mode.')
         if state.get('calls', 0) + count > limits['lifetime']:
             raise AIServiceError('ai_budget_limit', 'The demo AI spending allowance is reached. Live AI is paused to protect the remaining credit. You can still use the tutorial or explicitly choose offline mode.')
         if state.get('day') != day:
@@ -267,7 +299,14 @@ def ai_capacity(session):
     same_day = state.get('day') == time.strftime('%Y-%m-%d', time.gmtime(timestamp))
     daily_remaining = max(0, limits['interactive'] - (state.get('daily_calls', 0) if same_day else 0))
     call_lifetime_remaining = max(0, limits['lifetime'] - state.get('calls', 0))
-    monetary_remaining = max(0, ORDINARY_AI_BUDGET_CENTS - _reserved_cents(state))
+    reserved_cents = _reserved_cents(state)
+    emergency_allowance_cents = _emergency_budget_cents()
+    ordinary_used_cents = min(ORDINARY_AI_BUDGET_CENTS, reserved_cents)
+    emergency_used_cents = max(0, reserved_cents - ORDINARY_AI_BUDGET_CENTS)
+    emergency_used_cents = min(emergency_allowance_cents, emergency_used_cents)
+    ordinary_remaining_cents = max(0, ORDINARY_AI_BUDGET_CENTS - reserved_cents)
+    emergency_remaining_cents = max(0, emergency_allowance_cents - emergency_used_cents)
+    monetary_remaining = ordinary_remaining_cents + emergency_remaining_cents
     money_lifetime_remaining = monetary_remaining // reservation_cents
     # Keep the legacy lifetime key as the effective limit so callers that
     # gate on it cannot advertise capacity that the money ledger rejects.
@@ -280,8 +319,16 @@ def ai_capacity(session):
             'daily_remaining_calls': daily_remaining,
             'call_lifetime_remaining_calls': call_lifetime_remaining,
             'monetary_remaining_calls': money_lifetime_remaining,
-            'reserved_cents': _reserved_cents(state),
+            'reserved_cents': reserved_cents,
             'reservation_cents': reservation_cents,
+            'ordinary_allowance_cents': ORDINARY_AI_BUDGET_CENTS,
+            'emergency_allowance_cents': emergency_allowance_cents,
+            'ordinary_used_cents': ordinary_used_cents,
+            'emergency_used_cents': emergency_used_cents,
+            'ordinary_remaining_cents': ordinary_remaining_cents,
+            'emergency_remaining_cents': emergency_remaining_cents,
+            'total_allowance_cents': ORDINARY_AI_BUDGET_CENTS + emergency_allowance_cents,
+            'emergency_enabled': emergency_allowance_cents > 0,
             'reset_after_seconds': 86400 - int(timestamp) % 86400}
 
 

@@ -64,3 +64,41 @@ Flight profile 1.2.0 now treats departure date as a typed choice: one ISO date, 
 Airport identity uses the pinned `airportsdata` 20260905 catalogue (7,884 records, MIT) for offline lookup and ambiguity detection only. Multi-airport selections and date controls require an explicit customer action; empty controls stay empty and no unrelated sample date is inserted. Long loading status sits outside the compact send control. A stale saved draft can be refreshed only through an explicit action that preserves its full history and starts a new two-stage review.
 
 The bounded stateful experiment remains labeled honestly: six saved live rows scored 1/6 before the compiler fixes, and compiler replays were recorded without new inference. Low versus medium reasoning used only three cases per setting and is not a model ranking. The demo continues to use synthetic $295/$280 offers; an approved under-$200 limit correctly holds them. Full-round-trip support, arrival-time enforcement, final hosted UAT, and any claim about actual remaining student credit remain outside this decision record. Detailed behavior and source links are in `docs/18-flexible-conversation.md`.
+
+## October 14 adaptive conversation direction
+
+The conversation view now treats the model response as an adaptive plan rather
+than a field questionnaire. A plan may ask the customer, inspect merchant
+context, request read-only options, review an offer, or propose readiness for
+customer review. The UI renders the model's question, its reason, source words,
+context tools, and current criteria as one compact evidence surface. A question
+with multiple valid answers is a staged selection that requires an explicit
+submit; it never silently submits the first choice. Legacy typed airport and
+date controls remain because those are identity and date encodings, not a
+replacement for adaptive reasoning.
+
+The product overview and walkthrough now pitch the loop as “Captures what you
+mean. Checks what you buy.” They show clarify → review → signed offer checks,
+with synthetic commerce and the lack of Mastercard certification stated in the
+copy. The visual direction stays warm-white/forest/lime Swiss product UI, but
+the live conversation uses a quieter activity strip and source-linked criteria
+instead of a large technical trace or decorative assistant activity.
+
+## October 14 adaptive implementation and budget decision
+
+The shared conversation loop now uses a two-stage adaptive Foundry planner.
+The model may ask a source-grounded customer question, retrieve policy,
+inspect signed synthetic offers, propose readiness for review, or fail closed
+to review. The server allowlists and bounds read-only tool calls; customer
+approval and checkout remain deterministic. The implementation contract and
+current evidence limits are in [docs/19](docs/19-adaptive-intent-engine.md).
+
+The ordinary reservation ledger is exhausted at 256 calls and $20.00 reserved.
+An explicitly enabled $2.00 emergency allowance is available for the next
+local/production deployment only, using the same historical ledger and the
+existing cap, with no reset, repricing, or automatic unlock. The remaining
+$8.00 of the previously authorized emergency reserve stays disabled, and the
+at-least-$70 student-credit target is preserved; actual Azure billing balance
+is unknown. New stages remain bounded at $0.02 each, 2,600 tokens, and two
+stages per interpretation. No additional deployment or live success is
+implied by the allowance.

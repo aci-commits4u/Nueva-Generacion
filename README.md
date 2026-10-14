@@ -40,8 +40,9 @@ Open http://127.0.0.1:8000. Configure Azure variables for live AI. For a disconn
 - `profiles/`: versioned flights, hotels, and limited general-mode schemas.
 - `app/vi_adapter.py`: pinned VI SDK L1/L2/split L3 issuance and verification; independent ES256 merchant verification; explicit dispatch of every constraint.
 - `app/main.py`: server-owned review, approval, exact exceptions, reauthorization, idempotent purchase, evidence, and session recovery.
-- `app/ai_pipeline.py`: measured extraction + independent coverage audit on Foundry gpt-oss-120b, with strict grounded output validation.
-- `app/conversation.py`: revision-bound conversation and ranked profile questions.
+- `app/ai_pipeline.py`: two-stage adaptive planning on Foundry gpt-oss-120b, with strict grounded output validation and one bounded read-only tool action.
+- `app/adaptive_intent.py`: shared action, criterion, question, and merchant-context contract across domains.
+- `app/conversation.py`: revision-bound state, exact question binding, customer corrections, and approval preparation.
 - `app/quality.py`: authenticated, replay-safe daily live canary and public synthetic quality reports.
 - `app/foundry_client.py`: original baseline and on-demand explanation, without purchase authority.
 - `app/store.py`: SQLite locally; Azure Table conditional writes on Vercel. Function memory is not authoritative.
@@ -54,12 +55,12 @@ Hosted deployments require stable environment signing keys and durable Azure sto
 
 See [implementation status](docs/implementation-status.md), [design decisions](DESIGN.md), and the [research index](docs/00-index.md).
 
-The conversational revision has 76 passing regression tests, measured three pipelines on 12 development cases, and passed 6/6 untouched holdout cases with the selected audited pipeline. It completed live desktop/mobile Foundry flows, including the actual purchase refusal, exact consent and signed evidence download. Follow [the two-minute demo script](docs/12-demo-script.md); [running product and operations](docs/11-running-product.md) records the real endpoints and budget controls.
+The current live AI path is adaptive: it can ask a model-generated question, retrieve read-only merchant context, inspect synthetic offers, or stop for customer review. The model remains advisory; approval and checkout are deterministic. The first three fresh adaptive live cases strict-passed 1/3 before the current fixes, and that raw artifact remains unchanged. See [the adaptive engine contract](docs/19-adaptive-intent-engine.md) and [running product and operations](docs/11-running-product.md) for the evidence boundary and controls.
 
 This is a showable student prototype. It does not perform real travel search, take payment, file chargebacks, establish legal liability, or guarantee perfect intent extraction. It implements the supported profile fields; unimplemented requirements stay held.
 
 The upstream draft checker does not natively support our custom constraint. We verify the original chain, evaluate supported native constraints strictly, dispatch our recognized custom constraint to the deterministic engine, and hold any unimplemented constraint. We do not claim stock SDK or payment-network compatibility for the extension.
 
-See [AI evaluation and conversation](docs/15-ai-evaluation-and-conversation.md) for experimental results, known failures, the daily canary, and budget limits. The Quality view shows real recorded results.
+See [AI evaluation and conversation](docs/15-ai-evaluation-and-conversation.md) for experimental results, known failures, the daily canary, and budget limits. The Quality view shows recorded results; none of these results guarantee complete intent understanding.
 
 The product now starts with an overview and a **Show me how** walkthrough. Read [the tutorial guide](docs/16-product-walkthrough.md) for the five stages and working demo controls. The tutorial makes no paid model calls; **Try the demo** opens the actual Foundry workflow.

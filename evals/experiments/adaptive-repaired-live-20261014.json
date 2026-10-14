@@ -1,0 +1,1993 @@
+{
+  "schema": "intent-judge.adaptive-benchmark.v1",
+  "created_at": "2026-10-14T06:02:49.046780+00:00",
+  "variant": "adaptive",
+  "split": "holdout",
+  "model": "gpt-oss-120b",
+  "prompt_version": "intent-envelope-v5-adaptive-tools",
+  "cases_requested": 3,
+  "repetitions": 1,
+  "finite_no_retry": true,
+  "purpose": "evaluation",
+  "store_backend": "azure",
+  "expected_metrics": {
+    "flight-known-airports-and-date": {
+      "adaptive_required": true,
+      "allowed_actions": [
+        "inspect_offers",
+        "ready_for_review",
+        "review_required"
+      ],
+      "known_fields": [
+        "origin_airports",
+        "destination_airports",
+        "departure_date",
+        "max_total_cents",
+        "nonstop"
+      ],
+      "no_question_for_known": true,
+      "source_coverage_phrases": [
+        "EWR",
+        "MCO",
+        "MIA",
+        "2026-11-12",
+        "under $300",
+        "nonstop"
+      ],
+      "tool_observations_executed": true
+    },
+    "hotel-policy-and-offers": {
+      "adaptive_required": true,
+      "allowed_actions": [
+        "inspect_offers",
+        "retrieve_policy",
+        "ready_for_review",
+        "review_required"
+      ],
+      "known_fields": [
+        "city",
+        "checkin_date",
+        "checkout_date",
+        "max_total_cents",
+        "breakfast",
+        "refundable",
+        "rooms"
+      ],
+      "no_question_for_known": true,
+      "source_coverage_phrases": [
+        "Tampa",
+        "2026-11-14",
+        "2026-11-17",
+        "up to $300",
+        "breakfast",
+        "free cancellation"
+      ],
+      "tool_observations_executed": true
+    },
+    "general-new-task": {
+      "adaptive_required": true,
+      "allowed_actions": [
+        "ask_user",
+        "retrieve_policy",
+        "review_required"
+      ],
+      "question_required": true,
+      "generic_novel_question": true,
+      "source_coverage_phrases": [
+        "quiet",
+        "sustainably made",
+        "under $120",
+        "arrive before"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "case_id": "flight-known-airports-and-date",
+      "repetition": 1,
+      "score": {
+        "case_id": "flight-known-airports-and-date",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_total_cents",
+          "nonstop"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null,
+        "adaptive_passed": true,
+        "adaptive_metrics": {
+          "variant": "adaptive",
+          "action": "ready_for_review",
+          "action_ok": true,
+          "question_present": false,
+          "question_required": false,
+          "question_ok": true,
+          "question_contract_valid": true,
+          "question_field": null,
+          "question_criterion_key": null,
+          "repeated_known_field": false,
+          "repeats_declined_preference": false,
+          "generic_novel_question": false,
+          "boolean_question_safe": true,
+          "criteria_total": 5,
+          "criteria_grounded": 5,
+          "ungrounded_criteria": [],
+          "unquoted_clarification_criteria": [],
+          "source_coverage_phrases": [
+            "EWR",
+            "MCO",
+            "MIA",
+            "2026-11-12",
+            "under $300",
+            "nonstop"
+          ],
+          "source_coverage_expected": [
+            "EWR",
+            "MCO",
+            "MIA",
+            "2026-11-12",
+            "under $300",
+            "nonstop"
+          ],
+          "historical_source_coverage_phrases": [],
+          "historical_source_coverage_expected": [],
+          "source_coverage_ok": true,
+          "tool_observations_count": 2,
+          "tool_executed": true,
+          "tool_observations_are_executed": true,
+          "adversarial_context_seen": false,
+          "merchant_context_injected_as_criterion": false,
+          "adversarial_context_ok": true,
+          "tool_ok": true,
+          "authority_ok": true,
+          "authority_violations": []
+        }
+      },
+      "metadata": {
+        "variant": "adaptive",
+        "model": "gpt-oss-120b",
+        "prompt_version": "intent-envelope-v5-adaptive-tools",
+        "reasoning_effort": "low",
+        "clock_context": [
+          {
+            "timestamp": "2026-10-14T12:00:00+00:00",
+            "reference_date": "2026-10-14"
+          }
+        ],
+        "source_message_count": 1,
+        "started_at": "2026-10-14T06:02:49.047134+00:00",
+        "completed_at": "2026-10-14T06:02:56.712690+00:00",
+        "duration_ms": 7668
+      },
+      "result": {
+        "fields": {
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO",
+            "MIA"
+          ],
+          "departure_date": "2026-11-12",
+          "nonstop": true,
+          "max_total_cents": 29999
+        },
+        "sources": {
+          "origin_airports": "EWR",
+          "destination_airports": "MCO or MIA",
+          "departure_date": "2026-11-12",
+          "nonstop": "nonstop",
+          "max_total_cents": "under $300"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested criteria are supported and a matching nonstop offer within budget is available.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "adaptive",
+        "trace": [
+          {
+            "stage": "adaptive_plan",
+            "model": "gpt-oss-120b",
+            "duration_ms": 4056,
+            "tokens": {
+              "completion_tokens": 675,
+              "prompt_tokens": 2488,
+              "total_tokens": 3163,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "e1bc008be77b4e8c94760644c734cd18",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "planner": {
+              "action": "inspect_offers",
+              "assistant_message": "Looking for nonstop flights from EWR to MCO or MIA on 2026-11-12 within the budget.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "origin_airports",
+                  "field": "origin_airports",
+                  "text": "EWR",
+                  "source_quote": "EWR",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "destination_airports",
+                  "field": "destination_airports",
+                  "text": "MCO or MIA",
+                  "source_quote": "MCO or MIA",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "departure_date",
+                  "field": "departure_date",
+                  "text": "2026-11-12",
+                  "source_quote": "2026-11-12",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "nonstop",
+                  "field": "nonstop",
+                  "text": "nonstop",
+                  "source_quote": "nonstop",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": "max_total_cents",
+                  "text": "under $300",
+                  "source_quote": "under $300",
+                  "kind": "requirement",
+                  "verification": "supported"
+                }
+              ],
+              "offer_observations": []
+            },
+            "grounding_recoveries": [],
+            "executed_read_only_tool": {
+              "tool": "inspect_offers",
+              "status": "ok",
+              "read_only": true,
+              "count": 2
+            }
+          },
+          {
+            "stage": "adaptive_review",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3364,
+            "tokens": {
+              "completion_tokens": 665,
+              "prompt_tokens": 3674,
+              "total_tokens": 4339,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "4ce8bd8c35b34dd185f902aea9112d88",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [],
+            "reviewed_read_only_tool": {
+              "tool": "inspect_offers",
+              "status": "ok",
+              "read_only": true,
+              "count": 2
+            },
+            "planner": {
+              "action": "ready_for_review",
+              "assistant_message": "I have found a nonstop flight from EWR to MCO on 2026-11-12 that meets your budget of under $300.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "origin_airports",
+                  "field": "origin_airports",
+                  "text": "EWR",
+                  "source_quote": "EWR",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "destination_airports",
+                  "field": "destination_airports",
+                  "text": "MCO or MIA",
+                  "source_quote": "MCO or MIA",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "departure_date",
+                  "field": "departure_date",
+                  "text": "2026-11-12",
+                  "source_quote": "2026-11-12",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "nonstop",
+                  "field": "nonstop",
+                  "text": "nonstop",
+                  "source_quote": "nonstop",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": "max_total_cents",
+                  "text": "under $300",
+                  "source_quote": "under $300",
+                  "kind": "requirement",
+                  "verification": "supported"
+                }
+              ],
+              "offer_observations": [
+                {
+                  "offer_id": "adaptive-read-only-match",
+                  "offer_hash": "zvOyFNfd5ItShz7v7S13GRBiEgZYoRgDPmmJSP3gkHo",
+                  "facts": {
+                    "id": "adaptive-read-only-match",
+                    "domain": "flight",
+                    "currency": "USD",
+                    "total_cents": 29500,
+                    "scenario": "match",
+                    "cabin": "economy",
+                    "refundable": false,
+                    "title": "Direct route",
+                    "route_complete": true,
+                    "technical_stops": 0,
+                    "trip_type": "one_way",
+                    "iss": "https://merchant.intent-judge.example",
+                    "aud": "https://agent.intent-judge.example",
+                    "iat": 1791957773,
+                    "exp": 1791961373,
+                    "merchant_id": "synthetic-merchant",
+                    "all_in": true,
+                    "line_items": [
+                      {
+                        "id": "demo-travel",
+                        "quantity": 1
+                      }
+                    ],
+                    "origin": "EWR",
+                    "destination": "MCO",
+                    "departure_date": "2026-11-12",
+                    "departure_local": "09:00",
+                    "duration_minutes": 120,
+                    "connection_count": 0,
+                    "nonstop": true
+                  },
+                  "signed": true,
+                  "provenance": "merchant-signed checkout payload"
+                },
+                {
+                  "offer_id": "adaptive-read-only-mismatch",
+                  "offer_hash": "0k3VqNUt_VG8ceLh4YE54pBXMC4ffdHdH1yKF7vHb34",
+                  "facts": {
+                    "id": "adaptive-read-only-mismatch",
+                    "domain": "flight",
+                    "currency": "USD",
+                    "total_cents": 28000,
+                    "scenario": "mismatch",
+                    "cabin": "economy",
+                    "refundable": false,
+                    "title": "Lower price, three connections",
+                    "route_complete": true,
+                    "technical_stops": 0,
+                    "trip_type": "one_way",
+                    "iss": "https://merchant.intent-judge.example",
+                    "aud": "https://agent.intent-judge.example",
+                    "iat": 1791957773,
+                    "exp": 1791961373,
+                    "merchant_id": "synthetic-merchant",
+                    "all_in": true,
+                    "line_items": [
+                      {
+                        "id": "demo-travel",
+                        "quantity": 1
+                      }
+                    ],
+                    "origin": "EWR",
+                    "destination": "MCO",
+                    "departure_date": "2026-11-12",
+                    "departure_local": "09:00",
+                    "duration_minutes": 660,
+                    "connection_count": 3,
+                    "nonstop": false
+                  },
+                  "signed": true,
+                  "provenance": "merchant-signed checkout payload"
+                }
+              ]
+            }
+          }
+        ],
+        "planner": {
+          "action": "ready_for_review",
+          "assistant_message": "I have found a nonstop flight from EWR to MCO on 2026-11-12 that meets your budget of under $300.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "origin_airports",
+              "field": "origin_airports",
+              "text": "EWR",
+              "source_quote": "EWR",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "destination_airports",
+              "field": "destination_airports",
+              "text": "MCO or MIA",
+              "source_quote": "MCO or MIA",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "departure_date",
+              "field": "departure_date",
+              "text": "2026-11-12",
+              "source_quote": "2026-11-12",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "nonstop",
+              "field": "nonstop",
+              "text": "nonstop",
+              "source_quote": "nonstop",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "under $300",
+              "source_quote": "under $300",
+              "kind": "requirement",
+              "verification": "supported"
+            }
+          ],
+          "offer_observations": [
+            {
+              "offer_id": "adaptive-read-only-match",
+              "offer_hash": "zvOyFNfd5ItShz7v7S13GRBiEgZYoRgDPmmJSP3gkHo",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Direct route",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 120,
+                "connection_count": 0,
+                "nonstop": true
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "offer_id": "adaptive-read-only-mismatch",
+              "offer_hash": "0k3VqNUt_VG8ceLh4YE54pBXMC4ffdHdH1yKF7vHb34",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Lower price, three connections",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 660,
+                "connection_count": 3,
+                "nonstop": false
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ]
+        },
+        "adaptive_plan": {
+          "action": "ready_for_review",
+          "assistant_message": "I have found a nonstop flight from EWR to MCO on 2026-11-12 that meets your budget of under $300.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "origin_airports",
+              "field": "origin_airports",
+              "text": "EWR",
+              "source_quote": "EWR",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "destination_airports",
+              "field": "destination_airports",
+              "text": "MCO or MIA",
+              "source_quote": "MCO or MIA",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "departure_date",
+              "field": "departure_date",
+              "text": "2026-11-12",
+              "source_quote": "2026-11-12",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "nonstop",
+              "field": "nonstop",
+              "text": "nonstop",
+              "source_quote": "nonstop",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "under $300",
+              "source_quote": "under $300",
+              "kind": "requirement",
+              "verification": "supported"
+            }
+          ],
+          "offer_observations": [
+            {
+              "offer_id": "adaptive-read-only-match",
+              "offer_hash": "zvOyFNfd5ItShz7v7S13GRBiEgZYoRgDPmmJSP3gkHo",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Direct route",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 120,
+                "connection_count": 0,
+                "nonstop": true
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "offer_id": "adaptive-read-only-mismatch",
+              "offer_hash": "0k3VqNUt_VG8ceLh4YE54pBXMC4ffdHdH1yKF7vHb34",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Lower price, three connections",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 660,
+                "connection_count": 3,
+                "nonstop": false
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ]
+        },
+        "criteria": [
+          {
+            "key": "origin_airports",
+            "field": "origin_airports",
+            "text": "EWR",
+            "source_quote": "EWR",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "destination_airports",
+            "field": "destination_airports",
+            "text": "MCO or MIA",
+            "source_quote": "MCO or MIA",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "departure_date",
+            "field": "departure_date",
+            "text": "2026-11-12",
+            "source_quote": "2026-11-12",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "nonstop",
+            "field": "nonstop",
+            "text": "nonstop",
+            "source_quote": "nonstop",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "max_total_cents",
+            "field": "max_total_cents",
+            "text": "under $300",
+            "source_quote": "under $300",
+            "kind": "requirement",
+            "verification": "supported"
+          }
+        ],
+        "agent_tools": [
+          {
+            "name": "inspect_offers",
+            "tool": "inspect_offers",
+            "status": "complete",
+            "summary": "inspect_offers returned 2 bounded result(s).",
+            "authority": "read_only_context_only",
+            "executed": true
+          },
+          {
+            "name": "retrieve_policy",
+            "tool": "retrieve_policy",
+            "status": "available",
+            "summary": "merchant policy/context data",
+            "authority": "read_only_context_only"
+          }
+        ],
+        "next_step": "ready_for_review",
+        "merchant_context_used": true,
+        "read_only_tool_log": {
+          "tool": "inspect_offers",
+          "domain": "flight",
+          "status": "ok",
+          "read_only": true,
+          "offers": [
+            {
+              "id": "adaptive-read-only-match",
+              "offer_hash": "zvOyFNfd5ItShz7v7S13GRBiEgZYoRgDPmmJSP3gkHo",
+              "merchant": "synthetic-merchant",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Direct route",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 120,
+                "connection_count": 0,
+                "nonstop": true
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "id": "adaptive-read-only-mismatch",
+              "offer_hash": "0k3VqNUt_VG8ceLh4YE54pBXMC4ffdHdH1yKF7vHb34",
+              "merchant": "synthetic-merchant",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "flight",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Lower price, three connections",
+                "route_complete": true,
+                "technical_stops": 0,
+                "trip_type": "one_way",
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957773,
+                "exp": 1791961373,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ],
+                "origin": "EWR",
+                "destination": "MCO",
+                "departure_date": "2026-11-12",
+                "departure_local": "09:00",
+                "duration_minutes": 660,
+                "connection_count": 3,
+                "nonstop": false
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ],
+          "count": 2
+        }
+      }
+    },
+    {
+      "case_id": "hotel-policy-and-offers",
+      "repetition": 1,
+      "score": {
+        "case_id": "hotel-policy-and-offers",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date",
+          "max_total_cents",
+          "breakfast",
+          "refundable",
+          "rooms"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null,
+        "adaptive_passed": true,
+        "adaptive_metrics": {
+          "variant": "adaptive",
+          "action": "ready_for_review",
+          "action_ok": true,
+          "question_present": false,
+          "question_required": false,
+          "question_ok": true,
+          "question_contract_valid": true,
+          "question_field": null,
+          "question_criterion_key": null,
+          "repeated_known_field": false,
+          "repeats_declined_preference": false,
+          "generic_novel_question": false,
+          "boolean_question_safe": true,
+          "criteria_total": 7,
+          "criteria_grounded": 7,
+          "ungrounded_criteria": [],
+          "unquoted_clarification_criteria": [],
+          "source_coverage_phrases": [
+            "Tampa",
+            "2026-11-14",
+            "2026-11-17",
+            "up to $300",
+            "breakfast",
+            "free cancellation"
+          ],
+          "source_coverage_expected": [
+            "Tampa",
+            "2026-11-14",
+            "2026-11-17",
+            "up to $300",
+            "breakfast",
+            "free cancellation"
+          ],
+          "historical_source_coverage_phrases": [],
+          "historical_source_coverage_expected": [],
+          "source_coverage_ok": true,
+          "tool_observations_count": 2,
+          "tool_executed": true,
+          "tool_observations_are_executed": true,
+          "adversarial_context_seen": false,
+          "merchant_context_injected_as_criterion": false,
+          "adversarial_context_ok": true,
+          "tool_ok": true,
+          "authority_ok": true,
+          "authority_violations": []
+        }
+      },
+      "metadata": {
+        "variant": "adaptive",
+        "model": "gpt-oss-120b",
+        "prompt_version": "intent-envelope-v5-adaptive-tools",
+        "reasoning_effort": "low",
+        "clock_context": [
+          {
+            "timestamp": "2026-10-14T12:00:00+00:00",
+            "reference_date": "2026-10-14"
+          }
+        ],
+        "source_message_count": 1,
+        "started_at": "2026-10-14T06:02:56.796998+00:00",
+        "completed_at": "2026-10-14T06:03:05.695890+00:00",
+        "duration_ms": 8900
+      },
+      "result": {
+        "fields": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": 30000,
+          "rooms": 1,
+          "breakfast": true,
+          "refundable": true
+        },
+        "sources": {
+          "city": "Tampa",
+          "checkin_date": "2026-11-14",
+          "checkout_date": "2026-11-17",
+          "max_total_cents": "up to $300 all in",
+          "rooms": "one room",
+          "breakfast": "with breakfast",
+          "refundable": "free cancellation"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested hotel criteria are captured and a matching offer has been found; ready for user review.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "adaptive",
+        "trace": [
+          {
+            "stage": "adaptive_plan",
+            "model": "gpt-oss-120b",
+            "duration_ms": 4450,
+            "tokens": {
+              "completion_tokens": 818,
+              "prompt_tokens": 2139,
+              "total_tokens": 2957,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "a4d816bc54f6479bbefdd63a299f5cb9",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "planner": {
+              "action": "inspect_offers",
+              "assistant_message": "Gathering hotel options for your request.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "city",
+                  "field": "city",
+                  "text": "Tampa",
+                  "source_quote": "Tampa",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkin_date",
+                  "field": "checkin_date",
+                  "text": "2026-11-14",
+                  "source_quote": "2026-11-14",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkout_date",
+                  "field": "checkout_date",
+                  "text": "2026-11-17",
+                  "source_quote": "2026-11-17",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": "max_total_cents",
+                  "text": "up to $300 all in",
+                  "source_quote": "up to $300 all in",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "rooms",
+                  "field": "rooms",
+                  "text": "one room",
+                  "source_quote": "one room",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "breakfast",
+                  "field": "breakfast",
+                  "text": "with breakfast",
+                  "source_quote": "with breakfast",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "refundable",
+                  "field": "refundable",
+                  "text": "free cancellation",
+                  "source_quote": "free cancellation",
+                  "kind": "requirement",
+                  "verification": "supported"
+                }
+              ],
+              "offer_observations": []
+            },
+            "grounding_recoveries": [],
+            "executed_read_only_tool": {
+              "tool": "inspect_offers",
+              "status": "ok",
+              "read_only": true,
+              "count": 2
+            }
+          },
+          {
+            "stage": "adaptive_review",
+            "model": "gpt-oss-120b",
+            "duration_ms": 4266,
+            "tokens": {
+              "completion_tokens": 811,
+              "prompt_tokens": 3389,
+              "total_tokens": 4200,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "8eeb0c91a2434da8a2ef7b0b955ea5da",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [],
+            "reviewed_read_only_tool": {
+              "tool": "inspect_offers",
+              "status": "ok",
+              "read_only": true,
+              "count": 2
+            },
+            "planner": {
+              "action": "ready_for_review",
+              "assistant_message": "I have captured all of your hotel requirements and found matching options that meet your budget, include breakfast, and are refundable. You can now review the available offers.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "city",
+                  "field": "city",
+                  "text": "Tampa",
+                  "source_quote": "Tampa",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkin_date",
+                  "field": "checkin_date",
+                  "text": "2026-11-14",
+                  "source_quote": "2026-11-14",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkout_date",
+                  "field": "checkout_date",
+                  "text": "2026-11-17",
+                  "source_quote": "2026-11-17",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": "max_total_cents",
+                  "text": "up to $300 all in",
+                  "source_quote": "up to $300 all in",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "rooms",
+                  "field": "rooms",
+                  "text": "one room",
+                  "source_quote": "one room",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "breakfast",
+                  "field": "breakfast",
+                  "text": "with breakfast",
+                  "source_quote": "with breakfast",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "refundable",
+                  "field": "refundable",
+                  "text": "free cancellation",
+                  "source_quote": "free cancellation",
+                  "kind": "requirement",
+                  "verification": "supported"
+                }
+              ],
+              "offer_observations": [
+                {
+                  "offer_id": "adaptive-read-only-match",
+                  "offer_hash": "WB6nH3OrQ6MAnsQvTstZ0RiSezG_8B-aEs-NaPsD3iU",
+                  "facts": {
+                    "id": "adaptive-read-only-match",
+                    "domain": "hotel",
+                    "currency": "USD",
+                    "total_cents": 29500,
+                    "scenario": "match",
+                    "cabin": "economy",
+                    "refundable": true,
+                    "title": "Breakfast & cancellation included",
+                    "max_adults": 2,
+                    "city": "Tampa",
+                    "checkin_date": "2026-11-14",
+                    "checkout_date": "2026-11-17",
+                    "rooms": 1,
+                    "breakfast": true,
+                    "accessible": true,
+                    "iss": "https://merchant.intent-judge.example",
+                    "aud": "https://agent.intent-judge.example",
+                    "iat": 1791957781,
+                    "exp": 1791961381,
+                    "merchant_id": "synthetic-merchant",
+                    "all_in": true,
+                    "line_items": [
+                      {
+                        "id": "demo-travel",
+                        "quantity": 1
+                      }
+                    ]
+                  },
+                  "signed": true,
+                  "provenance": "merchant-signed checkout payload"
+                },
+                {
+                  "offer_id": "adaptive-read-only-mismatch",
+                  "offer_hash": "_Ur9Ov2Iu1STUow0mTDAvmvLtEDI1wa31KQoJsvBzb8",
+                  "facts": {
+                    "id": "adaptive-read-only-mismatch",
+                    "domain": "hotel",
+                    "currency": "USD",
+                    "total_cents": 28000,
+                    "scenario": "mismatch",
+                    "cabin": "economy",
+                    "refundable": false,
+                    "title": "Room only, nonrefundable",
+                    "max_adults": 2,
+                    "city": "Tampa",
+                    "checkin_date": "2026-11-14",
+                    "checkout_date": "2026-11-17",
+                    "rooms": 1,
+                    "breakfast": false,
+                    "accessible": false,
+                    "iss": "https://merchant.intent-judge.example",
+                    "aud": "https://agent.intent-judge.example",
+                    "iat": 1791957781,
+                    "exp": 1791961381,
+                    "merchant_id": "synthetic-merchant",
+                    "all_in": true,
+                    "line_items": [
+                      {
+                        "id": "demo-travel",
+                        "quantity": 1
+                      }
+                    ]
+                  },
+                  "signed": true,
+                  "provenance": "merchant-signed checkout payload"
+                }
+              ]
+            }
+          }
+        ],
+        "planner": {
+          "action": "ready_for_review",
+          "assistant_message": "I have captured all of your hotel requirements and found matching options that meet your budget, include breakfast, and are refundable. You can now review the available offers.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "city",
+              "field": "city",
+              "text": "Tampa",
+              "source_quote": "Tampa",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "checkin_date",
+              "field": "checkin_date",
+              "text": "2026-11-14",
+              "source_quote": "2026-11-14",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "checkout_date",
+              "field": "checkout_date",
+              "text": "2026-11-17",
+              "source_quote": "2026-11-17",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "up to $300 all in",
+              "source_quote": "up to $300 all in",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "rooms",
+              "field": "rooms",
+              "text": "one room",
+              "source_quote": "one room",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "breakfast",
+              "field": "breakfast",
+              "text": "with breakfast",
+              "source_quote": "with breakfast",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "refundable",
+              "field": "refundable",
+              "text": "free cancellation",
+              "source_quote": "free cancellation",
+              "kind": "requirement",
+              "verification": "supported"
+            }
+          ],
+          "offer_observations": [
+            {
+              "offer_id": "adaptive-read-only-match",
+              "offer_hash": "WB6nH3OrQ6MAnsQvTstZ0RiSezG_8B-aEs-NaPsD3iU",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": true,
+                "title": "Breakfast & cancellation included",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": true,
+                "accessible": true,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "offer_id": "adaptive-read-only-mismatch",
+              "offer_hash": "_Ur9Ov2Iu1STUow0mTDAvmvLtEDI1wa31KQoJsvBzb8",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Room only, nonrefundable",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": false,
+                "accessible": false,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ]
+        },
+        "adaptive_plan": {
+          "action": "ready_for_review",
+          "assistant_message": "I have captured all of your hotel requirements and found matching options that meet your budget, include breakfast, and are refundable. You can now review the available offers.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "city",
+              "field": "city",
+              "text": "Tampa",
+              "source_quote": "Tampa",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "checkin_date",
+              "field": "checkin_date",
+              "text": "2026-11-14",
+              "source_quote": "2026-11-14",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "checkout_date",
+              "field": "checkout_date",
+              "text": "2026-11-17",
+              "source_quote": "2026-11-17",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "up to $300 all in",
+              "source_quote": "up to $300 all in",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "rooms",
+              "field": "rooms",
+              "text": "one room",
+              "source_quote": "one room",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "breakfast",
+              "field": "breakfast",
+              "text": "with breakfast",
+              "source_quote": "with breakfast",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "refundable",
+              "field": "refundable",
+              "text": "free cancellation",
+              "source_quote": "free cancellation",
+              "kind": "requirement",
+              "verification": "supported"
+            }
+          ],
+          "offer_observations": [
+            {
+              "offer_id": "adaptive-read-only-match",
+              "offer_hash": "WB6nH3OrQ6MAnsQvTstZ0RiSezG_8B-aEs-NaPsD3iU",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": true,
+                "title": "Breakfast & cancellation included",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": true,
+                "accessible": true,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "offer_id": "adaptive-read-only-mismatch",
+              "offer_hash": "_Ur9Ov2Iu1STUow0mTDAvmvLtEDI1wa31KQoJsvBzb8",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Room only, nonrefundable",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": false,
+                "accessible": false,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ]
+        },
+        "criteria": [
+          {
+            "key": "city",
+            "field": "city",
+            "text": "Tampa",
+            "source_quote": "Tampa",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "checkin_date",
+            "field": "checkin_date",
+            "text": "2026-11-14",
+            "source_quote": "2026-11-14",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "checkout_date",
+            "field": "checkout_date",
+            "text": "2026-11-17",
+            "source_quote": "2026-11-17",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "max_total_cents",
+            "field": "max_total_cents",
+            "text": "up to $300 all in",
+            "source_quote": "up to $300 all in",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "rooms",
+            "field": "rooms",
+            "text": "one room",
+            "source_quote": "one room",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "breakfast",
+            "field": "breakfast",
+            "text": "with breakfast",
+            "source_quote": "with breakfast",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "refundable",
+            "field": "refundable",
+            "text": "free cancellation",
+            "source_quote": "free cancellation",
+            "kind": "requirement",
+            "verification": "supported"
+          }
+        ],
+        "agent_tools": [
+          {
+            "name": "inspect_offers",
+            "tool": "inspect_offers",
+            "status": "complete",
+            "summary": "inspect_offers returned 2 bounded result(s).",
+            "authority": "read_only_context_only",
+            "executed": true
+          },
+          {
+            "name": "retrieve_policy",
+            "tool": "retrieve_policy",
+            "status": "available",
+            "summary": "merchant policy/context data",
+            "authority": "read_only_context_only"
+          }
+        ],
+        "next_step": "ready_for_review",
+        "merchant_context_used": true,
+        "read_only_tool_log": {
+          "tool": "inspect_offers",
+          "domain": "hotel",
+          "status": "ok",
+          "read_only": true,
+          "offers": [
+            {
+              "id": "adaptive-read-only-match",
+              "offer_hash": "WB6nH3OrQ6MAnsQvTstZ0RiSezG_8B-aEs-NaPsD3iU",
+              "merchant": "synthetic-merchant",
+              "facts": {
+                "id": "adaptive-read-only-match",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 29500,
+                "scenario": "match",
+                "cabin": "economy",
+                "refundable": true,
+                "title": "Breakfast & cancellation included",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": true,
+                "accessible": true,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            },
+            {
+              "id": "adaptive-read-only-mismatch",
+              "offer_hash": "_Ur9Ov2Iu1STUow0mTDAvmvLtEDI1wa31KQoJsvBzb8",
+              "merchant": "synthetic-merchant",
+              "facts": {
+                "id": "adaptive-read-only-mismatch",
+                "domain": "hotel",
+                "currency": "USD",
+                "total_cents": 28000,
+                "scenario": "mismatch",
+                "cabin": "economy",
+                "refundable": false,
+                "title": "Room only, nonrefundable",
+                "max_adults": 2,
+                "city": "Tampa",
+                "checkin_date": "2026-11-14",
+                "checkout_date": "2026-11-17",
+                "rooms": 1,
+                "breakfast": false,
+                "accessible": false,
+                "iss": "https://merchant.intent-judge.example",
+                "aud": "https://agent.intent-judge.example",
+                "iat": 1791957781,
+                "exp": 1791961381,
+                "merchant_id": "synthetic-merchant",
+                "all_in": true,
+                "line_items": [
+                  {
+                    "id": "demo-travel",
+                    "quantity": 1
+                  }
+                ]
+              },
+              "signed": true,
+              "provenance": "merchant-signed checkout payload"
+            }
+          ],
+          "count": 2
+        }
+      }
+    },
+    {
+      "case_id": "general-new-task",
+      "repetition": 1,
+      "score": {
+        "case_id": "general-new-task",
+        "passed": false,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "max_total_cents"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null,
+        "adaptive_passed": false,
+        "adaptive_metrics": {
+          "variant": "adaptive",
+          "action": "review_required",
+          "action_ok": true,
+          "question_present": false,
+          "question_required": true,
+          "question_ok": false,
+          "question_contract_valid": true,
+          "question_field": null,
+          "question_criterion_key": null,
+          "repeated_known_field": false,
+          "repeats_declined_preference": false,
+          "generic_novel_question": false,
+          "boolean_question_safe": true,
+          "criteria_total": 4,
+          "criteria_grounded": 4,
+          "ungrounded_criteria": [],
+          "unquoted_clarification_criteria": [],
+          "source_coverage_phrases": [
+            "quiet",
+            "sustainably made",
+            "under $120",
+            "arrive before"
+          ],
+          "source_coverage_expected": [
+            "quiet",
+            "sustainably made",
+            "under $120",
+            "arrive before"
+          ],
+          "historical_source_coverage_phrases": [],
+          "historical_source_coverage_expected": [],
+          "source_coverage_ok": true,
+          "tool_observations_count": 0,
+          "tool_executed": false,
+          "tool_observations_are_executed": false,
+          "adversarial_context_seen": false,
+          "merchant_context_injected_as_criterion": false,
+          "adversarial_context_ok": true,
+          "tool_ok": true,
+          "authority_ok": true,
+          "authority_violations": []
+        }
+      },
+      "metadata": {
+        "variant": "adaptive",
+        "model": "gpt-oss-120b",
+        "prompt_version": "intent-envelope-v5-adaptive-tools",
+        "reasoning_effort": "low",
+        "clock_context": [
+          {
+            "timestamp": "2026-10-14T12:00:00+00:00",
+            "reference_date": "2026-10-14"
+          }
+        ],
+        "source_message_count": 1,
+        "started_at": "2026-10-14T06:03:05.772007+00:00",
+        "completed_at": "2026-10-14T06:03:12.361355+00:00",
+        "duration_ms": 6591
+      },
+      "result": {
+        "fields": {
+          "max_total_cents": 11999
+        },
+        "sources": {
+          "max_total_cents": "under $120"
+        },
+        "unsupported": [
+          "quiet",
+          "sustainably made",
+          "arrive before my work trip"
+        ],
+        "clarifications": [],
+        "explanation": "Review the captured requirements and any details that still need clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "adaptive",
+        "trace": [
+          {
+            "stage": "adaptive_plan",
+            "model": "gpt-oss-120b",
+            "duration_ms": 2735,
+            "tokens": {
+              "completion_tokens": 532,
+              "prompt_tokens": 1955,
+              "total_tokens": 2487,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "e4f2c1573a2e4566949314e8fbc918d4",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "planner": {
+              "action": "ready_for_review",
+              "assistant_message": "Draft prepared with budget constraint; other preferences noted as unsupported.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "budget",
+                  "field": "max_total_cents",
+                  "text": "under $120",
+                  "source_quote": "under $120",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "quiet",
+                  "field": null,
+                  "text": "quiet",
+                  "source_quote": "quiet",
+                  "kind": "preference",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "sustainably_made",
+                  "field": null,
+                  "text": "sustainably made",
+                  "source_quote": "sustainably made",
+                  "kind": "preference",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "arrival_timing",
+                  "field": null,
+                  "text": "arrive before my work trip",
+                  "source_quote": "arrive before my work trip",
+                  "kind": "requirement",
+                  "verification": "unsupported"
+                }
+              ],
+              "offer_observations": []
+            },
+            "grounding_recoveries": [],
+            "partial_recovery": {
+              "recovered_fields": [
+                "max_total_cents"
+              ],
+              "rejected_fields": [
+                {
+                  "field": "max_total_cents",
+                  "issue": "grounding_failed",
+                  "source_grounded": true
+                }
+              ],
+              "rejected_clarifications": [],
+              "source_grounded": true
+            }
+          },
+          {
+            "stage": "adaptive_review",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3684,
+            "tokens": {
+              "completion_tokens": 482,
+              "prompt_tokens": 2399,
+              "total_tokens": 2881,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "d2b5ec857c7a4850b5baae008c1e83b7",
+            "prompt_version": "intent-envelope-v5-adaptive-tools",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [],
+            "partial_recovery": {
+              "recovered_fields": [
+                "max_total_cents"
+              ],
+              "rejected_fields": [
+                {
+                  "field": "max_total_cents",
+                  "issue": "grounding_failed",
+                  "source_grounded": true
+                }
+              ],
+              "rejected_clarifications": [],
+              "source_grounded": true
+            },
+            "planner": {
+              "action": "ready_for_review",
+              "assistant_message": "Draft prepared with budget constraint; other preferences noted as unsupported.",
+              "question": null,
+              "criteria": [
+                {
+                  "key": "budget",
+                  "field": "max_total_cents",
+                  "text": "under $120",
+                  "source_quote": "under $120",
+                  "kind": "requirement",
+                  "verification": "supported"
+                },
+                {
+                  "key": "quiet",
+                  "field": null,
+                  "text": "quiet",
+                  "source_quote": "quiet",
+                  "kind": "preference",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "sustainably_made",
+                  "field": null,
+                  "text": "sustainably made",
+                  "source_quote": "sustainably made",
+                  "kind": "preference",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "arrival_timing",
+                  "field": null,
+                  "text": "arrive before my work trip",
+                  "source_quote": "arrive before my work trip",
+                  "kind": "requirement",
+                  "verification": "unsupported"
+                }
+              ],
+              "offer_observations": []
+            }
+          }
+        ],
+        "planner": {
+          "action": "ready_for_review",
+          "assistant_message": "Draft prepared with budget constraint; other preferences noted as unsupported.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "budget",
+              "field": "max_total_cents",
+              "text": "under $120",
+              "source_quote": "under $120",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "quiet",
+              "field": null,
+              "text": "quiet",
+              "source_quote": "quiet",
+              "kind": "preference",
+              "verification": "unsupported"
+            },
+            {
+              "key": "sustainably_made",
+              "field": null,
+              "text": "sustainably made",
+              "source_quote": "sustainably made",
+              "kind": "preference",
+              "verification": "unsupported"
+            },
+            {
+              "key": "arrival_timing",
+              "field": null,
+              "text": "arrive before my work trip",
+              "source_quote": "arrive before my work trip",
+              "kind": "requirement",
+              "verification": "unsupported"
+            }
+          ],
+          "offer_observations": []
+        },
+        "adaptive_plan": {
+          "action": "ready_for_review",
+          "assistant_message": "Draft prepared with budget constraint; other preferences noted as unsupported.",
+          "question": null,
+          "criteria": [
+            {
+              "key": "budget",
+              "field": "max_total_cents",
+              "text": "under $120",
+              "source_quote": "under $120",
+              "kind": "requirement",
+              "verification": "supported"
+            },
+            {
+              "key": "quiet",
+              "field": null,
+              "text": "quiet",
+              "source_quote": "quiet",
+              "kind": "preference",
+              "verification": "unsupported"
+            },
+            {
+              "key": "sustainably_made",
+              "field": null,
+              "text": "sustainably made",
+              "source_quote": "sustainably made",
+              "kind": "preference",
+              "verification": "unsupported"
+            },
+            {
+              "key": "arrival_timing",
+              "field": null,
+              "text": "arrive before my work trip",
+              "source_quote": "arrive before my work trip",
+              "kind": "requirement",
+              "verification": "unsupported"
+            }
+          ],
+          "offer_observations": []
+        },
+        "criteria": [
+          {
+            "key": "budget",
+            "field": "max_total_cents",
+            "text": "under $120",
+            "source_quote": "under $120",
+            "kind": "requirement",
+            "verification": "supported"
+          },
+          {
+            "key": "quiet",
+            "field": null,
+            "text": "quiet",
+            "source_quote": "quiet",
+            "kind": "preference",
+            "verification": "unsupported"
+          },
+          {
+            "key": "sustainably_made",
+            "field": null,
+            "text": "sustainably made",
+            "source_quote": "sustainably made",
+            "kind": "preference",
+            "verification": "unsupported"
+          },
+          {
+            "key": "arrival_timing",
+            "field": null,
+            "text": "arrive before my work trip",
+            "source_quote": "arrive before my work trip",
+            "kind": "requirement",
+            "verification": "unsupported"
+          }
+        ],
+        "agent_tools": [
+          {
+            "name": "inspect_offers",
+            "tool": "inspect_offers",
+            "status": "available",
+            "summary": "merchant-signed facts, hashes, and synthetic options",
+            "authority": "read_only_context_only"
+          },
+          {
+            "name": "retrieve_policy",
+            "tool": "retrieve_policy",
+            "status": "available",
+            "summary": "merchant policy/context data",
+            "authority": "read_only_context_only"
+          }
+        ],
+        "next_step": "ready_for_review",
+        "merchant_context_used": false,
+        "read_only_tool_log": null
+      }
+    }
+  ],
+  "completed_cases": 3,
+  "passed": 2,
+  "reserved_calls": 6,
+  "reserved_cents_delta": 12
+}

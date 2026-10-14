@@ -20,7 +20,7 @@ async page => {
  await page.screenshot({path:'artifacts/v3-hotel-mobile.png',fullPage:true});
  await page.getByRole('button',{name:'Simulate purchase'}).click();
  await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
- const receiptUrl=page.url();await page.goto(new URL(page.url()).origin+'/');await page.getByRole('heading',{name:'Make sure your AI buys what you meant.'}).waitFor();await page.goto(receiptUrl);await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
+ const receiptUrl=page.url();await page.goto(new URL(page.url()).origin+'/');await page.getByRole('heading',{name:'Before your agent buys, make your intent clear.'}).waitFor();await page.goto(receiptUrl);await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download evidence'}).click();await download;
 
  await page.getByRole('button',{name:'About the layer'}).click();
