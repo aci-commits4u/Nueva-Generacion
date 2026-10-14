@@ -133,16 +133,18 @@ request, the literal follow-up below, and the exact one-way flight request.
 
 The public repeat URL was
 `https://intent-judge-perfected.vercel.app/?intent=zxTQewt6Qq07JMY6v5Ds6g`.
-The new receipt's cryptographic verification was still pending when this
-record was updated; the earlier `HPFX...` receipt above is the one Root had
-independently verified.
+Root subsequently completed the independent cryptographic readback of the new
+receipt, as recorded below. The UI confirmation was not substituted for
+signature verification.
 
 ## Verification status
 
 Runtime source `b2141d7` was covered by green CI run `38527808000` with 428
 pytest tests and nine browser checks. Fresh v7 adaptive evaluation
 `evals/experiments/adaptive-nightly-final-live-20261014.json` passed its one
-held-out hotel case with two Foundry stages and no retry. The preceding v6
+observed-case hotel regression with two Foundry stages and no retry. The
+benchmark retains its legacy `holdout` split label, but this was a known UAT
+counterexample; it is not an unseen accuracy evaluation. The preceding v6
 diagnostic `evals/experiments/adaptive-nightly-diagnostic-live-20261014.json`
 retains its 0/1 failure; the earlier 8/8 v5 result remains historical in
 `evals/experiments/adaptive-final-live-20261014.json`.
