@@ -1,0 +1,44 @@
+{
+  "source": "https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&%24filter=armRegionName+eq+%27westus2%27+and+contains%28meterName%2C+%27gpt-oss%27%29",
+  "currency": "USD",
+  "items": [
+    {
+      "armRegionName": "westus2",
+      "meterName": "gpt-oss-120B Inp glbl Tokens",
+      "productName": "Azure OpenAI OSS Models",
+      "skuName": "gpt-oss-120B Inp glbl",
+      "unitOfMeasure": "1K",
+      "retailPrice": 0.00015,
+      "effectiveStartDate": "2026-03-01T00:00:00Z"
+    },
+    {
+      "armRegionName": "westus2",
+      "meterName": "gpt-oss-120B Outp DZone Tokens",
+      "productName": "Azure OpenAI OSS Models",
+      "skuName": "gpt-oss-120B Outp DZone",
+      "unitOfMeasure": "1K",
+      "retailPrice": 0.00066,
+      "effectiveStartDate": "2026-01-01T00:00:00Z"
+    },
+    {
+      "armRegionName": "westus2",
+      "meterName": "gpt-oss-120B Outp glbl Tokens",
+      "productName": "Azure OpenAI OSS Models",
+      "skuName": "gpt-oss-120B Outp glbl",
+      "unitOfMeasure": "1K",
+      "retailPrice": 0.0006,
+      "effectiveStartDate": "2026-03-01T00:00:00Z"
+    },
+    {
+      "armRegionName": "westus2",
+      "meterName": "gpt-oss-120B Inp DZone Tokens",
+      "productName": "Azure OpenAI OSS Models",
+      "skuName": "gpt-oss-120B Inp DZone",
+      "unitOfMeasure": "1K",
+      "retailPrice": 0.000165,
+      "effectiveStartDate": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "scope": "Snapshot transcribed from the successful public API response; existing gpt-oss-120B West US 2 token meters, not Azure remaining credit or invoice.",
+  "checked_on": "2026-10-13"
+}

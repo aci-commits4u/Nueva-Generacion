@@ -2,7 +2,7 @@
 
 The product is implemented on `victor/perfected`. The current public release adds an overview that explains the pitch, a five-step tutorial, and help throughout the working demo; see [the walkthrough guide](16-product-walkthrough.md). The underlying conversational revision adds two-stage live interpretation, revision-bound follow-ups, a live intent summary, explicit flagged-condition resolution, and continuous synthetic quality checks; see [the evaluation record](15-ai-evaluation-and-conversation.md). The earlier research documents describe a broader target; this file states what runs today.
 
-## Current UI release — October 13
+## Earlier UI release — October 13 (historical)
 
 Source `1a2cdf8` is deployed as `dpl_EMi2YA2LF9EjJh719WoGcvcj56Kc`, READY at **https://intent-judge-perfected.vercel.app**. The stable alias is public. [Source CI run 38471659344](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38471659344) passed; local regression remains 76 passing tests with one upstream deprecation warning.
 
@@ -16,7 +16,7 @@ Independent review reproduced and resolved navigation races, lost unsaved review
 
 Live Foundry extraction with exact source quotations, profile-driven follow-up review, explicit no preferences, customer approval bound to revision and digest, real pinned Verifiable Intent L1/L2/split L3 signatures, independently verified ES256 merchant checkout, deterministic requirements checks, nonwaivable integrity gates, offer-bound signed exceptions, revised native price authorization, idempotent simulated receipts, signed evidence downloads, and analyst review records.
 
-Flights support airport sets, departure date, all-in USD price, nonstop, maximum connections, local departure window (including overnight), duration, cabin, and refundability. Signed complete segment continuity and times are verified; nonstop additionally requires explicit technical-stop disclosure. Hotels support city, stay dates, room count, breakfast, cancellation, accessibility and total USD price. General mode has shared price and preserves unsupported conditions.
+Flights support airport sets, departure date, all-in USD price, nonstop, maximum connections, local departure window (including overnight), duration, cabin, refundability and explicitly signed one-way trips. Signed complete segment continuity and times are verified; nonstop additionally requires explicit technical-stop disclosure. Hotels support city, stay dates, room count, adult count against signed capacity, breakfast, cancellation, accessibility and total USD price. General mode has shared price and preserves unsupported conditions.
 
 Synthetic offers use fixed inventory prices and controlled fixtures adapted to the reviewed route or city. This is explicitly not live search. Baggage, passengers, round trips, subjective qualities and unimplemented domain fields remain unsupported. Merchant selection is a pinned synthetic trusted registry; arbitrary public merchant keys are not accepted.
 
@@ -31,7 +31,7 @@ Synthetic offers use fixed inventory prices and controlled fixtures adapted to t
 
 ## Budget safeguards
 
-Reuse the existing model; no paid deployment upgrade. Each live request has a token bound, no SDK auto-retries, an atomic global reservation and small session/day quotas. Default lifetime reservations are 200×$0.10=$20. The $10 emergency headroom is not automatically enabled.
+Reuse the existing model; no paid deployment upgrade. Each live request has a token bound, no SDK auto-retries, an atomic global reservation and small session/day quotas. The ordinary money cap is $20, enforced atomically and independently from a 500-stage ceiling. Past $0.10 reservations are retained; future bounded stages reserve $0.02 each. No counter or past money was reset. The $10 emergency reserve is disabled.
 
 Official Azure Retail Prices API on October 13, 2026 listed gpt-oss-120B global meters in westus2 at $0.15 per million input tokens and $0.60 per million output tokens; Data Zone rates were $0.165/$0.66. Recorded token usage is stored separately from conservative reservations. Storage adds very small metered costs. Actual remaining student credit and unrelated subscription activity are not claimed or inferred from our application ledger.
 

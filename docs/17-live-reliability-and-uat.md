@@ -11,7 +11,7 @@ The technical audit also found: session counts changed before rejected global re
 ## Implementation boundaries
 
 - Preserve the current static frontend, customer-approved requirements, deterministic backend rules, independently signed merchant facts, exact-offer exceptions and synthetic commerce adapter.
-- Budget service reserves an entire interpretation before calling a provider. Rejections are typed and do not consume a session allowance. Production and test purposes remain distinguishable under the unchanged 200-call/$20 lifetime cap.
+- Budget service reserves an entire interpretation before calling a provider. Rejections are typed and do not consume a session allowance. Production and test purposes remain distinguishable under the original 200-call/$20 lifetime cap during this investigation (the final additive reservation policy is recorded below).
 - Interpretation uses the original customer conversation, a typed draft, and a separate coverage audit. Only the final grounded, schema-valid draft reaches review. Neither model stage approves, signs or purchases.
 - Public errors distinguish exhausted allowances, provider unavailability and interpretation validation. Provider secrets and raw failure payloads never appear in the public response.
 - Clarification preserves the request and previous draft, supports useful natural replies, and exposes ambiguity and unsupported conditions rather than silently discarding them.
@@ -108,3 +108,29 @@ The stored live Seattle proposal was replayed through the final compiler without
 Profile changes require a new review rather than silent migration. Obsolete active drafts reopen live intake with the original request prefilled and no POST; old completed receipts and evidence remain accessible. Stale clarification, review, signing and paid explanation requests return 409 before inference. Final development verification: 201 tests pass with one upstream warning, and all eight local browser suites pass (the final guard suite also covers obsolete-profile recovery).
 
 Primary references: [Foundry cloud evaluation workflow](https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/cloud-evaluation), [native evaluation configuration](https://ai.azure.com/api-reference/evals/create-eval/), and [evaluating existing responses without target generation](https://ai.azure.com/api-reference/evals/create-eval-run/).
+
+
+## Final live hotel acceptance
+
+On functional release `8dbc8e2`, the independent shopper repeated the literal Seattle request above in a fresh Chrome session, using real Foundry. Their only follow-up was “No preference for accessibility; a standard room is fine.” Both audited sends succeeded (four model stages), with no retry or offline substitution. The question did not repeat. Review showed nine captured requirements and no unresolved conditions: Seattle, November 20–22 2026, one room, two adults, strict $349.99 maximum, breakfast, free cancellation, and explicit accessibility no preference.
+
+The signed $295 hotel passed and the $280 room-only/nonrefundable offer held. Simulated purchase produced receipt `oRbKb2HRB4bpZMkXPmitMA`, zero accepted differences, and a $295 total. The tester downloaded and inspected `intent-judge-evidence-oRbKb2HRB4bpZMkXPmitMA.json`: requirements, approval digest, signed offer hash, checkout/payment ledger and both offer checks were present. Reload recovered the receipt and approved rules. This was UI-only AI-simulated UAT, separate from developer tests and not a human study.
+
+## Additive reservation policy for later demos
+
+After retaining every past $0.10 reservation, future calls reserve $0.02 apiece. The ordinary $20 monetary cap is now enforced directly in the same authoritative transaction as call, daily and session quotas; the independent call ceiling is 500. The $10 emergency reserve remains disabled. Changing the configured future rate does not recompute historical money or reset any usage. Legacy money migrates conservatively to integer cents; failed and interrupted calls keep their reservations. Availability reports the minimum of remaining money, call, day and session capacity.
+
+The primary Azure Retail Prices API was rechecked on October 13, 2026: gpt-oss-120B West US 2 Global meters are $0.15/million input tokens and $0.60/million output tokens (Data Zone $0.165/$0.66). At the deliberately conservative 100,000-input-token and 1,800-output-token bound, Global inference is $0.01608 per stage. Actual request size is capped and prompts are much smaller. $0.02 is reserved per stage, including failed calls; the two-stage pipeline reserves $0.04 atomically. This estimate is tied to the existing model and bounds, not a pricing guarantee for other deployments. No actual Azure credit balance is inferred from this ledger. Storage, native evaluation compute and unrelated usage are separate.
+
+Eight additional budget regressions exercise historical additive accounting, rate changes, the money limit under concurrency, rejected-session accounting, availability and invalid rates. Final development verification with this budget change: **209 tests pass**, one upstream test-client warning.
+
+
+## Final live flight acceptance and downloaded evidence
+
+The independent flight tester repeated the exact one-way request and no-preference follow-up from the second pass against functional release `8dbc8e2`. Both audited sends succeeded (four model stages), without a retry, offline switch, explanation call or manual requirement removal. Cabin appeared once as canonical `economy`; the duplicate unsupported condition was gone, and the declined nonstop question did not repeat. Review recorded one-way EWR→TPA, November 7 2026, at most one connection, economy, strict $299.99 total and explicit no preferences.
+
+The $295 signed one-way flight passed; the $280 flight with three connections held. Receipt `obD3-us-k47p66E9c02cIA` showed zero accepted differences and persisted after reload, with eleven captured and no unresolved review fields. Evidence downloaded through the visible control. Root independently checked the actual downloaded flight and hotel files: canonical digest, ES256 issuer signature against the configured trusted key, merchant signature against the configured trusted key, exact offer hash, purchase amount and zero exceptions all passed. Public keys supplied by a packet alone were not treated as proof of issuer identity.
+
+A minor clarity finding remained in the unapproved flight summary: omitted optional choices appeared as “unresolved” despite the next step being explicit preference review. The final UI now separates captured values, required details still open, and preferences to review. No-preference fields are still chosen explicitly before approval; the interface does not insert consent. All eight local browser suites passed after this copy/count change.
+
+At this acceptance checkpoint the unchanged durable ledger held 186 stages and $18.60 in historical reservations, with 191,686 prompt tokens and 50,195 completion tokens recorded. Applying the observed Global meters estimates approximately $0.059 for those recorded inference tokens, excluding storage, native evaluation compute, untracked diagnostics and unrelated usage. Reservations are deliberately higher and are not the invoice. The $1.40 unreserved ordinary allowance can accommodate at most 70 future $0.02 stages (35 two-stage interpretations), shared with monitoring and subject to daily/session limits. No emergency allowance was enabled.

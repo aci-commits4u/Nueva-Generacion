@@ -82,6 +82,106 @@ def test_existing_lifetime_reservations_are_not_reset(budget, monkeypatch):
     assert budget.read('global-ai-budget')['calls'] == 103
 
 
+def test_future_rate_is_additive_to_legacy_reservations(budget, monkeypatch):
+    """Changing the configured rate must not reprice historical calls."""
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=178, reserved_usd=17.80))
+    reserve_ai_calls('evaluation', 2, purpose='evaluation')
+    ledger = budget.read('global-ai-budget')
+    assert ledger['reserved_cents'] == 1784
+    assert ledger['reserved_usd'] == 17.84
+
+
+def test_rolling_workers_preserve_the_larger_legacy_money_representation(budget, monkeypatch):
+    """An old worker may update dollars while a new cents field is stale."""
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=100, reserved_usd=10.00, reserved_cents=100))
+    reserve_ai_calls('evaluation', 1, purpose='evaluation')
+    ledger = budget.read('global-ai-budget')
+    assert ledger['reserved_cents'] == 1002
+    assert ledger['reserved_usd'] == 10.02
+
+
+def test_concurrent_money_reservations_never_cross_twenty_dollars(budget, monkeypatch):
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    budget.mutate('global-ai-budget', lambda s: s.update(reserved_cents=1998, reserved_usd=19.98))
+
+    def reserve(i):
+        try:
+            reserve_ai_calls(f'money-traveler-{i}', 1)
+            return True
+        except AIServiceError as exc:
+            assert exc.code == 'ai_budget_limit'
+            return False
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(reserve, range(8)))
+    assert sum(results) == 1
+    ledger = budget.read('global-ai-budget')
+    assert ledger['reserved_cents'] == 2000
+    assert ledger['calls'] == 1
+
+
+def test_rejected_money_allowance_does_not_charge_session(budget, monkeypatch):
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    budget.mutate('global-ai-budget', lambda s: s.update(reserved_cents=1999, reserved_usd=19.99))
+    with pytest.raises(AIServiceError) as exc:
+        reserve_ai_calls('money-traveler', 1)
+    assert exc.value.code == 'ai_budget_limit'
+    assert budget.read('global-ai-budget').get('calls', 0) == 0
+    assert budget.read('money-traveler').get('ai_calls', 0) == 0
+
+
+def test_lower_future_rate_does_not_reset_past_usage(budget, monkeypatch):
+    from app.store import reserve_ai_calls
+    monkeypatch.setenv('AI_CALL_LIMIT', '500')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=178, reserved_usd=17.80))
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.10')
+    reserve_ai_calls('evaluation', 1, purpose='evaluation')
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    reserve_ai_calls('evaluation', 1, purpose='evaluation')
+    assert budget.read('global-ai-budget')['reserved_cents'] == 1792
+
+
+def test_capacity_is_limited_by_remaining_money(budget, monkeypatch):
+    from app.store import ai_capacity
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    budget.mutate('global-ai-budget', lambda s: s.update(calls=10, reserved_cents=1996, reserved_usd=19.96))
+    capacity = ai_capacity('capacity-traveler')
+    assert capacity['monetary_remaining_calls'] == 2
+    assert capacity['lifetime_remaining_calls'] == 2
+    assert capacity['remaining_calls'] == 2
+    assert capacity['reserved_cents'] == 1996
+
+
+def test_invalid_or_free_future_rate_fails_before_store_mutation(budget, monkeypatch):
+    from app.store import reserve_ai_calls
+    for raw in ('nan', 'inf', '-0.01', '0.01'):
+        monkeypatch.setenv('AI_RESERVATION_USD', raw)
+        with pytest.raises(AIServiceError) as exc:
+            reserve_ai_calls('configuration-traveler', 1)
+        assert exc.value.code == 'ai_configuration'
+        assert budget.read('global-ai-budget').get('calls', 0) == 0
+
+
+def test_malformed_money_ledger_grants_no_capacity(budget, monkeypatch):
+    from app.store import ai_capacity, reserve_ai_calls
+    monkeypatch.setenv('AI_RESERVATION_USD', '0.02')
+    for invalid in ('not-an-amount', 'nan', True, -1, 0.5):
+        budget.mutate('global-ai-budget', lambda s: s.update(reserved_cents=invalid, reserved_usd=1.0))
+        assert ai_capacity('corrupt-ledger')['lifetime_remaining_calls'] == 0
+        with pytest.raises(AIServiceError) as exc:
+            reserve_ai_calls('corrupt-ledger', 1)
+        assert exc.value.code == 'ai_budget_limit'
+        assert budget.read('corrupt-ledger').get('ai_calls', 0) == 0
+
+
 @pytest.fixture
 def client(budget, monkeypatch):
     from fastapi.testclient import TestClient

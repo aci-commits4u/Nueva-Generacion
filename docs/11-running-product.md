@@ -42,7 +42,7 @@ Keys demonstrate synthetic trust roles, not Mastercard certification or real con
 
 ## Budget and maintenance
 
-Default live limits: 8 calls per session, 40/day, 200 ordinary lifetime calls. Each request reserves $0.10 before inference, so lifetime ordinary reservations cap at $20. SDK automatic retries are disabled and token/time bounds apply. Failed requests consume their reservation. No $10 emergency increase is automatic. These are application controls; unrelated Azure activity and storage charges require Azure billing inspection.
+Configured live limits: 16 model stages per session, 80 interactive stages/day, 100 evaluation stages/day, and an independent 500-stage lifetime ceiling. The ordinary money allowance is hard-capped at $20. Existing $0.10 historical reservations are retained; future bounded calls on the current gpt-oss-120b deployment reserve $0.02 additively. An audited interpretation reserves two stages ($0.04) before inference. Monitoring is limited to two stages/day and 40 lifetime, sharing the same money allowance. SDK automatic retries are disabled and token/time bounds apply. Failed requests keep their reservation. The $10 emergency reserve is disabled. These are application controls; actual Azure credit, unrelated activity, storage and native evaluation compute require separate billing inspection. See [the final reliability record](17-live-reliability-and-uat.md).
 
 Do not clear the global ledger to “fix” an exhausted allowance. Choose emergency mode explicitly for offline presentations, or deliberately review the remaining Azure credit before changing limits. Provider secrets and signing keys stay in ignored `.env` locally and Vercel environment variables in hosting. No secret values belong in Git, browser state or evidence.
 

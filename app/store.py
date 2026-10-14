@@ -6,8 +6,18 @@ import time
 import zlib
 import hashlib
 import logging
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import lru_cache
 from app.ai_errors import AIServiceError
+
+
+# The money cap is intentionally independent from the model-call cap.  The
+# latter is a safety valve for runaway retries; this immutable allowance is
+# what keeps a change in per-call reservation price from spending the team's
+# ordinary demo budget.
+ORDINARY_AI_BUDGET_CENTS = 2_000
+LEGACY_RESERVATION_CENTS = 10
+MIN_RESERVATION_CENTS = 2
 
 
 def encode_entity(key,state):
@@ -93,10 +103,93 @@ def _session_budget_key(session):
 
 def _limits():
     # Daily capacity can be tuned without expanding the student's lifetime allowance.
-    return {'lifetime': min(200, int(os.getenv('AI_CALL_LIMIT', '200'))),
+    return {'lifetime': max(0, min(500, int(os.getenv('AI_CALL_LIMIT', '500')))),
             'interactive': int(os.getenv('AI_DAILY_LIMIT', '80')),
             'evaluation': int(os.getenv('AI_EVAL_DAILY_LIMIT', '100')),
             'monitor': 2, 'session': int(os.getenv('AI_SESSION_LIMIT', '16'))}
+
+
+def _reservation_rate_cents():
+    """Return the configured future reservation cost, rounded up to cents.
+
+    ``reserved_usd`` is a historical ledger field, so changing this setting
+    must never recalculate what has already been reserved.  A minimum of two
+    cents prevents a zero-cost configuration from making the call ceiling
+    meaningless.  Invalid configuration fails before a store transaction.
+    """
+    raw = os.getenv('AI_RESERVATION_USD')
+    if raw is None:
+        raw = '0.10'
+    try:
+        amount = Decimal(str(raw).strip())
+    except (InvalidOperation, ValueError):
+        raise AIServiceError('ai_configuration', 'AI_RESERVATION_USD must be a finite non-negative amount.', stage='preflight')
+    if not amount.is_finite() or amount < 0:
+        raise AIServiceError('ai_configuration', 'AI_RESERVATION_USD must be a finite non-negative amount.', stage='preflight')
+    if amount < Decimal('0.02'):
+        raise AIServiceError('ai_configuration', 'AI_RESERVATION_USD must be at least $0.02 per reserved model call.', stage='preflight')
+    cents = int((amount * 100).to_integral_value(rounding=ROUND_CEILING))
+    return max(MIN_RESERVATION_CENTS, cents)
+
+
+def _reserved_cents(state):
+    """Read the ledger without repricing historical reservations.
+
+    ``reserved_cents`` is the exact representation written by this version.
+    Older ledgers only have ``reserved_usd``; use its ceiling so fractional
+    historical values cannot create unbudgeted headroom.  During rolling
+    deploys an older worker can update ``reserved_usd`` while leaving the
+    newer cents field stale, so both valid representations are honored and
+    the larger value wins.  Very old records without either field are
+    conservatively valued at the former $0.10/call.
+    """
+    parsed = []
+    malformed = False
+    if 'reserved_cents' in state:
+        try:
+            value = state['reserved_cents']
+            if isinstance(value, bool):
+                raise ValueError('boolean is not a ledger amount')
+            amount = Decimal(str(value))
+            if (not amount.is_finite() or amount < 0 or
+                    amount != amount.to_integral_value()):
+                raise ValueError('negative ledger amount')
+            cents = int(amount)
+            parsed.append(cents)
+        except (InvalidOperation, TypeError, ValueError, OverflowError):
+            malformed = True
+
+    if 'reserved_usd' in state:
+        try:
+            value = state['reserved_usd']
+            if isinstance(value, bool):
+                raise ValueError('boolean is not a ledger amount')
+            amount = Decimal(str(value))
+            if not amount.is_finite() or amount < 0:
+                raise ValueError('invalid ledger amount')
+            parsed.append(int((amount * 100).to_integral_value(rounding=ROUND_CEILING)))
+        except (InvalidOperation, ValueError, TypeError, OverflowError):
+            malformed = True
+
+    if malformed:
+        # A corrupt amount must never create new spendable headroom.
+        return ORDINARY_AI_BUDGET_CENTS
+    if parsed:
+        return max(parsed)
+
+    calls = state.get('calls', 0)
+    try:
+        calls = max(0, int(calls))
+    except (TypeError, ValueError, OverflowError):
+        calls = 0
+    # A malformed positive ledger is safer when treated as fully spent than
+    # when it silently grants new capacity.
+    return calls * LEGACY_RESERVATION_CENTS
+
+
+def _display_reserved_usd(cents):
+    """Keep the legacy two-decimal field useful for existing dashboards."""
+    return float(Decimal(cents) / Decimal(100))
 
 
 def reserve_ai_calls(session, count, purpose='interactive'):
@@ -110,6 +203,7 @@ def reserve_ai_calls(session, count, purpose='interactive'):
         raise ValueError('Unknown AI call purpose')
     if type(count) is not int or not 1 <= count <= 3:
         raise ValueError('Invalid model call count')
+    reservation_cents = _reservation_rate_cents()
     store = get_store()
     timestamp = time.time()
     day = time.strftime('%Y-%m-%d', time.gmtime(timestamp))
@@ -119,6 +213,10 @@ def reserve_ai_calls(session, count, purpose='interactive'):
     legacy_session_count = store.read(session).get('ai_calls', 0) if purpose == 'interactive' else 0
 
     def reserve(state):
+        current_reserved = _reserved_cents(state)
+        proposed_reserved = current_reserved + (count * reservation_cents)
+        if proposed_reserved > ORDINARY_AI_BUDGET_CENTS:
+            raise AIServiceError('ai_budget_limit', 'The demo AI spending allowance is reached. Live AI is paused to protect the remaining credit. You can still use the tutorial or explicitly choose offline mode.')
         if state.get('calls', 0) + count > limits['lifetime']:
             raise AIServiceError('ai_budget_limit', 'The demo AI spending allowance is reached. Live AI is paused to protect the remaining credit. You can still use the tutorial or explicitly choose offline mode.')
         if state.get('day') != day:
@@ -140,7 +238,10 @@ def reserve_ai_calls(session, count, purpose='interactive'):
             session_counts[session_key] = session_count + count
         else:
             state[purpose + '_calls'] = state.get(purpose + '_calls', 0) + count
-        state['reserved_usd'] = round(state['calls'] * float(os.getenv('AI_RESERVATION_USD', '0.10')), 2)
+        # This is an additive reservation.  In particular, changing the
+        # configured future rate never reprices already reserved calls.
+        state['reserved_cents'] = proposed_reserved
+        state['reserved_usd'] = _display_reserved_usd(proposed_reserved)
         state.setdefault('usage', {'prompt_tokens': 0, 'completion_tokens': 0})
         return state['calls'], session_count + count
 
@@ -161,16 +262,26 @@ def ai_capacity(session):
     """Read availability without inference, reservations, or exposing other sessions."""
     state = get_store().read('global-ai-budget')
     limits = _limits()
+    reservation_cents = _reservation_rate_cents()
     timestamp = time.time()
     same_day = state.get('day') == time.strftime('%Y-%m-%d', time.gmtime(timestamp))
     daily_remaining = max(0, limits['interactive'] - (state.get('daily_calls', 0) if same_day else 0))
-    lifetime_remaining = max(0, limits['lifetime'] - state.get('calls', 0))
+    call_lifetime_remaining = max(0, limits['lifetime'] - state.get('calls', 0))
+    monetary_remaining = max(0, ORDINARY_AI_BUDGET_CENTS - _reserved_cents(state))
+    money_lifetime_remaining = monetary_remaining // reservation_cents
+    # Keep the legacy lifetime key as the effective limit so callers that
+    # gate on it cannot advertise capacity that the money ledger rejects.
+    lifetime_remaining = min(call_lifetime_remaining, money_lifetime_remaining)
     session_count = state.get('session_reservations', {}).get(_session_budget_key(session), get_store().read(session).get('ai_calls', 0))
     session_remaining = max(0, limits['session'] - session_count)
     return {'remaining_calls': min(daily_remaining, lifetime_remaining),
             'session_remaining_calls': session_remaining,
             'lifetime_remaining_calls': lifetime_remaining,
             'daily_remaining_calls': daily_remaining,
+            'call_lifetime_remaining_calls': call_lifetime_remaining,
+            'monetary_remaining_calls': money_lifetime_remaining,
+            'reserved_cents': _reserved_cents(state),
+            'reservation_cents': reservation_cents,
             'reset_after_seconds': 86400 - int(timestamp) % 86400}
 
 
