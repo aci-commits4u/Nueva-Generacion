@@ -92,6 +92,8 @@
 .pipeline-explainer li span{max-width:220px}
 .quality-section>.eyebrow{margin-bottom:6px}
 .quality-section>.small{max-width:720px}
+.quality-grid>article{min-width:0;overflow-wrap:anywhere}
+.quality-grid .eyebrow{max-width:100%;overflow-wrap:anywhere}
 @media(max-width:650px){.quality-native{grid-template-columns:1fr;gap:12px;padding:22px 0}.quality-native h2{font-size:42px}.pipeline-explainer ol{grid-template-columns:1fr;gap:16px}.pipeline-explainer li span{max-width:none}.quality-runtime-counts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}}
 
 /* Flexible choices keep their selected state visible and fit the conversation. */
