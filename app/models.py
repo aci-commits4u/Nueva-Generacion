@@ -1,14 +1,42 @@
 """Validated request contracts; free text never becomes authorization."""
 from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
+
+
+def validate_time_zone(value):
+    if type(value) is not str or not value or len(value)>80:
+        raise ValueError('time_zone must be a valid IANA time-zone name')
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError('time_zone must be a valid IANA time-zone name')
+    return value
+
 
 class IntentRequest(StrictModel):
     domain: Literal['flight','hotel','general'] = 'flight'
     message: str = Field(min_length=5,max_length=2500)
     mode: Literal['live','offline'] = 'live'
+    time_zone: str = 'UTC'
+
+    @field_validator('time_zone')
+    @classmethod
+    def valid_time_zone(cls,value):
+        return validate_time_zone(value)
+
+
+class ProfileRefreshRequest(StrictModel):
+    revision: int
+    time_zone: str
+
+    @field_validator('time_zone')
+    @classmethod
+    def valid_time_zone(cls,value):
+        return validate_time_zone(value)
 
 class AnswerRequest(StrictModel):
     revision: int

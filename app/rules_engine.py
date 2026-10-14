@@ -1,5 +1,5 @@
 """Only this module assigns purchase decisions. No network or language model."""
-from app.profile_registry import valid_time
+from app.profile_registry import valid_date_choice, valid_iso_date, valid_time
 
 
 def evaluate(profile, fields, facts, unsupported=(), gates=()):
@@ -15,7 +15,7 @@ def evaluate(profile, fields, facts, unsupported=(), gates=()):
             reason='This requirement does not have a supported deterministic check.'
         elif value is not None:
             op,t=spec['op'],spec['type']
-            valid = (t=='integer' and type(value) is int and value>=0 and type(required) is int) or (t=='boolean' and type(value) is bool and type(required) is bool) or (t=='string' and type(value) is str and type(required) is str) or (t=='strings' and type(value) is str and type(required) is list and all(type(x) is str for x in required)) or (t=='window' and valid_time(value) and type(required) is list and len(required)==2 and all(valid_time(x) for x in required))
+            valid = (t=='integer' and type(value) is int and value>=0 and type(required) is int) or (t=='boolean' and type(value) is bool and type(required) is bool) or (t=='string' and type(value) is str and type(required) is str) or (t=='strings' and type(value) is str and type(required) is list and all(type(x) is str for x in required)) or (t=='window' and valid_time(value) and type(required) is list and len(required)==2 and all(valid_time(x) for x in required)) or (t=='date_choice' and valid_iso_date(value) and valid_date_choice(required))
             if valid:
                 if op=='lte': ok=value<=required
                 elif op=='gte': ok=value>=required
@@ -24,6 +24,13 @@ def evaluate(profile, fields, facts, unsupported=(), gates=()):
                 elif op=='window':
                     start,end=required
                     ok=(start<=value<=end) if start<=end else (value>=start or value<=end)
+                elif op=='date_choice':
+                    if type(required) is str:
+                        ok=value==required
+                    elif 'dates' in required:
+                        ok=value in required['dates']
+                    else:
+                        ok=required['start']<=value<=required['end']
                 else: ok=False
                 status='pass' if ok else 'fail'
                 reason='Matches your approved requirement.' if ok else 'This offer differs from your approved requirement.'

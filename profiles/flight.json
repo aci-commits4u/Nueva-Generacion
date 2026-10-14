@@ -1,6 +1,6 @@
 {
   "id": "flight",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "custom_constraint_type": "urn:intent-judge:flight-requirements",
   "fields": {
     "max_total_cents": {
@@ -31,11 +31,11 @@
       "required": true
     },
     "departure_date": {
-      "type": "string",
-      "op": "eq",
+      "type": "date_choice",
+      "op": "date_choice",
       "fact": "departure_date",
-      "label": "Departure date",
-      "question": "What exact date will you travel?",
+      "label": "Travel dates",
+      "question": "What date or date range works for you?",
       "exception_allowed": true,
       "required": true
     },

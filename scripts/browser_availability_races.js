@@ -16,8 +16,15 @@ async page => {
  await page.getByLabel('What would you like to find?').fill('Find a flight under $300.');
  await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
- const replies=await page.locator('[data-reply]').all();if(replies.length<2)throw new Error('Fixture must expose at least two targeted replies');
- await replies[0].click();await replies[1].click({force:true});await clarifyReceived;
+ const airportQuestion=page.locator('[data-question="origin_airports"]');
+ await airportQuestion.waitFor();
+ await airportQuestion.getByRole('button',{name:'Newark · EWR'}).click();
+ const useAirport=airportQuestion.getByRole('button',{name:/Use 1 airport/});
+ await useAirport.click();
+ await clarifyReceived;
+ // The explicit submit is the one intent-level action. A stale or impatient
+ // click while its request is in flight must not create a second clarification.
+ await useAirport.click({force:true});
  if(clarifyCalls!==1)throw new Error(`Rapid reply race sent ${clarifyCalls} clarification requests`);
  if(await page.locator('[data-reply]:enabled').count()!==0||await page.getByLabel('Add a detail or change your request').isEnabled())throw new Error('Clarification controls stayed enabled during the in-flight request');
  releaseClarify();

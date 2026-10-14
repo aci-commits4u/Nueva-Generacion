@@ -3,17 +3,20 @@ import json
 import os
 import secrets
 import time
+from copy import deepcopy
 from datetime import datetime,timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from urllib.parse import urlsplit
 from contextlib import contextmanager
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent/'.env')
-from fastapi import FastAPI,HTTPException,Request,Response
+from fastapi import FastAPI,HTTPException,Request,Response,Query
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
-from app.models import IntentRequest,AnswerRequest,ApprovalRequest,CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest
+from app.models import (IntentRequest,ProfileRefreshRequest,AnswerRequest,ApprovalRequest,
+                        CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest)
 from app.profile_registry import get_profile,validate_fields,normalise_review_fields,digest
 from app.rules_engine import evaluate
 from app.store import get_store,ai_capacity
@@ -22,12 +25,20 @@ from app.ai_config import selected_pipeline,selected_reasoning_effort
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
-from app.conversation import context,user_text,questions,provenance,merge_unsupported,declined_preferences
+from app.conversation import (context,user_text,questions,provenance,merge_unsupported,
+                               declined_preferences,merge_revision_state)
 from demo.fixtures import offers_for
+from app.airport_reference import search_airports,airport_reference_metadata
 
 ROOT=Path(__file__).resolve().parent.parent
 app=FastAPI(title='Intent Judge',version='1.0.0')
 MAX_FOLLOWUPS=6
+
+
+@app.get('/api/airports')
+def airport_search(q:str=Query('',max_length=80)):
+    """Offline airport identities for an explicit customer choice, not inventory."""
+    return {'airports':search_airports(q),'reference':airport_reference_metadata()}
 
 
 def live_configuration_ready():
@@ -48,7 +59,7 @@ def conversation_view(draft):
 def require_current_profile(draft):
     """A changed task schema needs a new review, never silent consent migration."""
     if draft.get('profile_digest')!=get_profile(draft['domain'])['digest']:
-        raise HTTPException(409,'This task profile was updated. Start a new conversation and review the current rules. Your saved evidence remains available.')
+        raise HTTPException(409,'This task profile was updated. Update this saved conversation, then review the current rules. Your saved evidence remains available.')
 
 
 @app.exception_handler(AIServiceError)
@@ -58,6 +69,21 @@ async def ai_service_error(request,exc):
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def uid(): return secrets.token_urlsafe(16)
+
+
+def trusted_reference_date(timestamp, time_zone='UTC'):
+    """Return the server-observed calendar date used for relative phrases."""
+    try:
+        zone=ZoneInfo(time_zone)
+    except (ZoneInfoNotFoundError, ValueError):
+        zone=timezone.utc
+    return datetime.fromisoformat(timestamp).astimezone(zone).date().isoformat()
+
+
+def trusted_clock_context(messages):
+    """Expose server timestamps separately from customer source text."""
+    return [{'timestamp':m.get('timestamp'),'reference_date':m.get('reference_date')}
+            for m in messages or [] if m.get('timestamp') or m.get('reference_date')]
 
 def session_id(request):
     sid=request.cookies.get('ij_session')
@@ -112,6 +138,35 @@ def required(s,collection,id):
     obj=s.get(collection,{}).get(id)
     if obj is None: raise HTTPException(404,'This record is not in your demo session.')
     return obj
+
+
+def completed_purchase_for_intent(state,intent_id):
+    """Return a receipt for this intent, if a simulated purchase completed."""
+    decisions=state.get('decisions',{})
+    for purchase in state.get('purchases',{}).values():
+        receipt=purchase.get('receipt',{})
+        decision=decisions.get(receipt.get('decision_id'),{})
+        if decision.get('intent_id')==intent_id:
+            return receipt
+    return None
+
+
+def replay_messages_with_clock(messages, time_zone, fallback_message=None, fallback_timestamp=None):
+    """Copy stored customer turns and add only missing server-date metadata."""
+    source=deepcopy(messages or [])
+    if not source and fallback_message is not None:
+        source=[{'role':'user','content':fallback_message,'timestamp':fallback_timestamp}]
+    added=[]
+    for index,message in enumerate(source):
+        if message.get('reference_date') or not isinstance(message.get('timestamp'),str):
+            continue
+        try:
+            reference_date=trusted_reference_date(message['timestamp'],time_zone)
+        except (TypeError,ValueError):
+            continue
+        message['reference_date']=reference_date
+        added.append({'message_index':index,'timestamp':message['timestamp'],'reference_date':reference_date})
+    return source,added
 
 def integrity(check_id,ok,message):
     return {'check_id':check_id,'label':check_id.replace('_',' ').title(),'requirement':True,'offer_value':ok,'status':'pass' if ok else 'fail','message':message,'exception_allowed':False,'integrity':True}
@@ -215,13 +270,16 @@ def intake(body:IntentRequest,request:Request):
     sid=session_id(request)
     s=get_store().read(sid)
     if len(s.get('drafts',{}))>=3: raise HTTPException(429,'This session has three scenarios. Start a fresh session to explore another.')
+    initial_timestamp=now()
+    initial_message={'role':'user','content':body.message,'timestamp':initial_timestamp,
+                     'reference_date':trusted_reference_date(initial_timestamp,body.time_zone)}
     if body.mode=='offline': extraction=offline_extract(body.domain,body.message)
     else:
         from app.foundry_client import extract
-        try: extraction=extract(body.domain,body.message,sid,source_messages=[{'role':'user','content':body.message}])
+        try: extraction=extract(body.domain,body.message,sid,source_messages=[initial_message])
         except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
-    d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':now(),'messages':[{'role':'user','content':body.message,'timestamp':now()}],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
+    d=refresh({'id':uid(),'revision':1,'domain':body.domain,'profile_digest':get_profile(body.domain)['digest'],'message':body.message,'fields':extraction['fields'],'sources':extraction['sources'],'unsupported':extraction['unsupported'],'explanation':extraction['explanation'],'mode':extraction['mode'],'model':extraction['model'],'reviewed':False,'created_at':initial_timestamp,'time_zone':body.time_zone,'messages':[initial_message],'ai_runs':[provenance(extraction,1)],'questions':questions(body.domain,extraction['fields'])})
     d['ai_runs']=[provenance(extraction,1,d['messages'])]
     d['clarifications']=extraction.get('clarifications',[])
     d['questions']=questions(body.domain,d['fields'],d['clarifications'],d['messages'])
@@ -241,6 +299,119 @@ def get_intent(id:str,request:Request):
     purchases=[p['receipt'] for p in s['purchases'].values() if any(v['id']==p['receipt']['decision_id'] for v in decisions)]
     return conversation_view({**d,'saved_decisions':decisions,'latest_purchase':purchases[-1] if purchases else None})
 
+
+@app.post('/api/intents/{id}/refresh-profile')
+@serialize_interpretation
+def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
+    """Explicitly reinterpret a saved draft under the current task profile."""
+    sid=session_id(request)
+    state=get_store().read(sid)
+    draft=required(state,'drafts',id)
+    current_profile=get_profile(draft['domain'])
+    if draft.get('profile_digest')==current_profile['digest']:
+        raise HTTPException(409,'This saved conversation already uses the current task profile.')
+    if body.revision!=draft['revision']:
+        raise HTTPException(409,'This saved conversation changed. Reload it before updating the task profile.')
+    receipt=completed_purchase_for_intent(state,id)
+    if receipt:
+        raise HTTPException(409,'A completed purchase keeps its original profile and evidence immutable.')
+
+    replay_messages,reference_dates_added=replay_messages_with_clock(
+        draft.get('messages'),body.time_zone,draft.get('message'),draft.get('created_at')
+    )
+    source_text=user_text(replay_messages)
+    conversation=context(replay_messages)
+    latest=next((message for message in reversed(replay_messages)
+                 if message.get('role') in {'user','customer'}),replay_messages[-1])
+    current_draft={
+        'revision':draft['revision'],
+        'fields':draft.get('fields',{}),
+        'sources':draft.get('sources',{}),
+        'clarifications':draft.get('clarifications',[]),
+        'unsupported':draft.get('unsupported',[]),
+        'latest_customer_turn':{'content':latest.get('content',''),'timestamp':latest.get('timestamp')},
+        'pending_question':latest.get('reply_to'),
+        'time_zone':body.time_zone,
+        'trusted_reference_date':latest.get('reference_date'),
+        'trusted_clock_context':trusted_clock_context(replay_messages),
+    }
+    if draft.get('mode')=='offline':
+        extraction=offline_extract(draft['domain'],source_text)
+    else:
+        from app.foundry_client import extract
+        try:
+            extraction=extract(draft['domain'],conversation,sid,source_text=source_text,
+                               source_messages=replay_messages,current_draft=current_draft)
+        except AIServiceError:
+            raise
+        except ValueError as exc:
+            raise HTTPException(503,str(exc))
+
+    def save(state):
+        current=required(state,'drafts',id)
+        if current['revision']!=body.revision:
+            raise HTTPException(409,'This saved conversation changed during interpretation. Reload it before updating the task profile.')
+        if current.get('profile_digest')==current_profile['digest']:
+            raise HTTPException(409,'This saved conversation already uses the current task profile.')
+        receipt=completed_purchase_for_intent(state,id)
+        if receipt:
+            raise HTTPException(409,'A completed purchase keeps its original profile and evidence immutable.')
+        try:
+            unsupported=merge_unsupported(current.get('unsupported',[]),extraction.get('unsupported',[]))
+        except ValueError as exc:
+            raise HTTPException(422,str(exc))
+        from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
+                                      reconcile_supported_conditions)
+        merged={**extraction,'unsupported':unsupported}
+        revision_state=merge_revision_state(
+            current['domain'],current,merged,latest.get('content',''),replay_messages
+        )
+        merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
+        merged=reconcile_supported_conditions(merged,current['domain'],source_text,replay_messages)
+        merged=reconcile_one_way_unsupported(merged)
+        merged=reconcile_cabin_unsupported(merged,current['domain'],source_text)
+        removed=[item for item in unsupported if item not in merged['unsupported']]
+        if removed:
+            event(state,'condition_represented_by_grounded_field',{
+                'intent_id':id,'conditions':removed,
+                'authority':'unapproved draft; explicit customer review still required',
+            })
+        old_profile_digest=current['profile_digest']
+        revision=current['revision']+1
+        current.update(
+            fields=merged['fields'],
+            sources=merged['sources'],
+            unsupported=merged['unsupported'],
+            explanation=merged['explanation'],
+            messages=replay_messages,
+            revision=revision,
+            reviewed=False,
+            profile_digest=current_profile['digest'],
+            time_zone=body.time_zone,
+            model=extraction.get('model'),
+            questions=questions(current['domain'],merged['fields'],merged.get('clarifications'),replay_messages),
+        )
+        current['clarifications']=merged.get('clarifications',[])
+        current.setdefault('ai_runs',[]).append(provenance(extraction,revision,replay_messages))
+        current.pop('approved',None)
+        current.pop('offer_views',None)
+        refresh(current)
+        event(state,'profile_reinterpreted',{
+            'intent_id':id,
+            'revision':revision,
+            'old_profile_digest':old_profile_digest,
+            'new_profile_digest':current_profile['digest'],
+            'unapproved':True,
+            'time_zone':body.time_zone,
+            'clock_provenance':{
+                'source':'server_recorded_message_timestamps',
+                'reference_dates_added':reference_dates_added,
+            },
+        })
+        return current
+    return conversation_view(get_store().mutate(sid,save))
+
+
 @app.post('/api/intents/{id}/clarify')
 @serialize_interpretation
 def clarify(id:str,body:ClarifyRequest,request:Request):
@@ -250,14 +421,30 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
     if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,'Review the captured requirements to continue; this demo allows six AI follow-ups, and every field remains editable in review.')
-    reply_to=(d.get('questions') or questions(d['domain'],d['fields']) or [None])[0]
-    messages=messages+[{'role':'user','content':body.message,'timestamp':now(),'reply_to':reply_to}]
+    reply_to=(d.get('questions') or questions(d['domain'],d['fields'],d.get('clarifications'),messages) or [None])[0]
+    turn_timestamp=now()
+    time_zone=d.get('time_zone','UTC')
+    messages=messages+[{'role':'user','content':body.message,'timestamp':turn_timestamp,
+                        'reference_date':trusted_reference_date(turn_timestamp,time_zone),
+                        'reply_to':reply_to}]
     text=context(messages)
     if len(user_text(messages))>5000: raise HTTPException(422,'Conversation is too long for this demo.')
     if d['mode']=='offline': extraction=offline_extract(d['domain'],user_text(messages))
     else:
         from app.foundry_client import extract
-        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages)
+        current_draft={
+            'revision':d['revision'],
+            'fields':d.get('fields',{}),
+            'sources':d.get('sources',{}),
+            'clarifications':d.get('clarifications',[]),
+            'unsupported':d.get('unsupported',[]),
+            'latest_customer_turn':{'content':body.message,'timestamp':turn_timestamp},
+            'pending_question':reply_to,
+            'time_zone':time_zone,
+            'trusted_reference_date':messages[-1]['reference_date'],
+            'trusted_clock_context':trusted_clock_context(messages),
+        }
+        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages,current_draft=current_draft)
         except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
     def save(state):
@@ -265,8 +452,15 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         if current['revision']!=body.revision: raise HTTPException(409,'Another edit arrived during interpretation. Reload your latest draft.')
         try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
         except ValueError as exc: raise HTTPException(422,str(exc))
-        from app.ai_grounding import reconcile_one_way_unsupported,reconcile_cabin_unsupported
+        from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
+                                      reconcile_supported_conditions)
         merged={**extraction,'unsupported':unsupported}
+        revision_state=merge_revision_state(d['domain'],current,merged,body.message,messages)
+        merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
+        # This helper is the narrow bridge for a known field marker (for
+        # example a broad airport or temporal phrase) becoming grounded in the
+        # latest customer words. Unknown conditions remain unsupported.
+        merged=reconcile_supported_conditions(merged,d['domain'],user_text(messages),messages)
         merged=reconcile_one_way_unsupported(merged)
         merged=reconcile_cabin_unsupported(merged,d['domain'],user_text(messages))
         removed=[item for item in unsupported if item not in merged['unsupported']]
@@ -274,23 +468,14 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
             event(state,'condition_represented_by_grounded_field',{'intent_id':id,'conditions':removed,'authority':'unapproved draft; explicit customer review still required'})
         unsupported=merged['unsupported']
         revision=current['revision']+1
-        previous_clarifications=current.get('clarifications',[])
-        current.update(fields=extraction['fields'],sources=extraction['sources'],unsupported=unsupported,explanation=extraction['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],extraction['fields']))
-        next_clarifications=extraction.get('clarifications',[])
-        by_field={item['field']:item for item in next_clarifications}
-        for item in previous_clarifications:
-            if item['field'] not in current['fields'] and item['field'] not in by_field:
-                by_field[item['field']]=item
-            elif item['field'] in current['fields']:
-                event(state,'clarification_interpreted',{'intent_id':id,'revision':revision,'field':item['field'],
-                      'original_quote':item['source_quote'],'proposed_value':current['fields'][item['field']],
-                      'new_source_quote':current['sources'].get(item['field']),
-                      'authority':'unapproved draft; customer review still required'})
+        current.update(fields=merged['fields'],sources=merged['sources'],unsupported=merged['unsupported'],explanation=merged['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],merged['fields'],merged.get('clarifications'),messages))
+        current['clarifications']=merged.get('clarifications',[])
+        for change in revision_state['changes']:
+            event(state,'intent_requirement_reconciled',{'intent_id':id,'revision':revision,
+                  **change,'authority':'unapproved draft; customer review still required'})
         declined=declined_preferences(d['domain'],messages)
         for field,quote in declined.items():
-            if field in by_field:
-                event(state,'preference_declined_in_conversation',{'intent_id':id,'revision':revision,'field':field,'source_quote':quote,'authority':'unapproved; explicit structured review still required'})
-        current['clarifications']=[item for item in by_field.values() if item['field'] not in declined or item['field'] in current['fields']]
+            event(state,'preference_declined_in_conversation',{'intent_id':id,'revision':revision,'field':field,'source_quote':quote,'authority':'unapproved; explicit structured review still required'})
         current['questions']=questions(d['domain'],current['fields'],current['clarifications'],messages)
         current.setdefault('ai_runs',[]).append(provenance(extraction,revision,messages))
         current.pop('approved',None);current.pop('offer_views',None)

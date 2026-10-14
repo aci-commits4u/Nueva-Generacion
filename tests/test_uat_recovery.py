@@ -80,7 +80,7 @@ def test_offline_explanation_names_each_uncheckable_condition():
 
 def test_declined_optional_question_is_not_repeated_but_still_needs_review(client,monkeypatch):
     def proposal(*args,**kwargs):
-        return {'fields':{'origin_airports':['EWR'],'destination_airports':['TPA'],'departure_date':'2026-11-07','max_total_cents':29999,'max_connections':1},'sources':{},'unsupported':[],'explanation':'Review your choices.','mode':'live','model':'test'}
+        return {'fields':{'origin_airports':['EWR'],'destination_airports':['TPA'],'departure_date':'2026-11-07','max_total_cents':29999,'max_connections':1},'sources':{},'unsupported':[],'clarifications':[{'field':'nonstop','source_quote':'one connection okay','reason':'preference'}],'explanation':'Review your choices.','mode':'live','model':'test'}
     monkeypatch.setattr('app.foundry_client.extract',proposal)
     d=client.post('/api/intents',json={'mode':'live','message':'Newark to Tampa November 7, 2026, under $300, one connection okay.'}).json()
     assert d['questions'][0]['field']=='nonstop'

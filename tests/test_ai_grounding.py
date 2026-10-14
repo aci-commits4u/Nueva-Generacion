@@ -47,6 +47,25 @@ def test_broad_state_is_a_clarification_need_not_an_airport():
     assert result["clarifications"] == [{"field": "destination_airports", "source_quote": "Florida", "reason": "ambiguous"}]
 
 
+def test_florida_reconciliation_accepts_catalogue_airport_beyond_demo_four():
+    data = envelope5(
+        {"destination_airports": ["RSW"]},
+        {"destination_airports": "RSW"},
+        clarifications=[{
+            "field": "destination_airports",
+            "source_quote": "Florida",
+            "reason": "ambiguous",
+        }],
+    )
+    reconciled = grounding.reconcile_supported_conditions(
+        data,
+        "flight",
+        "Fly to Florida, specifically RSW.",
+    )
+    assert reconciled["fields"]["destination_airports"] == ["RSW"]
+    assert reconciled["clarifications"] == []
+
+
 def test_structured_clarifications_cover_florida_and_soft_preferences():
     florida = validate_extraction(
         "flight",
@@ -264,6 +283,158 @@ def test_specific_city_is_normalized_to_a_known_airport():
 
     assert result["fields"]["origin_airports"] == ["EWR"]
     assert result["fields"]["destination_airports"] == ["TPA"]
+
+
+@pytest.mark.parametrize(
+    ("place", "code"),
+    [("Lisbon", "LIS"), ("Heathrow", "LHR")],
+)
+def test_catalogue_places_resolve_without_a_local_alias(place, code):
+    result = validate_extraction(
+        "flight",
+        f"Fly to {place} under $300",
+        envelope(
+            {"destination_airports": [place], "max_total_cents": 29999},
+            {"destination_airports": place, "max_total_cents": "under $300"},
+        ),
+    )
+    assert result["fields"]["destination_airports"] == [code]
+
+
+def test_multi_airport_city_stays_ambiguous_without_explicit_alternatives():
+    result = validate_extraction(
+        "flight",
+        "Fly to Tokyo under $300",
+        envelope(
+            {"destination_airports": ["Tokyo"], "max_total_cents": 29999},
+            {"destination_airports": "Tokyo", "max_total_cents": "under $300"},
+        ),
+    )
+    assert "destination_airports" not in result["fields"]
+    assert result["clarifications"] == [{
+        "field": "destination_airports", "source_quote": "Tokyo", "reason": "ambiguous",
+    }]
+
+
+def test_multi_airport_city_accepts_explicit_positive_same_city_alternatives():
+    result = validate_extraction(
+        "flight",
+        "Fly to Tokyo, either HND or NRT, under $300",
+        envelope(
+            {"destination_airports": ["Tokyo"], "max_total_cents": 29999},
+            {
+                "destination_airports": "Tokyo, either HND or NRT",
+                "max_total_cents": "under $300",
+            },
+        ),
+    )
+    assert result["fields"]["destination_airports"] == ["HND", "NRT"]
+
+
+def test_catalogue_rejects_unknown_explicit_iata_code():
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            "Fly to XYZ under $300",
+            envelope(
+                {"destination_airports": ["XYZ"], "max_total_cents": 29999},
+                {"destination_airports": "XYZ", "max_total_cents": "under $300"},
+            ),
+        )
+
+
+@pytest.mark.parametrize("message", [
+    "Arrive at MCO, but avoid MIA.",
+    "Arrive at MCO, but not MIA.",
+    "Arrive at MCO, except MIA.",
+])
+def test_airport_polarity_rejects_excluded_option_even_when_model_quotes_only_code(message):
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            message,
+            envelope(
+                {"destination_airports": ["MIA"]},
+                {"destination_airports": "MIA"},
+            ),
+        )
+
+
+def test_latest_bound_airport_reply_overrides_prior_negative_context():
+    history = "I want to arrive in Florida, but avoid MIA."
+    latest = "Arrive at MIA."
+    result = validate_extraction(
+        "flight",
+        f"{history}\n{latest}",
+        envelope(
+            {"destination_airports": ["MIA"]},
+            {"destination_airports": "MIA"},
+        ),
+        source_messages=[
+            {"role": "user", "content": history},
+            {
+                "role": "user",
+                "content": latest,
+                "reply_to": {
+                    "field": "destination_airports",
+                    "question": "Which arrival airports are acceptable?",
+                },
+            },
+        ],
+    )
+    assert result["fields"]["destination_airports"] == ["MIA"]
+
+
+def test_latest_bound_origin_airport_reply_uses_origin_scope():
+    history = "I want to depart from Florida, but avoid MIA."
+    latest = "Depart from MIA."
+    result = validate_extraction(
+        "flight",
+        f"{history}\n{latest}",
+        envelope(
+            {"origin_airports": ["MIA"]},
+            {"origin_airports": "MIA"},
+        ),
+        source_messages=[
+            {"role": "user", "content": history},
+            {
+                "role": "user",
+                "content": latest,
+                "reply_to": {
+                    "field": "origin_airports",
+                    "question": "Which departure airports are acceptable?",
+                },
+            },
+        ],
+    )
+    assert result["fields"]["origin_airports"] == ["MIA"]
+
+
+def test_unbound_tiny_airport_quote_remains_conservative_with_history():
+    history = "I want to arrive in Florida, but avoid MIA."
+    with pytest.raises(GroundingFailure):
+        validate_extraction(
+            "flight",
+            history,
+            envelope(
+                {"destination_airports": ["MIA"]},
+                {"destination_airports": "MIA"},
+            ),
+            source_messages=[{"role": "user", "content": history}],
+        )
+
+
+def test_airport_polarity_accepts_positive_multiple_explicit_options():
+    message = "Arrive at MCO or MIA."
+    result = validate_extraction(
+        "flight",
+        message,
+        envelope(
+            {"destination_airports": ["MCO", "MIA"]},
+            {"destination_airports": "MCO or MIA"},
+        ),
+    )
+    assert result["fields"]["destination_airports"] == ["MCO", "MIA"]
 
 
 def test_cabin_is_canonicalized_while_source_quote_stays_exact():

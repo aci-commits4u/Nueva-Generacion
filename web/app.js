@@ -16,6 +16,18 @@ let aiStatusRequest=null;
 let aiStatusRequestToken=0;
 let sessionGeneration=0;
 const clarificationRequests=new Set();
+const airportSelection={intentId:null,revision:null,field:null,values:new Set()};
+function browserTimeZone(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';}catch{return 'UTC';}}
+function syncAirportSelection(d,question){
+ const isAirport=question?.field==='origin_airports'||question?.field==='destination_airports';
+ if(!isAirport||airportSelection.intentId!==d?.id||airportSelection.revision!==d?.revision||airportSelection.field!==question?.field){
+  airportSelection.intentId=d?.id||null;
+  airportSelection.revision=d?.revision??null;
+  airportSelection.field=isAirport?question.field:null;
+  airportSelection.values=new Set();
+ }
+}
+function clearAirportSelection(){airportSelection.values=new Set();}
 function invalidateSessionStatus(){
  sessionGeneration++;
  aiStatusRequestToken++;
@@ -25,7 +37,7 @@ function invalidateSessionStatus(){
 }
 function setClarificationControls(intentId,disabled){
  if(state.stage!==2||state.draft?.id!==intentId)return;
- document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply]').forEach(control=>{control.disabled=disabled;control.toggleAttribute('aria-busy',disabled);});
+ document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply],[data-airport-choice],[data-airport-submit],[data-airport-search],[data-airport-search-choice],[data-date-choice-send]').forEach(control=>{control.disabled=disabled;control.toggleAttribute('aria-busy',disabled);});
  const review=$('#review-now');
  if(review){review.disabled=disabled;review.toggleAttribute('aria-busy',disabled);}
 }
@@ -124,9 +136,39 @@ async function reportError(error,navigation){
  if(String(e.code||'').startsWith('ai_')||/\/api\/intents/.test(e.path||''))await refreshAIStatus(true);
  if(navigation===state.navigation)notice(errorMessage(e,Boolean(state.draft)));
 }
+function composerStatus(){
+ const bottom=$('.conversation-bottom');
+ if(!bottom)return null;
+ let status=bottom.querySelector('.composer-status');
+ if(!status){
+  status=document.createElement('div');
+  status.className='composer-status';
+  status.setAttribute('role','status');
+  status.setAttribute('aria-live','polite');
+  status.hidden=true;
+  const help=bottom.querySelector('.composer-help');
+  bottom.insertBefore(status,help||null);
+ }
+ return status;
+}
+function setComposerBusy(button,isBusy,label=''){
+ if(!button?.classList.contains('send'))return;
+ const status=composerStatus();
+ if(isBusy){
+  button.setAttribute('aria-busy','true');
+  button.setAttribute('aria-label','Sending clarification');
+  button.innerHTML='<span class="send-spinner" aria-hidden="true"></span>';
+  if(status){status.hidden=false;status.textContent=label;}
+ }else{
+  button.removeAttribute('aria-busy');
+  button.setAttribute('aria-label','Send clarification');
+  button.textContent='↑';
+  if(status){status.hidden=true;status.textContent='';}
+ }
+}
 async function busy(button,fn,label='Working…'){
- const old=button?.textContent,navigation=state.navigation;if(button){button.disabled=true;button.dataset.busy='true';button.textContent=label;}notice();
- try{await fn();}catch(e){await reportError(e,navigation);}finally{if(button){button.disabled=false;button.textContent=old;}}
+ const old=button?.textContent,navigation=state.navigation,isComposerSend=button?.classList.contains('send');if(button){button.disabled=true;button.dataset.busy='true';if(isComposerSend)setComposerBusy(button,true,label);else button.textContent=label;}notice();
+ try{await fn();}catch(e){await reportError(e,navigation);}finally{if(button){button.disabled=false;if(isComposerSend)setComposerBusy(button,false,old);else button.textContent=old;}}
  if(button){delete button.dataset.busy;renderAvailability();}
 }
 function routeForStage(stage){
@@ -165,10 +207,10 @@ async function returnToDemo(){
 }
 
 function reopenLiveIntake(staleDraft){
- state.reviewEdits=null;state.clarifyEdit=null;state.draft=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.latestIntent=null;state.domain=staleDraft.domain||state.domain;state.message=staleDraft.message||'';state.mode='live';state.navigation++;state.stage=1;
- history.replaceState(null,'',routeForStage(1));
+ state.reviewEdits=null;state.clarifyEdit=null;state.draft=staleDraft;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=2;state.latestIntent=staleDraft.id;state.domain=staleDraft.domain||state.domain;state.message=staleDraft.message||'';state.mode=staleDraft.mode||'live';state.navigation++;state.stage=2;
+ history.replaceState(null,'',routeForStage(2));
  render();
- notice('Profile updated; start a new conversation to review current rules.');
+ notice('This saved conversation uses an older task profile. Update it when you are ready to continue.');
  window.scrollTo({top:0,behavior:'instant'});$('#workspace').focus({preventScroll:true});
 }
 
@@ -227,7 +269,8 @@ function renderSummary(){
  const valueFor=(key,value)=>value===null?'No preference':escapeHTML(displayValue({check_id:key},value));
  const rows=entries.map(([k,f])=>{const open=d.fields[k]===undefined,clarification=clarificationFor(d,k),clarificationNote=open&&clarification?.source_quote&&clarification.source_quote!==d.sources[k]?`<small class="clarification-source">From your words: “${escapeHTML(clarification.source_quote)}”</small>`:'',openLabel=f.required?'Still open':'Preference to review';return `<div class="summary-rule${open?' unresolved':''}"><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in price':f.label)}</b><span>${open?`<em>${openLabel}</em>`:valueFor(k,d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}${clarificationNote}</div>`;}).join('');
  const summaryCounts=`<span><b>${captured}</b> captured</span>${openRequired?`<span><b>${openRequired}</b> still open</span>`:''}${pendingPreferences?`<span><b>${pendingPreferences}</b> ${pendingPreferences===1?'preference':'preferences'} to review</span>`:''}`;
- $('#intent-content').innerHTML=`<span class="eyebrow">${d.approved?'APPROVED BY YOU':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':'Captured values stay visible while you clarify.'}</p><div class="summary-counts">${summaryCounts}</div><div class="summary-rules">${rows}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">You approve the rules; signed merchant facts are checked before checkout.</p>`;
+ const profileStale=d.profile_current===false;
+ $('#intent-content').innerHTML=`<span class="eyebrow">${d.approved?'APPROVED BY YOU':profileStale?'SAVED DRAFT':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':profileStale?'Captured values are read-only until this saved conversation is updated.':'Captured values stay visible while you clarify.'}</p><div class="summary-counts">${summaryCounts}</div><div class="summary-rules">${rows}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">You approve the rules; signed merchant facts are checked before checkout.</p>`;
 }
 function renderIntake(){
  $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">INTENT JUDGE / AGENTIC COMMERCE</span><h1>What should your agent know?</h1><p>Start with what matters. We’ll clarify the rest together.</p></div><div id="intake-availability" class="availability-card" data-availability data-mode="${state.mode}" role="status" aria-live="polite"></div><form id="intake-form" class="intake-form"><label for="request-text">What would you like to find?</label><textarea id="request-text" name="request" autocomplete="off" maxlength="2500" minlength="5" rows="5" required placeholder="I need a nonstop flight to Florida under $300…">${escapeHTML(state.message||'')}</textarea><div class="intake-controls"><span class="small">Your words become an unapproved draft.</span><button class="primary" type="submit">Start a conversation →</button></div><div class="examples"><span>Try an example</span><button type="button" id="sample-ambiguous" class="chip">${state.domain==='flight'?'A flight with missing details':state.domain==='hotel'?'Breakfast & cancellation':'An unsupported preference'}</button><button type="button" id="sample-standard" class="chip">${state.domain==='flight'?'A fully specified flight':'Full request'}</button></div><details class="mode-settings"><summary>Interpretation settings</summary><label for="ai-mode">AI availability</label><select id="ai-mode" name="interpretation_mode" autocomplete="off"><option value="live">Live Microsoft Foundry</option><option value="offline" ${state.mode==='offline'?'selected':''}>Explicit emergency offline parser</option></select><p class="small">Live availability is shown above. Offline mode is always an explicit choice and keeps unsupported text visible.</p></details></form><section class="principle"><span class="eyebrow">WHY THIS LAYER EXISTS</span><h2>A valid authorization can still miss what you meant.</h2><p>If “nonstop” gets lost before approval, a cheap flight with three connections may satisfy the recorded rules. We help capture that requirement, ask you to approve it, and check the signed itinerary.</p></section>`;
@@ -236,16 +279,23 @@ function renderIntake(){
  const syncMode=()=>{state.mode=$('#ai-mode').value;$('#intake-availability').dataset.mode=state.mode;renderAvailability();const submit=$('#intake-form button[type="submit"]');submit.disabled=state.mode==='live'&&!liveAvailable();};
  $('#ai-mode').onchange=syncMode;
  syncMode();
- $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation,generation=sessionGeneration;if(state.mode==='live'){const status=await refreshAIStatus(true,{generation});if(generation!==sessionGeneration)return;if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
+ $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation,generation=sessionGeneration;if(state.mode==='live'){const status=await refreshAIStatus(true,{generation});if(generation!==sessionGeneration)return;if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode,time_zone:browserTimeZone()});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
 }
 function renderConversation(){
- const d=state.draft;$('#workspace').innerHTML=conversationMarkup(d,escapeHTML);
+ const d=state.draft,question=d.questions?.[0]||null,profileStale=d.profile_current===false;
+ syncAirportSelection(d,question);
+ $('#workspace').innerHTML=conversationMarkup(d,escapeHTML,{selectedAirports:[...airportSelection.values],profileStale});
  if(state.clarifyEdit?.id===d.id&&state.clarifyEdit.revision===d.revision)$('#clarify-text').value=state.clarifyEdit.value;
  renderAvailability();
- setClarificationControls(d.id,clarificationRequests.has(d.id));
- $('#review-now').onclick=()=>{if(!clarificationRequests.has(d.id))transition(3);};
+ setClarificationControls(d.id,profileStale||clarificationRequests.has(d.id));
+ if($('#review-now'))$('#review-now').onclick=()=>{if(!clarificationRequests.has(d.id))transition(3);};
+ if($('#refresh-profile'))$('#refresh-profile').onclick=e=>busy(e.currentTarget,async()=>{
+  const navigation=state.navigation,updated=await trackedApi(d.id,`/api/intents/${d.id}/refresh-profile`,{revision:d.revision,time_zone:browserTimeZone()});
+  if(!currentRequest(navigation,d.id))return;
+  state.reviewEdits=null;state.clarifyEdit=null;state.draft=updated;state.domain=updated.domain;state.mode=updated.mode;state.offers=[];state.decisions={};state.receipt=null;transition(2);
+ },'Updating this saved conversation…');
  const send=text=>{
-  if(clarificationRequests.has(d.id))return;
+  if(profileStale||clarificationRequests.has(d.id))return;
   const navigation=state.navigation,generation=sessionGeneration,inputSnapshot=$('#clarify-text')?.value??'';
   clarificationRequests.add(d.id);state.clarifyEdit={id:d.id,revision:d.revision,value:inputSnapshot};setClarificationControls(d.id,true);
   return busy($('#clarify-form button'),async()=>{
@@ -259,8 +309,77 @@ function renderConversation(){
    state.clarifyEdit=null;state.draft=draft;render();
   },'Interpreting your clarification…').finally(()=>{clarificationRequests.delete(d.id);setClarificationControls(d.id,false);});
  };
- $('#clarify-form').onsubmit=e=>{e.preventDefault();send($('#clarify-text').value);};
- document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>send(b.dataset.reply));
+ $('#clarify-form').onsubmit=e=>{e.preventDefault();clearAirportSelection();send($('#clarify-text').value);};
+ document.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>{clearAirportSelection();send(b.dataset.reply);});
+ const syncAirportSelectionUI=()=>{
+  document.querySelectorAll('[data-airport-choice],[data-airport-search-choice]').forEach(button=>{
+   const code=button.dataset.airportChoice||button.dataset.airportSearchChoice;
+   const selected=airportSelection.values.has(code);
+   button.classList.toggle('selected',selected);
+   button.setAttribute('aria-pressed',String(selected));
+  });
+  const summary=document.querySelector('[data-airport-selected-summary]');
+  if(summary){
+   summary.innerHTML=[...airportSelection.values].map(code=>`<button type="button" class="selected-airport-chip" data-airport-remove="${escapeHTML(code)}" aria-label="Remove ${escapeHTML(code)}">${escapeHTML(code)}<span aria-hidden="true">×</span></button>`).join('');
+   summary.querySelectorAll('[data-airport-remove]').forEach(button=>button.onclick=()=>{
+    airportSelection.values.delete(button.dataset.airportRemove);
+    syncAirportSelectionUI();
+   });
+  }
+  const submit=document.querySelector('[data-airport-submit]');
+  if(submit){
+   const count=airportSelection.values.size;
+   submit.disabled=count===0;
+   submit.innerHTML=count?`Use ${count} airport${count===1?'':'s'} <span aria-hidden="true">→</span>`:'Choose one or more <span aria-hidden="true">→</span>';
+  }
+ };
+ document.querySelectorAll('[data-airport-choice]').forEach(button=>button.onclick=()=>{
+  const code=button.dataset.airportChoice;
+  if(airportSelection.values.has(code))airportSelection.values.delete(code);else airportSelection.values.add(code);
+  syncAirportSelectionUI();
+ });
+ syncAirportSelectionUI();
+ document.querySelector('[data-airport-submit]')?.addEventListener('click',()=>{
+  if(!airportSelection.values.size)return;
+  const codes=[...airportSelection.values],prefix=question?.field==='origin_airports'?'Depart from':'Arrive at';
+  clearAirportSelection();
+  send(`${prefix} ${codes.join(' or ')}.`);
+ });
+ const airportSearch=document.querySelector('[data-airport-search]');
+ const airportSearchResults=document.querySelector('[data-airport-search-results]');
+ if(airportSearch&&airportSearchResults){
+  const searchNavigation=state.navigation,searchIntent=d.id,searchRevision=d.revision,searchField=question?.field;
+  let searchTimer=null,searchVersion=0;
+  const searchIsCurrent=version=>version===searchVersion&&searchNavigation===state.navigation&&state.draft?.id===searchIntent&&state.draft?.revision===searchRevision&&state.draft?.questions?.[0]?.field===searchField;
+  const bindSearchResults=()=>airportSearchResults.querySelectorAll('[data-airport-search-choice]').forEach(button=>button.onclick=()=>{const code=button.dataset.airportSearchChoice;if(airportSelection.values.has(code))airportSelection.values.delete(code);else airportSelection.values.add(code);syncAirportSelectionUI();});
+  const showResults=airports=>{airportSearchResults.innerHTML=airports.slice(0,6).map(airport=>{const code=escapeHTML(airport.code),selected=airportSelection.values.has(airport.code);const location=[airport.city,airport.region,airport.country].filter(Boolean).join(' · ');return `<button type="button" class="airport-result${selected?' selected':''}" data-airport-search-choice="${code}" aria-pressed="${selected}" role="option"><b>${escapeHTML(airport.name||airport.code)} · ${code}</b><span>${escapeHTML(location||'Airport identity')}</span></button>`;}).join('');bindSearchResults();syncAirportSelectionUI();};
+  airportSearch.addEventListener('input',()=>{const query=airportSearch.value.trim().slice(0,80);searchVersion++;const version=searchVersion;clearTimeout(searchTimer);if(!query){airportSearchResults.innerHTML='';return;}airportSearchResults.innerHTML='<span class="small airport-search-status">Searching the airport catalog…</span>';searchTimer=setTimeout(async()=>{try{const result=await api('/api/airports?q='+encodeURIComponent(query));if(!searchIsCurrent(version))return;showResults(Array.isArray(result.airports)?result.airports:[]);if(!result.airports?.length)airportSearchResults.innerHTML='<span class="small airport-search-status">No airport identity matches yet.</span>';}catch(error){if(!searchIsCurrent(version))return;airportSearchResults.innerHTML='<span class="small airport-search-status">Airport search is unavailable. You can keep typing and try again.</span>';}} ,220);});
+ }
+ const dateControls=document.querySelector('[data-date-choice-controls]');
+ if(dateControls){
+  const modeInputs=[...dateControls.querySelectorAll('input[name="clarify-date-mode"]')];
+  const panels=[...dateControls.querySelectorAll('[data-date-panel]')],submit=dateControls.querySelector('[data-date-choice-send]');
+  const currentMode=()=>dateControls.querySelector('input[name="clarify-date-mode"]:checked')?.value||'single';
+  const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'');
+  const syncDateControls=()=>{
+   const mode=currentMode();panels.forEach(panel=>{panel.hidden=panel.dataset.datePanel!==mode;});
+   let valid=false;
+   if(mode==='single')valid=validDate($('#clarify-date-single')?.value);
+   if(mode==='range'){const start=$('#clarify-date-start')?.value,end=$('#clarify-date-end')?.value;valid=validDate(start)&&validDate(end)&&start<=end;}
+   if(mode==='dates'){const values=($('#clarify-date-list')?.value||'').split(',').map(value=>value.trim()).filter(Boolean);valid=values.length>0&&values.length<=20&&values.every(validDate)&&new Set(values).size===values.length;}
+   submit.disabled=!valid;
+  };
+  modeInputs.forEach(input=>input.addEventListener('change',syncDateControls));
+  dateControls.querySelectorAll('input[type="date"],#clarify-date-list').forEach(input=>input.addEventListener('input',syncDateControls));
+  submit.addEventListener('click',()=>{
+   const mode=currentMode();let text='';
+   if(mode==='single')text=`Depart on ${$('#clarify-date-single').value}.`;
+   else if(mode==='range')text=`Travel between ${$('#clarify-date-start').value} and ${$('#clarify-date-end').value}, inclusive.`;
+   else text=`I can travel on ${$('#clarify-date-list').value.split(',').map(value=>value.trim()).filter(Boolean).join(' or ')}.`;
+   send(text);
+  });
+  syncDateControls();
+ }
 }
 async function renderQuality(){
  $('#workspace').innerHTML='<p class="loading">Loading measured quality…</p>';
@@ -272,7 +391,8 @@ async function renderQuality(){
   const runtimeCounts=Object.entries(q.runtime?.counts||{}).filter(([,value])=>Number.isFinite(Number(value)));
   const runtimeRecord=runtimeCounts.length?`<div class="quality-runtime"><span class="eyebrow">RECORDED PIPELINE STAGES</span><p class="small quality-runtime-label">Instrumentation counts model stages, not transactions${q.runtime.updated_at?` · updated ${escapeHTML(q.runtime.updated_at)}`:''}.</p><div class="quality-runtime-counts">${runtimeCounts.map(([key,value])=>`<span><b>${escapeHTML(value)}</b> ${escapeHTML(key.replace(/:/g,' · ').replace(/_/g,' '))}</span>`).join('')}</div>${q.runtime.last_failure?`<p class="small quality-last-failure"><b>Last retained failure:</b> ${escapeHTML(q.runtime.last_failure.stage||'unknown stage')} · ${escapeHTML(q.runtime.last_failure.code||'unknown code')}${q.runtime.last_failure.timestamp?` · ${escapeHTML(q.runtime.last_failure.timestamp)}`:''}</p>`:''}</div>`:'';
   const pipeline=`<div class="pipeline-explainer"><span class="eyebrow">HOW THE PIPELINE IS BOUNDED</span><ol><li><b>01</b><span>Foundry extracts a draft.</span></li><li><b>02</b><span>Foundry audits coverage and source checks.</span></li><li><b>03</b><span>You review before Verifiable Intent and deterministic offer checks.</span></li></ol></div>`;
-  $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div>${nativeEvaluation}${runtimeRecord}${pipeline}<section class="quality-section"><span class="eyebrow">HISTORICAL BENCHMARK SNAPSHOTS</span><p class="small">Retained reports from earlier development runs. They are reference points, not the current native evaluation.</p><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p><p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs provider-independent regression tests. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;
+  const monitorVersionNote=q.monitor&&q.prompt_version&&q.monitor.prompt_version!==q.prompt_version?'<p class="small">This saved live check predates the current prompt release. Future daily checks record the prompt version they used.</p>':'';
+  $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div>${nativeEvaluation}${runtimeRecord}${pipeline}<section class="quality-section"><span class="eyebrow">HISTORICAL BENCHMARK SNAPSHOTS</span><p class="small">Retained reports from earlier development runs. They are reference points, not the current native evaluation.</p><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p>${monitorVersionNote}<p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs deterministic checks and eight browser journeys, with screenshots retained. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;
  }
  catch(e){notice(e.message);}
 }
@@ -282,17 +402,31 @@ function fieldMarkup(key,spec){
  if(spec.type==='boolean')input=`<select id="${id}" name="${key}" autocomplete="off" data-field="${key}"><option value="">Choose…</option><option value="true" ${v===true?'selected':''}>Yes — must be included</option><option value="false" ${v===false?'selected':''}>No — must be absent</option></select>`;
  else if(Array.isArray(spec.enum))input=`<select id="${id}" name="${key}" autocomplete="off" data-field="${key}"><option value="">Choose…</option>${spec.enum.map(value=>`<option value="${escapeHTML(value)}" ${v===value?'selected':''}>${escapeHTML(displayValue({check_id:key},value))}</option>`).join('')}</select>`;
  else if(spec.type==='window')input=`<div class="time-inputs"><input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="time" value="${escapeHTML(v?.[0]||'')}" aria-label="Start of local departure window"><input id="${id}-end" type="time" value="${escapeHTML(v?.[1]||'')}" aria-label="End of local departure window"></div>`;
+ else if(spec.type==='date_choice')input=reviewDateChoiceMarkup(key,v);
  else{const value=v===undefined||v===null?'':key==='max_total_cents'?(v/100).toFixed(2):Array.isArray(v)?v.join(', '):v;input=`<input id="${id}" name="${key}" autocomplete="off" data-field="${key}" type="${key.endsWith('date')?'date':spec.type==='integer'?'number':'text'}" ${spec.type==='integer'?`min="${spec.min??0}" step="${key==='max_total_cents'?'0.01':'1'}" ${key==='max_total_cents'?'inputmode="decimal"':''}`:''} value="${escapeHTML(value)}" ${spec.required?'required':''} ${spec.type==='strings'?'placeholder="Airport codes, separated by commas"':''}>`;}
  const moneyNote=key==='max_total_cents'?'<span class="money-helper">Enter a USD amount. It is checked precisely against the approved limit.</span>':'';
  const clarificationNote=clarification?`<span class="field-clarification-note">Choice tied to “${escapeHTML(clarification.source_quote)}”</span>`:'';
- return `<div class="field${clarification?' field-clarification':''}"><label for="${id}">${escapeHTML(key==='max_total_cents'?'Maximum all-in price (USD)':spec.label)}${spec.required?' *':''}</label>${input}<small>${escapeHTML(spec.question)}${moneyNote}${d.sources[key]?`<br>From your words: “${escapeHTML(d.sources[key])}”`:''}${clarificationNote}</small>${!spec.required?`<label class="preference"><input type="checkbox" data-no-preference="${key}" ${v===null?'checked':''}> I have no preference for this detail</label>`:''}</div>`;
+ const labelTarget=spec.type==='date_choice'?`${id}-single`:id;
+ return `<div class="field${clarification?' field-clarification':''}"><label for="${labelTarget}">${escapeHTML(key==='max_total_cents'?'Maximum all-in price (USD)':spec.label)}${spec.required?' *':''}</label>${input}<small>${escapeHTML(spec.question)}${moneyNote}${d.sources[key]?`<br>From your words: “${escapeHTML(d.sources[key])}”`:''}${clarificationNote}</small>${!spec.required?`<label class="preference"><input type="checkbox" data-no-preference="${key}" ${v===null?'checked':''}> I have no preference for this detail</label>`:''}</div>`;
+}
+
+function reviewDateChoiceMarkup(key,value){
+ const single=typeof value==='string'?value:'';
+ const range=value&&typeof value==='object'&&!Array.isArray(value)?value.start&&value.end?value:null:null;
+ const alternatives=value&&typeof value==='object'&&!Array.isArray(value)&&Array.isArray(value.dates)?value.dates:[];
+ const mode=alternatives.length?'dates':range?'range':'single';
+ const id='field-'+key;
+ return `<fieldset class="date-choice-fields" data-date-field="${key}"><legend class="small">Choose one exact date, an inclusive range, or specific acceptable dates.</legend><div class="date-choice-modes"><label class="chip"><input type="radio" name="${id}-mode" value="single" ${mode==='single'?'checked':''}> Exact date</label><label class="chip"><input type="radio" name="${id}-mode" value="range" ${mode==='range'?'checked':''}> Inclusive range</label><label class="chip"><input type="radio" name="${id}-mode" value="dates" ${mode==='dates'?'checked':''}> Specific dates</label></div><div class="date-choice-inputs"><label data-date-panel="single" ${mode==='single'?'':'hidden'}>Exact date<input id="${id}-single" type="date" value="${escapeHTML(single)}" autocomplete="off"></label><label data-date-panel="range" ${mode==='range'?'':'hidden'}>Range start<input id="${id}-start" type="date" value="${escapeHTML(range?.start||'')}" autocomplete="off"></label><label data-date-panel="range" ${mode==='range'?'':'hidden'}>Range end<input id="${id}-end" type="date" value="${escapeHTML(range?.end||'')}" autocomplete="off"></label><label data-date-panel="dates" ${mode==='dates'?'':'hidden'}>Specific dates, separated by commas<input id="${id}-list" type="text" value="${escapeHTML(alternatives.join(', '))}" placeholder="YYYY-MM-DD, YYYY-MM-DD" autocomplete="off"></label></div></fieldset>`;
 }
 function renderReview(){
  const d=state.draft,p=state.profiles[d.domain];
  const clarifications=(d.clarifications||[]).filter(item=>item?.field&&item?.source_quote&&p.fields[item.field]);
  const clarificationBlock=clarifications.length?`<section class="clarification-review" aria-labelledby="clarification-title"><span class="eyebrow">CHOICES TO CLARIFY</span><h2 id="clarification-title">Choices to clarify</h2><p class="small">These details need a direct choice before they can become part of the reviewed requirements.</p><ul>${clarifications.map(item=>`<li><blockquote>“${escapeHTML(item.source_quote)}”</blockquote><b>${escapeHTML(p.fields[item.field].label)}</b><p>${escapeHTML(clarificationReason(item))}</p></li>`).join('')}</ul><p class="small">Your choice in the form below will be recorded when you review these requirements.</p></section>`:'';
  $('#workspace').innerHTML=`<section><div class="section-head"><span class="eyebrow">02 / YOUR APPROVAL IS THE SOURCE OF TRUTH</span><h1 class="page-title">Review what will be checked.</h1><p>Confirm the captured details, answer anything still open, and make an explicit choice for each optional field. Nothing is approved until you confirm.</p></div><div class="review-layout"><aside class="request-summary"><span class="eyebrow">YOUR ORIGINAL REQUEST</span><blockquote>“${escapeHTML(d.message)}”</blockquote><details class="interpretation-note"><summary>Interpretation details</summary><span class="small">${d.mode==='live'?`Live Foundry · ${escapeHTML(d.model)}`:'Explicit offline parser — limited phrase support'}</span><p>${escapeHTML(d.explanation)}</p></details><p>A blank optional field stays unresolved. Select “No preference” only when that is your choice.</p>${d.unsupported.length?`<div class="unsupported"><b>Not yet enforceable</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p>Keep these in your approval to hold checkout, or specifically remove a condition below.</p></div>`:''}</aside><form id="review-form">${clarificationBlock}<div class="flagged-review">${d.unsupported.length?`<h3>Resolve the flagged conditions</h3><p class="small">Keep each condition to hold checkout, or explicitly remove it as a separate requirement. Your removal is recorded alongside the original request.</p>${d.unsupported.map((x,i)=>`<label class="consent"><input type="checkbox" data-remove-condition="${i}"><span>I remove “${escapeHTML(x)}” as a separate purchasing requirement. The fields I review below express what I authorize.</span></label>`).join('')}`:''}</div><div class="fields">${Object.entries(p.fields).map(([k,f])=>fieldMarkup(k,f)).join('')}</div><div class="field"><label for="missed-requirements">Any other requirement we missed?</label><textarea id="missed-requirements" name="missed_requirements" maxlength="2000" placeholder="One additional requirement per line"></textarea><small>Correct a supported field above, or record an additional condition here. Additional conditions stay in your approval and hold checkout until an evaluator supports them.</small></div><div class="review-actions"><button type="button" class="text-button" id="no-preference">No preference for unanswered optional details ↗</button><label class="consent"><input type="checkbox" id="review-confirm" required><span>I reviewed my original request and every requirement above, including each explicit no preference. These are the rules I authorize for this demo.</span></label><button class="primary" type="submit">Approve these requirements <span aria-hidden="true">→</span></button><p class="small">${d.unsupported.length?'Unsupported conditions remain held after approval.':'Your approved requirements will be signed into a Verifiable Intent mandate.'}</p></div></form></div></section>`;
- if(state.reviewEdits?.id===d.id&&state.reviewEdits.revision===d.revision)[...$('#review-form').querySelectorAll('input,select,textarea')].forEach((el,i)=>{const saved=state.reviewEdits.controls[i];if(saved){el.value=saved.value;if(el.type==='checkbox')el.checked=saved.checked;}});
+ if(state.reviewEdits?.id===d.id&&state.reviewEdits.revision===d.revision)[...$('#review-form').querySelectorAll('input,select,textarea')].forEach((el,i)=>{const saved=state.reviewEdits.controls[i];if(saved){el.value=saved.value;if(el.type==='checkbox'||el.type==='radio')el.checked=saved.checked;}});
+ const syncReviewDateChoices=()=>document.querySelectorAll('[data-date-field]').forEach(fieldset=>{const mode=fieldset.querySelector('input[type="radio"]:checked')?.value||'single';fieldset.querySelectorAll('[data-date-panel]').forEach(panel=>{panel.hidden=panel.dataset.datePanel!==mode;});});
+ document.querySelectorAll('[data-date-field] input[type="radio"]').forEach(radio=>radio.addEventListener('change',syncReviewDateChoices));
+ syncReviewDateChoices();
  document.querySelectorAll('[data-no-preference]').forEach(box=>{box.onchange=()=>{const input=$('#field-'+box.dataset.noPreference);input.disabled=box.checked;if(input.type==='time')$('#'+input.id+'-end').disabled=box.checked;};box.onchange();});
  $('#no-preference').onclick=()=>{document.querySelectorAll('[data-no-preference]').forEach(box=>{const input=$('#field-'+box.dataset.noPreference);if(!input.value){box.checked=true;box.onchange();}});};
  $('#review-form').onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
@@ -301,6 +435,11 @@ function renderReview(){
    for(const [k,f] of Object.entries(p.fields)){
     const input=$('#field-'+k),pref=$(`[data-no-preference="${k}"]`);
     if(pref?.checked){fields[k]=null;continue;}
+    if(f.type==='date_choice'){
+     const choice=readDateChoice(k);
+     if(choice===null){$('#field-'+k+'-single').focus();throw new Error(`Please choose ${f.label.toLowerCase()}.`);}
+     fields[k]=choice;continue;
+    }
     if(!input.value.trim()){input.focus();throw new Error(`Please answer ${f.label.toLowerCase()} or explicitly choose no preference.`);}
     if(f.type==='integer'){if(k==='max_total_cents'){if(!/^\d+(\.\d{1,2})?$/.test(input.value))throw new Error('Use a USD amount with at most two decimal places.');fields[k]=Math.round(Number(input.value)*100);}else fields[k]=Number(input.value);}
     else if(f.type==='boolean')fields[k]=input.value==='true';
@@ -318,12 +457,32 @@ function renderReview(){
    state.offers=approved.offers;state.draft.approved=approved.approved;state.decisions=Object.fromEntries(decisions);transition(4);
  },'Signing your approved requirements…');};
 }
+function readDateChoice(key){
+ const id='field-'+key,mode=document.querySelector(`input[name="${id}-mode"]:checked`)?.value||'single';
+ const valid=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'');
+ if(mode==='single'){const value=$('#'+id+'-single')?.value;return valid(value)?value:null;}
+ if(mode==='range'){
+  const start=$('#'+id+'-start')?.value,end=$('#'+id+'-end')?.value;
+  return valid(start)&&valid(end)&&start<=end?{start,end}:null;
+ }
+ const dates=($('#'+id+'-list')?.value||'').split(',').map(value=>value.trim()).filter(Boolean);
+ return dates.length>0&&dates.length<=20&&dates.every(valid)&&new Set(dates).size===dates.length?{dates}:null;
+}
 function displayValue(check,value){
  if(value===null||value===undefined)return 'Not disclosed';
  if(check.check_id==='max_total_cents')return fmtMoney(value);
  if(check.check_id==='trip_type'&&value==='one_way')return 'One-way';
  if(typeof value==='boolean')return value?'Yes':'No';
+ if(check.check_id==='departure_date')return formatDateChoice(value);
  return Array.isArray(value)?value.join(' – '):String(value);
+}
+function formatDateChoice(value){
+ const format=value=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return String(value??'');const date=new Date(`${value}T00:00:00`);return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(date);};
+ if(typeof value==='string')return format(value);
+ if(Array.isArray(value))return value.map(format).join(' · ');
+ if(value&&typeof value==='object'&&Array.isArray(value.dates))return value.dates.map(format).join(' · ');
+ if(value&&typeof value==='object'&&value.start&&value.end)return `${format(value.start)} through ${format(value.end)}`;
+ return String(value??'');
 }
 function checkMarkup(c){return `<div class="check-row"><div>${escapeHTML(c.check_id==='max_total_cents'?'All-in price':c.label)}${c.status!=='pass'?`<small>Required: ${escapeHTML(displayValue(c,c.requirement))}<br>Offer: ${escapeHTML(displayValue(c,c.offer_value))}</small>`:''}</div><span class="result ${c.status}">${c.status==='pass'?'✓ Matches':c.status==='fail'?'! Differs':'? Missing'}</span></div>`;}
 function renderOffers(){

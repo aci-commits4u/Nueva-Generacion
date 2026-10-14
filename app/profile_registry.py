@@ -1,6 +1,8 @@
 """Reviewed profiles select a fixed set of typed operators, never executable code."""
 import hashlib
 import json
+import re
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +26,43 @@ def normalise_review_fields(domain,fields):
             result['trip_type']='one_way'
     return result
 
+
+_ISO_DATE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
+
+
+def valid_iso_date(value):
+    """Accept only the canonical date shape used by signed merchant facts."""
+    if type(value) is not str or not _ISO_DATE.fullmatch(value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def valid_date_choice(value):
+    """Validate an exact date, bounded range, or finite date alternatives."""
+    if valid_iso_date(value):
+        return True
+    if type(value) is not dict:
+        return False
+    if set(value) == {'start', 'end'}:
+        start, end = value['start'], value['end']
+        if not valid_iso_date(start) or not valid_iso_date(end):
+            return False
+        start_date, end_date = date.fromisoformat(start), date.fromisoformat(end)
+        return start_date <= end_date and (end_date - start_date).days <= 366
+    if set(value) == {'dates'}:
+        dates = value['dates']
+        return (
+            type(dates) is list
+            and 0 < len(dates) <= 20
+            and all(valid_iso_date(item) for item in dates)
+            and len(set(dates)) == len(dates)
+        )
+    return False
+
 def validate_fields(profile, fields):
     if len(fields)>30:
         raise ValueError('Too many requirements')
@@ -34,7 +73,7 @@ def validate_fields(profile, fields):
             continue
         f=profile['fields'][key]
         t=f['type']
-        valid = (t=='integer' and type(value) is int and value>=0) or (t=='boolean' and type(value) is bool) or (t=='string' and type(value) is str and 0<len(value)<=120) or (t=='strings' and type(value) is list and 0<len(value)<=20 and all(type(v) is str and len(v)<=120 for v in value)) or (t=='window' and type(value) is list and len(value)==2 and all(valid_time(v) for v in value))
+        valid = (t=='integer' and type(value) is int and value>=0) or (t=='boolean' and type(value) is bool) or (t=='string' and type(value) is str and 0<len(value)<=120) or (t=='strings' and type(value) is list and 0<len(value)<=20 and all(type(v) is str and len(v)<=120 for v in value)) or (t=='window' and type(value) is list and len(value)==2 and all(valid_time(v) for v in value)) or (t=='date_choice' and valid_date_choice(value))
         if not valid:
             raise ValueError(f'Invalid value for {key}')
         if f.get('enum') and value not in f['enum']:
@@ -45,9 +84,11 @@ def validate_fields(profile, fields):
             import re
             if any(not re.fullmatch(r'[A-Z]{3}',airport) or airport in {'USA','NYC','CHI'} for airport in value):
                 raise ValueError('Choose three-letter airport codes, such as EWR or MCO; city and region names need clarification.')
-        if key.endswith('date'):
-            from datetime import date
-            date.fromisoformat(value)
+        if t=='date_choice' and not valid_date_choice(value):
+            raise ValueError(f'Invalid value for {key}')
+        if key.endswith('date') and t=='string':
+            if not valid_iso_date(value):
+                raise ValueError(f'Invalid value for {key}')
 
 def valid_time(v):
     import re

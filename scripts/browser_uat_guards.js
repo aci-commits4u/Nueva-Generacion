@@ -18,7 +18,11 @@ async page => {
  await page.getByLabel('What would you like to find?').fill('Find a nonstop flight from Newark to Orlando under $300.');
  await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
- await page.locator('[data-reply]').first().click();await clarifyReceived;
+ const pendingAirport=page.locator('[data-question="origin_airports"]');
+ await pendingAirport.waitFor();
+ await pendingAirport.getByRole('button',{name:'Newark · EWR'}).click();
+ await pendingAirport.getByRole('button',{name:/Use 1 airport/}).click();
+ await clarifyReceived;
  const reviewNow=page.getByRole('button',{name:'Review requirements'});
  if(!await reviewNow.isEnabled()){
   await reviewNow.click({force:true});
@@ -64,24 +68,42 @@ async page => {
  await page.waitForTimeout(100);
  if(!(await page.locator('#explanation-fixture-offer').innerText()).includes('quiet and recyclable'))throw new Error('Offline explanation did not render the escaped condition text');
 
- // A draft from an older profile must reopen as a new live intake without a
- // model call, approval attempt, or session reset. Completed receipts remain
- // resumable even when their profile is no longer current.
+ // A draft from an older profile must reopen as a read-only saved conversation
+ // without a model call, approval attempt, or session reset. Reinterpretation
+ // is an explicit user action. Completed receipts remain resumable even when
+ // their profile is no longer current.
  const staleDraft={...baseDraft(),id:'stale-profile-intent',profile_current:false,mode:'offline'};
  const completedStaleDraft={...staleDraft,id:'completed-stale-intent',latest_purchase:{id:'fixture-receipt',total_cents:29900,exceptions_count:0,timestamp:'2026-10-13T15:00:00.000Z',offer_hash:'fixture-offer-hash'}};
- let resumeFixture='stale',stalePostCalls=0,sessionResetCalls=0;
+ const refreshedDraft={...staleDraft,revision:2,profile_current:true,questions:[],messages:[...staleDraft.messages,{role:'assistant',content:'Saved conversation updated under the current profile.'}]};
+ let resumeFixture='stale',stalePostCalls=0,sessionResetCalls=0,refreshProfileCalls=0;
  await page.route('**/api/session',async route=>{const id=resumeFixture==='stale'?staleDraft.id:completedStaleDraft.id;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({intents:[{id}]})});});
  await page.route('**/api/session/reset',async route=>{sessionResetCalls++;await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({detail:'Unexpected session reset in stale resume fixture'})});});
  await page.route('**/api/intents',async route=>{if(route.request().method()==='POST'){stalePostCalls++;await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({detail:'Unexpected new interpretation in stale resume fixture'})});return;}await route.continue();});
- await page.route('**/api/intents/*',async route=>{const draft=resumeFixture==='stale'?staleDraft:completedStaleDraft;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft)});});
+ await page.route('**/api/intents/*',async route=>{
+  const draft=resumeFixture==='stale'?staleDraft:completedStaleDraft;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft)});
+ });
+ await page.route('**/api/intents/*/refresh-profile',async route=>{refreshProfileCalls++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(refreshedDraft)});});
  await page.goto(origin+'/?intent='+staleDraft.id);
- await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
- if((await page.getByLabel('What would you like to find?').inputValue())!==staleDraft.message)throw new Error('Stale draft did not prefill the original request');
- if(!await page.getByText('Profile updated; start a new conversation to review current rules.',{exact:true}).isVisible())throw new Error('Stale draft resume lacks profile update guidance');
- if(stalePostCalls!==0||sessionResetCalls!==0)throw new Error('Stale draft resume triggered a new interpretation or session reset');
+ await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
+ if((await page.getByLabel('Add a detail or change your request').inputValue())!=='')throw new Error('Stale draft exposed an editable clarification');
+ if(!await page.getByRole('heading',{name:'This request uses an older task profile.'}).isVisible())throw new Error('Stale draft resume lacks read-only profile guidance');
+ if(await page.getByRole('button',{name:'Review requirements'}).count())throw new Error('Stale draft exposed review before profile update');
+ if(await page.getByLabel('Add a detail or change your request').isEnabled())throw new Error('Stale draft composer remained editable');
+ if(!await page.locator('.messages').getByText(staleDraft.message,{exact:true}).isVisible())throw new Error('Stale draft did not preserve the original conversation');
+ if(stalePostCalls!==0||sessionResetCalls!==0||refreshProfileCalls!==0)throw new Error('Stale draft resume triggered an interpretation, refresh, or session reset');
+ const refresh=page.waitForRequest(r=>new URL(r.url()).pathname.endsWith('/refresh-profile')&&r.method()==='POST');
+ await page.getByRole('button',{name:/Update this saved conversation/}).click();
+ await refresh;
+ await page.locator('#stale-profile-title').waitFor({state:'detached'});
+ await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
+ if(await page.getByRole('heading',{name:'This request uses an older task profile.'}).count())throw new Error('Explicit profile update did not reopen the conversation');
+ if(!(await page.getByLabel('Add a detail or change your request').isEnabled()))throw new Error('Updated saved conversation stayed read-only');
+ if(!await page.locator('.messages').getByText(staleDraft.message,{exact:true}).isVisible())throw new Error('Profile update discarded the original conversation');
+ if(refreshProfileCalls!==1||stalePostCalls!==0||sessionResetCalls!==0)throw new Error('Profile update made an unexpected interpretation or reset call');
  resumeFixture='completed';
  await page.goto(origin+'/?intent='+completedStaleDraft.id);
  await page.getByRole('heading',{name:'Booked in the demo.'}).waitFor();
- if(await page.getByLabel('What would you like to find?').count())throw new Error('Completed stale receipt was routed back to intake');
- return {result:'PASS',reviewBlockedDuringClarification:true,unsupportedOnlyAcceptanceHidden:true,cannotWaiveGuidance:true,offlineConditionTextVisible:true,staleDraftReopened:true,completedStaleReceiptResumed:true};
+ if(await page.getByLabel('What would you like to find?').count()||await page.getByLabel('Add a detail or change your request').count())throw new Error('Completed stale receipt was routed back to intake');
+ return {result:'PASS',reviewBlockedDuringClarification:true,unsupportedOnlyAcceptanceHidden:true,cannotWaiveGuidance:true,offlineConditionTextVisible:true,staleDraftReadOnly:true,explicitProfileUpdate:true,conversationPreserved:true,completedStaleReceiptResumed:true};
 }

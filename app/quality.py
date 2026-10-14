@@ -7,7 +7,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 from fastapi import HTTPException
 from app.store import get_store
-from app.ai_config import selected_pipeline
+from app.ai_config import selected_pipeline,PROMPT_VERSION
 from evals.scoring import score_case
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -30,7 +30,7 @@ def overview():
     today=datetime.now(timezone.utc).date().isoformat()
     current=get_store().read('quality-'+today) or get_store().read('quality-latest')
     publication=ROOT/'evals/native-publication.json'
-    return {'pipeline':selected_pipeline(),'benchmarks':benchmarks,'monitor':display_report(current.get('report')),
+    return {'pipeline':selected_pipeline(),'prompt_version':PROMPT_VERSION,'benchmarks':benchmarks,'monitor':display_report(current.get('report')),
             'runtime':get_store().read('ai-runtime'),
             'native_evaluation':json.loads(publication.read_text()) if publication.exists() else None,
             'limitations':'Small synthetic benchmarks, not a guarantee of complete understanding. Original development and holdout scores describe the earlier prompts. Reliability-development includes deliberately difficult requests and records failures as well as successes. Customer review and deterministic enforcement remain mandatory.'}
@@ -49,7 +49,7 @@ def canary(authorization):
         if state.get('report'):
             state['report']=display_report(state['report'])
             return False,state['report']
-        report={'date':date.isoformat(),'case_id':case['id'],'status':'running','started_at':datetime.now(timezone.utc).isoformat()}
+        report={'date':date.isoformat(),'case_id':case['id'],'status':'running','prompt_version':PROMPT_VERSION,'started_at':datetime.now(timezone.utc).isoformat()}
         state.update(owner=owner,report=report)
         return True,report
     claimed,report=get_store().mutate(key,claim)

@@ -1,0 +1,705 @@
+{
+  "scope": "Bounded development comparison, not human UAT or statistical model ranking. Same configured Foundry deployment, low vs medium reasoning, current stateful pipeline. Actual responses retained.",
+  "before": {
+    "calls": 198,
+    "reserved_usd": 18.84,
+    "reserved_cents": 1884
+  },
+  "after": {
+    "calls": 210,
+    "reserved_usd": 19.08,
+    "reserved_cents": 1908
+  },
+  "rows": [
+    {
+      "case": "reported-intake",
+      "reasoning": "low",
+      "passed": false,
+      "duration_ms": 4541,
+      "result": {
+        "fields": {
+          "nonstop": true,
+          "max_total_cents": 19999,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-20"
+          }
+        },
+        "sources": {
+          "nonstop": "nonstop",
+          "max_total_cents": "under $200",
+          "departure_date": "within the next week"
+        },
+        "unsupported": [
+          "FL"
+        ],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "FL",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Retained clear nonstop and budget fields; destination state FL remains unsupported; departure date is ambiguous without a concrete date range, so moved to clarifications.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 1928,
+            "tokens": {
+              "completion_tokens": 362,
+              "prompt_tokens": 1490,
+              "total_tokens": 1852,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "faff70f5600b40a5bd97e22ffd57a358",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 2101,
+            "tokens": {
+              "completion_tokens": 261,
+              "prompt_tokens": 1820,
+              "total_tokens": 2081,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "1c8d0c818bc5443491c70713e0838493",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": []
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "nonstop": true,
+        "max_total_cents": 19999,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-20"
+        }
+      },
+      "compiler_replay": {
+        "fields": {
+          "nonstop": true,
+          "max_total_cents": 19999,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-20"
+          }
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "fl",
+            "reason": "ambiguous"
+          }
+        ],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    },
+    {
+      "case": "date-window-correction",
+      "reasoning": "low",
+      "passed": true,
+      "duration_ms": 6901,
+      "result": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ]
+        },
+        "sources": {
+          "max_total_cents": "under $200",
+          "nonstop": "nonstop",
+          "departure_date": "Oct 14th through oct 21st",
+          "origin_airports": "Depart from EWR.",
+          "destination_airports": "Arrive at MCO."
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "Captured explicit budget, nonstop, dates, and airports; the vague 'within the next week' conflicts with the explicit date range and is recorded as unsupported.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 2849,
+            "tokens": {
+              "completion_tokens": 397,
+              "prompt_tokens": 2171,
+              "total_tokens": 2568,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "803c63d53d6d4e44b50cff9bc89e854d",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3534,
+            "tokens": {
+              "completion_tokens": 545,
+              "prompt_tokens": 2519,
+              "total_tokens": 3064,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "7e36474d30834c3593f7072451af1989",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "max_total_cents": 19999,
+        "nonstop": true,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-21"
+        },
+        "origin_airports": [
+          "EWR"
+        ],
+        "destination_airports": [
+          "MCO"
+        ]
+      },
+      "compiler_replay": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ]
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    },
+    {
+      "case": "airport-alternatives-and-decline",
+      "reasoning": "low",
+      "passed": false,
+      "duration_ms": 8004,
+      "result": {
+        "fields": {
+          "max_total_cents": 19999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "cabin": "economy"
+        },
+        "sources": {
+          "max_total_cents": "under $200",
+          "origin_airports": "Depart from EWR.",
+          "departure_date": "Oct 14th through oct 21st",
+          "cabin": "economy is fine."
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "Orlando or Miami are both fine.",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Budget, origin, and dates are set; nonstop requirement withdrawn; cabin not required; destination ambiguous needs clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3610,
+            "tokens": {
+              "completion_tokens": 502,
+              "prompt_tokens": 2400,
+              "total_tokens": 2902,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "e0882dc7c2ea4dcc9be34dec43c155e1",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3900,
+            "tokens": {
+              "completion_tokens": 580,
+              "prompt_tokens": 2766,
+              "total_tokens": 3346,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "a2d1ab8eb35c44e6b4e201393a0f118a",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "max_total_cents": 19999,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-21"
+        },
+        "origin_airports": [
+          "EWR"
+        ],
+        "destination_airports": [
+          "MCO"
+        ],
+        "cabin": "economy"
+      },
+      "compiler_replay": {
+        "fields": {
+          "max_total_cents": 19999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "cabin": "economy",
+          "destination_airports": [
+            "MCO",
+            "MIA"
+          ]
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    },
+    {
+      "case": "reported-intake",
+      "reasoning": "medium",
+      "passed": false,
+      "duration_ms": 6931,
+      "result": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-20"
+          }
+        },
+        "sources": {
+          "max_total_cents": "under $200",
+          "nonstop": "nonstop",
+          "departure_date": "within the next week"
+        },
+        "unsupported": [
+          "FL"
+        ],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "FL",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "Budget and nonstop requirement are captured; destination state and date range are ambiguous and recorded as unsupported and clarification respectively.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 2446,
+            "tokens": {
+              "completion_tokens": 733,
+              "prompt_tokens": 1490,
+              "total_tokens": 2223,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "0bd13c64bcd74b5ca618f71d265e4f07",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 3952,
+            "tokens": {
+              "completion_tokens": 619,
+              "prompt_tokens": 1813,
+              "total_tokens": 2432,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "4ecb54981f594de3b3915da4f62d758a",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": []
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "max_total_cents": 19999,
+        "nonstop": true,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-20"
+        }
+      },
+      "compiler_replay": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-20"
+          }
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "destination_airports",
+            "source_quote": "fl",
+            "reason": "ambiguous"
+          }
+        ],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    },
+    {
+      "case": "date-window-correction",
+      "reasoning": "medium",
+      "passed": false,
+      "duration_ms": 14695,
+      "result": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ]
+        },
+        "sources": {
+          "max_total_cents": "under $200",
+          "nonstop": "nonstop",
+          "departure_date": "Oct 14th through oct 21st",
+          "origin_airports": "Depart from EWR.",
+          "destination_airports": "Arrive at MCO."
+        },
+        "unsupported": [
+          "to FL"
+        ],
+        "clarifications": [],
+        "explanation": "All required fields captured; ambiguous state destination recorded as clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 7013,
+            "tokens": {
+              "completion_tokens": 1153,
+              "prompt_tokens": 2171,
+              "total_tokens": 3324,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "c8fb75ad89d64792a6a64b8ab3de654b",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 7170,
+            "tokens": {
+              "completion_tokens": 1342,
+              "prompt_tokens": 2516,
+              "total_tokens": 3858,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "47a08d99b1804b52b7e34b308cfa8d8c",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "max_total_cents": 19999,
+        "nonstop": true,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-21"
+        },
+        "origin_airports": [
+          "EWR"
+        ],
+        "destination_airports": [
+          "MCO"
+        ]
+      },
+      "compiler_replay": {
+        "fields": {
+          "max_total_cents": 19999,
+          "nonstop": true,
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          },
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO"
+          ]
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    },
+    {
+      "case": "airport-alternatives-and-decline",
+      "reasoning": "medium",
+      "passed": false,
+      "duration_ms": 14392,
+      "result": {
+        "fields": {
+          "max_total_cents": 19999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO",
+            "MIA"
+          ],
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          }
+        },
+        "sources": {
+          "max_total_cents": "under $200",
+          "origin_airports": "Depart from EWR.",
+          "destination_airports": "Orlando or Miami are both fine.",
+          "departure_date": "Oct 14th through oct 21st"
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "cabin",
+            "source_quote": "economy is fine.",
+            "reason": "preference"
+          }
+        ],
+        "explanation": "Retained budget, origin, both destination airports, and date range. Removed nonstop requirement per later correction. Economy cabin noted as a preference clarification.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "audited",
+        "trace": [
+          {
+            "stage": "extract",
+            "model": "gpt-oss-120b",
+            "duration_ms": 6616,
+            "tokens": {
+              "completion_tokens": 1237,
+              "prompt_tokens": 2400,
+              "total_tokens": 3637,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "35bafbc340eb4d2ab665e690072dd7be",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          },
+          {
+            "stage": "coverage_audit",
+            "model": "gpt-oss-120b",
+            "duration_ms": 7276,
+            "tokens": {
+              "completion_tokens": 1363,
+              "prompt_tokens": 2778,
+              "total_tokens": 4141,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "5238dc0b632c4f269fb41c2e6bf346c6",
+            "prompt_version": "intent-envelope-v4-stateful-choices",
+            "reasoning_effort": "medium",
+            "output_format": "plain-json",
+            "grounding_recoveries": [
+              {
+                "field": "departure_date",
+                "reason": "year_missing"
+              }
+            ]
+          }
+        ]
+      },
+      "reconciled_fields": {
+        "max_total_cents": 19999,
+        "departure_date": {
+          "start": "2026-10-14",
+          "end": "2026-10-21"
+        },
+        "origin_airports": [
+          "EWR"
+        ],
+        "destination_airports": [
+          "MCO",
+          "MIA"
+        ]
+      },
+      "compiler_replay": {
+        "fields": {
+          "max_total_cents": 19999,
+          "origin_airports": [
+            "EWR"
+          ],
+          "destination_airports": [
+            "MCO",
+            "MIA"
+          ],
+          "departure_date": {
+            "start": "2026-10-14",
+            "end": "2026-10-21"
+          }
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "cabin",
+            "source_quote": "economy is fine.",
+            "reason": "preference"
+          }
+        ],
+        "scope": "Existing actual response replayed without new inference; original result and original score retained."
+      }
+    }
+  ]
+}

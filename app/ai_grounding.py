@@ -9,9 +9,17 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 import re
 
+from app.airport_reference import (
+    airport_record,
+    airport_records,
+    codes_for_place,
+    quote_supports_airport,
+)
 from app.profile_registry import get_profile, validate_fields
+from app.temporal import expand_date_quote, reference_for_quote, resolve_date_choice
 
 
 LEGACY_KEYS = {"fields", "sources", "unsupported", "explanation"}
@@ -37,6 +45,7 @@ _AIRPORT_ALIASES = {
     "san francisco": ("SFO",),
 }
 _AMBIGUOUS_LOCATIONS = {
+    "fl",
     "florida",
     "the state of florida",
     "new england",
@@ -144,13 +153,13 @@ def _source_span(quote: str, text: str) -> str | None:
         starts.extend([index] * len(normalized_character))
         ends.extend([index + 1] * len(normalized_character))
     normalized_text = "".join(normalized_text_parts)
-    start = normalized_text.find(normalized_quote)
-    if start < 0:
-        return None
-    end = start + len(normalized_quote)
-    if end > len(starts):
-        return None
-    return text[starts[start]:ends[end - 1]]
+    prefix = r'(?<!\w)' if normalized_quote[0].isalnum() else ''
+    suffix = r'(?!\w)' if normalized_quote[-1].isalnum() else ''
+    matches = list(re.finditer(prefix + re.escape(normalized_quote) + suffix, normalized_text))
+    # Prefer the exact spelling before case/typography-equivalent recovery.
+    # In particular, FL must not be restored to the letters inside "flight".
+    spans = [text[starts[m.start()]:ends[m.end()-1]] for m in matches]
+    return next((span for span in spans if span == quote), spans[0] if spans else None)
 
 
 def _contains(quote: str, text: str) -> bool:
@@ -260,12 +269,151 @@ def one_way_quote_supported(quote: str) -> bool:
     return _one_way_quote_supports(quote)
 
 
-def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, list[str]]:
+def _field_source_scope(
+    key: str,
+    quote: str,
+    message: str,
+    source_messages: list[dict] | None = None,
+) -> str:
+    """Use a latest trusted field-bound customer turn as polarity scope."""
+    for item in reversed(source_messages or []):
+        if not isinstance(item, dict) or item.get("role") not in {"user", "customer"}:
+            continue
+        reply_to = item.get("reply_to")
+        content = item.get("content")
+        if (not isinstance(reply_to, dict) or reply_to.get("field") != key
+                or not isinstance(content, str) or not content.strip()):
+            continue
+        if _contains(quote, content):
+            return content
+    return message
+
+
+def _airport_source_supports(code: str, quote: str, message: str | None = None) -> bool:
+    """Require catalogue identity and positive polarity in the source span."""
+    record = airport_record(code)
+    if record is None or not quote_supports_airport(code, quote):
+        return False
+    if message is None:
+        return True
+    if _source_span(quote, message) is None:
+        return False
+    normalized_quote = quote.translate(_SOURCE_TYPOGRAPHY).casefold()
+    # Check explicit code occurrences first. This catches a negative code in a
+    # larger source quote such as "MCO, but avoid MIA" even when the model
+    # incorrectly proposes both airports.
+    code_pattern = re.compile(rf"(?<!\w){re.escape(code.casefold())}(?!\w)")
+    code_matches = list(code_pattern.finditer(normalized_quote))
+    if code_matches:
+        if any(_airport_phrase_negated(normalized_quote, match.start(), match.end()) for match in code_matches):
+            return False
+        # A tiny quote such as "MIA" still needs its surrounding customer
+        # context checked; the quote itself cannot hide "avoid MIA".
+        if normalized_quote.strip() == code.casefold():
+            normalized_message = message.translate(_SOURCE_TYPOGRAPHY).casefold()
+            source_pattern = re.compile(rf"(?<!\w){re.escape(code.casefold())}(?!\w)")
+            occurrences = list(source_pattern.finditer(normalized_message))
+            return bool(occurrences) and not any(
+                _airport_phrase_negated(normalized_message, match.start(), match.end())
+                for match in occurrences
+            )
+        return True
+    # City/name phrases are also allowed evidence, including distinctive
+    # shortened names such as "Heathrow". Their full source quote is checked
+    # for polarity, and a tiny phrase is checked in the complete message.
+    literal_matches: list[re.Match] = []
+    for phrase in (record["city"], record["name"]):
+        if not phrase:
+            continue
+        literal_matches.extend(
+            re.finditer(
+                rf"(?<!\w){re.escape(phrase.translate(_SOURCE_TYPOGRAPHY).casefold())}(?!\w)",
+                normalized_quote,
+            )
+        )
+    if literal_matches:
+        if any(_airport_phrase_negated(normalized_quote, match.start(), match.end()) for match in literal_matches):
+            return False
+        return True
+    normalized_message = message.translate(_SOURCE_TYPOGRAPHY).casefold()
+    source_span = _source_span(quote, message)
+    if source_span is None:
+        return False
+    source_pattern = re.compile(rf"(?<!\w){re.escape(source_span.casefold())}(?!\w)")
+    occurrences = list(source_pattern.finditer(normalized_message))
+    return bool(occurrences) and not any(
+        _airport_phrase_negated(normalized_message, match.start(), match.end())
+        for match in occurrences
+    )
+
+
+def _airport_phrase_negated(text: str, start: int, end: int) -> bool:
+    """Reject an airport mentioned in an exclusion or negative clause."""
+    prefix = text[max(0, start - 120):start]
+    suffix = text[end:end + 80]
+    if re.search(r"\b(?:avoid|except|excluding|exclude|skip)\s*$", prefix):
+        return True
+    if re.search(
+        r"(?:\b(?:do|does|did)\s+not|\b(?:don't|doesn't|didn't)|\bnot)\s+"
+        r"(?:want|need|prefer|use|include|take|fly\s+to|go\s+to)?\s*"
+        r"(?:a|an|the)?\s*$",
+        prefix,
+    ):
+        return True
+    return bool(re.match(
+        r"^\s*(?:(?:is|are|was|were)\s+not|(?:isn't|aren't|wasn't|weren't)|"
+        r"not|unacceptable|excluded|off[- ]limits)\b",
+        suffix,
+        re.I,
+    ))
+
+
+def _positive_place_alternatives(
+    place: str,
+    candidates: list[str],
+    quote: str,
+    message: str | None,
+) -> list[str] | None:
+    """Resolve a multi-airport city only when all positive alternatives are explicit."""
+    if not re.search(r"\b(?:either|any|both)\b", quote, re.I):
+        return None
+    if re.search(r"\b(?:avoid|except|excluding|exclude|not|don't|doesn't)\b", quote, re.I):
+        return None
+    if not _contains(place, quote):
+        return None
+    mentioned = list(dict.fromkeys(
+        code for code in re.findall(r"\b[A-Z]{3}\b", quote)
+        if code in candidates
+    ))
+    if len(mentioned) < 2:
+        return None
+    records = [airport_record(code) for code in mentioned]
+    if any(record is None for record in records):
+        return None
+    identities = {(record["city"].casefold(), record["country"].upper()) for record in records}
+    if len(identities) != 1:
+        return None
+    if not all(_airport_source_supports(code, quote, message) for code in mentioned):
+        return None
+    return mentioned
+
+
+def _normalise_airports(
+    value,
+    key: str,
+    quote: str,
+    message: str | None = None,
+    source_messages: list[dict] | None = None,
+) -> tuple[list[str], bool, list[str]]:
     if type(value) is not list or not value or any(type(item) is not str for item in value):
         raise GroundingFailure(f"{key} must contain airport codes or specific city names")
     airports: list[str] = []
     ambiguous = False
     unresolved: list[str] = []
+    scoped_message = (
+        _field_source_scope(key, quote, message, source_messages)
+        if message is not None else None
+    )
     for raw in value:
         token = raw.strip()
         lower = token.casefold()
@@ -278,19 +426,36 @@ def _normalise_airports(value, key: str, quote: str) -> tuple[list[str], bool, l
             unresolved.append(token)
         elif _IATA.fullmatch(token.upper()):
             code = token.upper()
-            aliases = [name for name, codes in _AIRPORT_ALIASES.items() if code in codes]
-            if not re.search(rf"\b{re.escape(code)}\b", quote, re.I) and not any(
-                re.search(rf"\b{re.escape(alias)}\b", quote, re.I) for alias in aliases
-            ):
+            if not _airport_source_supports(code, quote, scoped_message):
                 raise GroundingFailure(f"{key} value is not supported by its source quotation")
             airports.append(code)
         elif lower in _AIRPORT_ALIASES:
-            airports.extend(_AIRPORT_ALIASES[lower])
+            legacy_codes = list(_AIRPORT_ALIASES[lower])
+            if not all(_airport_source_supports(code, quote, scoped_message) for code in legacy_codes):
+                raise GroundingFailure(f"{key} value is not supported by its source quotation")
+            airports.extend(legacy_codes)
         else:
-            # A customer-named city that is outside the reviewed alias map is
-            # a clarification need, not permission to invent an airport.
-            ambiguous = True
-            unresolved.append(token)
+            matched_codes = codes_for_place(token)
+            if not matched_codes:
+                # A customer-named city that is outside the catalogue is a
+                # clarification need, not permission to invent an airport.
+                ambiguous = True
+                unresolved.append(token)
+                continue
+            if len(matched_codes) > 1:
+                alternatives = _positive_place_alternatives(
+                    token, matched_codes, quote, scoped_message
+                )
+                if alternatives:
+                    airports.extend(alternatives)
+                else:
+                    ambiguous = True
+                    unresolved.append(token)
+                continue
+            code = matched_codes[0]
+            if not _airport_source_supports(code, quote, scoped_message):
+                raise GroundingFailure(f"{key} value is not supported by its source quotation")
+            airports.append(code)
     # A broad geography is a clarification need, never a fake airport value.
     if ambiguous:
         return [], True, unresolved
@@ -346,7 +511,12 @@ def _remove_field_clarification_flags(data: dict, message: str) -> dict:
     return result
 
 
-def _normalise_fields(domain: str, data: dict, message: str) -> dict:
+def _normalise_fields(
+    domain: str,
+    data: dict,
+    message: str,
+    source_messages: list[dict] | None = None,
+) -> dict:
     result = deepcopy(data)
     fields = result["fields"]
     sources = result["sources"]
@@ -373,7 +543,9 @@ def _normalise_fields(domain: str, data: dict, message: str) -> dict:
         quote = sources.get(key, "")
         if type(quote) is not str or not quote or not _contains(quote, message):
             raise GroundingFailure(f"{key} source quotation is not in customer text")
-        normalised, ambiguous, unresolved = _normalise_airports(fields[key], key, quote)
+        normalised, ambiguous, unresolved = _normalise_airports(
+            fields[key], key, quote, message, source_messages
+        )
         if ambiguous:
             # Keep the original customer words in the conversation and leave the
             # required field unresolved so the profile asks for a specific airport.
@@ -473,7 +645,7 @@ def clarification_guidance(data: object, message: str) -> list[str]:
         if not isinstance(values, list) or not isinstance(quote, str) or not _contains(quote, message):
             continue
         try:
-            _, ambiguous, unresolved = _normalise_airports(values, key, quote)
+            _, ambiguous, unresolved = _normalise_airports(values, key, quote, message)
         except GroundingFailure:
             continue
         if ambiguous:
@@ -714,13 +886,17 @@ def _date_in_quote(value: str, quote: str, *, message: str | None = None,
     return bool(message and _shared_hotel_year_supports(value, quote, message, domain, key))
 
 
-def _airport_quote_supports(value: list[str], quote: str) -> bool:
-    lower = quote.casefold()
+def _airport_quote_supports(
+    value: list[str], quote: str, message: str | None = None,
+    source_messages: list[dict] | None = None,
+    key: str | None = None,
+) -> bool:
+    scoped_message = (
+        _field_source_scope(key, quote, message, source_messages)
+        if key and message is not None and source_messages is not None else message
+    )
     for airport in value:
-        if re.search(r'\b'+re.escape(airport.casefold())+r'\b',lower):
-            continue
-        aliases = [name for name, codes in _AIRPORT_ALIASES.items() if airport in codes]
-        if not any(re.search(r'\b'+re.escape(alias)+r'\b',lower) for alias in aliases):
+        if not _airport_source_supports(airport, quote, scoped_message):
             return False
     return True
 
@@ -884,12 +1060,17 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
     if type(quote) is not str or not quote or not _contains(quote, message):
         raise GroundingFailure(f"{key} source quotation is not in customer text")
     if key in {"origin_airports", "destination_airports"}:
-        if not _airport_quote_supports(value, quote):
+        if not _airport_quote_supports(value, quote, message, source_messages, key):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "max_total_cents":
         if type(value) is not int or _money_cents(quote) != value:
             raise GroundingFailure("price value is not supported by its source quotation")
     elif key.endswith("date"):
+        temporal = _temporal_value(key, quote, domain, source_messages)
+        if temporal is not None:
+            if temporal != value:
+                raise GroundingFailure(f"{key} value is not supported by its dated source quotation")
+            return
         if not isinstance(value, str) or not _date_in_quote(
             value, quote, message=message, domain=domain, key=key
         ):
@@ -1001,6 +1182,7 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
                 result["unsupported"].append(quote)
             continue
         if (key.endswith("date") and _yearless_date_quote(quote)
+                and _temporal_value(key, quote, domain, source_messages) is None
                 and not _shared_hotel_year_supports(value, quote, message, domain, key)):
             fields.pop(key, None)
             sources.pop(key, None)
@@ -1275,8 +1457,11 @@ def validate_extraction(domain: str, message: str, data: dict,
     # five-key responses must classify supported clarification explicitly.
     canonical = _remove_field_clarification_flags(data, message) if legacy else deepcopy(data)
     canonical = _restore_source_spans(canonical, message)
+    canonical = _restore_boolean_scope(canonical, message, source_messages)
     _validate_clarification_structure(canonical)
-    canonical = _normalise_fields(domain, canonical, message)
+    canonical = _normalise_fields(domain, canonical, message, source_messages)
+    canonical = _compile_temporal_fields(canonical, domain, message, source_messages)
+    canonical = reconcile_supported_conditions(canonical, domain, message, source_messages)
     canonical = _recover_safe_field_uncertainty(
         canonical, domain, message, source_messages=source_messages
     )
@@ -1395,7 +1580,9 @@ def valid_candidate_clarifications(data: object, domain: str, message: str) -> l
             source = data.get("sources", {}).get(field) if isinstance(data.get("sources"), dict) else None
             source = source if isinstance(source, str) else quote
             try:
-                _, ambiguous, _ = _normalise_airports(fields[field], field, source or quote)
+                _, ambiguous, _ = _normalise_airports(
+                    fields[field], field, source or quote, message
+                )
             except GroundingFailure:
                 continue
             if not ambiguous:
@@ -1432,4 +1619,303 @@ def preserve_candidate_clarifications(clarifications: list[dict], audited: dict)
         if item["field"] not in result["fields"] and item["field"] not in existing:
             result["clarifications"].append(deepcopy(item))
             existing.add(item["field"])
+    return result
+
+
+def _temporal_value(key, quote, domain, source_messages=None):
+    """Resolve dates only from a customer quote and its recorded clock context."""
+    if key not in {'departure_date', 'checkin_date', 'checkout_date'}:
+        return None
+    resolved = resolve_date_choice(quote, reference_for_quote(quote, source_messages))
+    if domain == 'flight' and key == 'departure_date':
+        return resolved
+    if domain == 'hotel':
+        if isinstance(resolved, str):
+            return resolved
+        if isinstance(resolved, dict) and set(resolved) == {'start', 'end'}:
+            return resolved['start' if key == 'checkin_date' else 'end']
+    return None
+
+
+def _compile_temporal_fields(data, domain, message, source_messages=None):
+    """Compile explicit choices without losing range endpoints in a proposal.
+
+    A quoted date range can be represented as a range rather than collapsed to
+    its first day. Invalid explicit dates are still rejected, not repaired by
+    changing their meaning. Typed airport widget replies are similarly complete
+    sets of customer-selected options, not model-invented defaults.
+    """
+    result = deepcopy(data)
+    for key, value in list(result['fields'].items()):
+        quote = result['sources'].get(key)
+        if not isinstance(quote, str) or not _contains(quote, message):
+            continue
+        expected = _temporal_value(key, quote, domain, source_messages)
+        if domain == 'flight' and key == 'departure_date':
+            for turn in reversed(source_messages or []):
+                content = turn.get('content', '')
+                if turn.get('role') not in {'user', 'customer'} or not _contains(quote, content):
+                    continue
+                expanded = expand_date_quote(quote, content)
+                if expanded and _bare_date_condition(expanded):
+                    expanded_value = _temporal_value(key, expanded, domain, source_messages)
+                    if isinstance(expanded_value, dict):
+                        first = expanded_value.get('start') or (expanded_value.get('dates') or [None])[0]
+                        if value == first or value == expanded_value:
+                            result['fields'][key] = expanded_value
+                            result['sources'][key] = expanded
+                            quote, expected = expanded, expanded_value
+                break
+        if isinstance(expected, dict) and isinstance(value, str):
+            first = expected.get('start') or (expected.get('dates') or [None])[0]
+            if value == first:
+                result['fields'][key] = expected
+        # A date-question reply can quote the first endpoint while the actual
+        # answer specifies a full interval. Preserve that complete source.
+        if domain == 'flight' and key == 'departure_date':
+            for turn in reversed(source_messages or []):
+                content = turn.get('content', '')
+                if (turn.get('role') in {'user', 'customer'} and
+                        (turn.get('reply_to') or {}).get('field') == key and
+                        _contains(quote, content) and _bare_date_condition(content)):
+                    full = _temporal_value(key, content, domain, source_messages)
+                    if isinstance(full, dict):
+                        first = full.get('start') or (full.get('dates') or [None])[0]
+                        if value == first or value == full:
+                            result['fields'][key] = full
+                            result['sources'][key] = content
+                    break
+    if source_messages:
+        turn = source_messages[-1]
+        key = (turn.get('reply_to') or {}).get('field')
+        content = turn.get('content', '')
+        if domain == 'flight' and key in {'origin_airports', 'destination_airports'}:
+            prefix = 'Depart from' if key == 'origin_airports' else 'Arrive at'
+            match = re.fullmatch('(?i:' + re.escape(prefix) + r')\s+([A-Z]{3}(?:\s+or\s+[A-Z]{3})*)[.!]?', content)
+            if match:
+                codes = [code.upper() for code in re.split(r'\s+or\s+', match.group(1), flags=re.I)]
+                try:
+                    validate_fields(get_profile(domain), {key: codes})
+                except ValueError:
+                    return result
+                result['fields'][key] = list(dict.fromkeys(codes))
+                result['sources'][key] = content
+                result['clarifications'] = [c for c in result['clarifications'] if c['field'] != key]
+    return result
+
+
+_DATE_WORDS = re.compile(
+    r'\b(?:dates?|departure|depart|travel|i|can|on|from|between|within|the|next|'
+    r'week|days?|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|through|to|or|and|inclusive|these|work|'
+    r'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|'
+    r'aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b', re.I)
+
+
+def _bare_date_condition(phrase):
+    if not isinstance(phrase, str):
+        return False
+    stripped = re.sub(r'(?<=\d)(?:st|nd|rd|th)\b', '', phrase, flags=re.I)
+    stripped = _DATE_WORDS.sub('', stripped)
+    return not re.sub(r'[\d\s.,:/\-\u2010-\u2015]+', '', stripped)
+
+
+_GEO_PATTERN = re.compile(
+    r'^(?:(from|to|in)\s+)?(fl|florida|the state of florida|new york|new york city|nyc|'
+    r'chicago|chi|washington|new england|usa|united states|the united states)$', re.I)
+
+
+@lru_cache(maxsize=8)
+def _airport_codes_for_region(place: str) -> frozenset[str]:
+    """Return every catalogue airport in a named US region for reconciliation."""
+    normalized_place = place.strip().casefold()
+    aliases = {"fl": "florida"}
+    normalized_place = aliases.get(normalized_place, normalized_place)
+    return frozenset(
+        code
+        for code, record in airport_records().items()
+        if record["country"].casefold() == "us"
+        and record["region"].casefold() == normalized_place
+    )
+
+
+def reconcile_supported_conditions(data, domain, message, source_messages=None):
+    """Classify known slot ambiguities; never discard a substantive condition.
+
+    Geography and travel-date choices belong to supported fields. A later
+    source-grounded answer resolves the earlier ambiguity in that same slot.
+    Additional qualifiers (bags, returns, proximity, arrival deadlines) are
+    not bare slot markers and remain held. Every change is still a draft.
+    """
+    result = deepcopy(data)
+    result.setdefault('clarifications', [])
+    if domain != 'flight':
+        return result
+    pending = {item['field']: item for item in result['clarifications']}
+    kept = []
+    for phrase in result.get('unsupported', []):
+        if not isinstance(phrase, str) or not _contains(phrase, message):
+            kept.append(phrase)
+            continue
+        geo = _GEO_PATTERN.fullmatch(phrase.strip())
+        field = None
+        if geo:
+            direction, place = geo.groups()
+            direction = (direction or '').casefold()
+            if direction == 'from':
+                field = 'origin_airports'
+            elif direction == 'to':
+                field = 'destination_airports'
+            else:
+                directions = {d.casefold() for d in re.findall(r'\b(from|to)\s+' + re.escape(place) + r'\b', message, re.I)}
+                if len(directions) == 1:
+                    field = 'origin_airports' if next(iter(directions)).casefold() == 'from' else 'destination_airports'
+                else:
+                    matches = [item['field'] for item in result['clarifications']
+                               if item['field'] in {'origin_airports', 'destination_airports'}
+                               and _contains(place, item['source_quote'])]
+                    if len(set(matches)) == 1:
+                        field = matches[0]
+            if field:
+                airports = result['fields'].get(field)
+                if airports:
+                    # A regional marker is satisfied only when every disclosed
+                    # airport belongs to that region in the maintained catalog.
+                    # No single airport is selected from the region here.
+                    region = place.casefold().removeprefix('the state of ')
+                    if set(airports) <= _airport_codes_for_region(region):
+                        pending.pop(field, None)
+                        continue
+                    kept.append(phrase)
+                    continue
+                pending.setdefault(field, {'field': field, 'source_quote': phrase, 'reason': 'ambiguous'})
+                continue
+        if _bare_date_condition(phrase):
+            value = _temporal_value('departure_date', phrase, domain, source_messages)
+            if value is not None:
+                if 'departure_date' not in result['fields']:
+                    result['fields']['departure_date'] = value
+                    result['sources']['departure_date'] = phrase
+                pending.pop('departure_date', None)
+                continue
+            if _DATEISH_QUOTE.search(phrase):
+                pending.setdefault('departure_date', {'field': 'departure_date', 'source_quote': phrase, 'reason': 'ambiguous'})
+                continue
+        kept.append(phrase)
+    for field, item in list(pending.items()):
+        if field in {'origin_airports', 'destination_airports'}:
+            airports = _explicit_airport_choices(item['source_quote'])
+            if airports:
+                result['fields'][field] = airports
+                result['sources'][field] = item['source_quote']
+                pending.pop(field, None)
+                continue
+        value = _temporal_value(field, item['source_quote'], domain, source_messages)
+        if value is not None:
+            if field not in result['fields']:
+                result['fields'][field] = value
+                result['sources'][field] = item['source_quote']
+            pending.pop(field, None)
+        elif field in result['fields']:
+            pending.pop(field, None)
+    result['unsupported'] = list(dict.fromkeys(kept))
+    result['clarifications'] = list(pending.values())
+    return result
+
+
+def _explicit_airport_choices(quote):
+    """Compile positive alternatives named in a quoted airport answer."""
+    if not isinstance(quote, str) or re.search(r'\b(?:not|except|avoid|preferably|maybe)\b', quote, re.I):
+        return None
+    # An alternative list is a choice set, not ambiguity about which single
+    # airport must be chosen. Every value still needs this exact source quote.
+    if not re.search(r'\b(?:or|both|either|any)\b', quote, re.I):
+        return None
+    found = []
+    for alias, codes in _AIRPORT_ALIASES.items():
+        if re.search(r'\b' + re.escape(alias) + r'\b', quote, re.I):
+            found.extend(code for code in codes if airport_record(code) is not None)
+    found.extend(
+        code for code in re.findall(r'\b[A-Z]{3}\b', quote)
+        if code not in {'USA', 'NYC', 'CHI'} and airport_record(code) is not None
+    )
+    values = list(dict.fromkeys(found))
+    return values if values and len(values) <= 20 else None
+
+
+def clarification_field_supported(field, quote, domain, source_messages=None):
+    """Require a real field mention before a new ambiguity replaces old state."""
+    if not isinstance(quote, str) or not quote.strip():
+        return False
+    if source_messages:
+        latest = source_messages[-1]
+        if ((latest.get('reply_to') or {}).get('field') == field
+                and _contains(quote, latest.get('content', ''))):
+            return True
+    patterns = {
+        'max_total_cents': r'\$|\b(?:budget|price|dollars?|USD|spend|cost)\b',
+        'origin_airports': r'\b(?:airport|depart|from|origin)\b',
+        'destination_airports': r'\b(?:airport|arrive|arrival|destination|to)\b',
+        'departure_date': _DATEISH_QUOTE.pattern,
+        'checkin_date': _DATEISH_QUOTE.pattern,
+        'checkout_date': _DATEISH_QUOTE.pattern,
+        'departure_window': r'\b(?:morning|afternoon|evening|departure|takeoff|am|pm)\b|\d:\d',
+        'nonstop': r'\b(?:non[- ]?stop|direct|connections?|layovers?)\b',
+        'max_connections': r'\b(?:connections?|layovers?|stops?)\b',
+        'max_duration_minutes': r'\b(?:duration|hours?|minutes?)\b',
+        'cabin': r'\b(?:cabin|economy|business|first)\b',
+        'refundable': r'\b(?:refund\w*|cancel\w*)\b',
+        'breakfast': r'\bbreakfast\b',
+        'accessible': r'\baccessib\w*\b',
+        'rooms': r'\brooms?\b', 'adults': r'\b(?:adults?|guests?)\b',
+        'trip_type': r'\b(?:one[- ]?way|round[- ]?trip|outbound)\b',
+    }
+    return bool(re.search(patterns.get(field, r'(?!)'), quote, re.I))
+
+
+_BOOLEAN_WORDS = {
+    'nonstop': r'non[- ]?stop', 'refundable': r'refundable',
+    'breakfast': r'breakfast', 'accessible': r'accessib(?:le|ility)',
+}
+_NEGATIVE_PREFIX = re.compile(
+    r'(?P<scope>(?:(?:do\s+not|does\s+not|don[’\']t|doesn[’\']t|'
+    r'no\s+need|no\s+preference|not|no|without|avoid|non[- ]?)'
+    r'(?:\s+(?:require|need|care|about|whether|if|for|get|buy|book|allow|want|a|an|the))*\s*)+)$', re.I)
+
+
+def _restore_boolean_scope(data, message, source_messages=None):
+    """Keep a real negation that sits immediately outside a short quote.
+
+    A model must not quote only 'refundable' from 'non-refundable', or only
+    'nonstop' from 'do not require nonstop'. The restored phrase is contiguous
+    customer text, not generated evidence. Existing field polarity checks
+    then reject reversed values or preserve explicit no-requirement wording.
+    """
+    result = deepcopy(data)
+    texts = [m.get('content', '') for m in source_messages or []
+             if m.get('role') in {'user', 'customer'}] or [message]
+    for field in list(result['fields']):
+        pattern = _BOOLEAN_WORDS.get(field)
+        quote = result['sources'].get(field)
+        if not pattern or not isinstance(quote, str) or not re.match(r'^(?:' + pattern + r')\b', quote, re.I):
+            continue
+        for text in reversed(texts):
+            span = _source_span(quote, text)
+            if span is None:
+                continue
+            occurrences = list(re.finditer(re.escape(span), text))
+            # An identical short token used with conflicting scopes must not
+            # be used to invent which statement the customer authorized.
+            contexts = []
+            for occurrence in occurrences:
+                prefix = text[max(0, occurrence.start()-90):occurrence.start()]
+                match = _NEGATIVE_PREFIX.search(prefix)
+                contexts.append((match.group('scope') if match else '') + span)
+            if contexts and all(context == contexts[0] for context in contexts):
+                result['sources'][field] = contexts[0]
+            elif any(context != span for context in contexts):
+                result['fields'].pop(field, None)
+                result['sources'].pop(field, None)
+                result['clarifications'] = [c for c in result['clarifications'] if c['field'] != field]
+                result['clarifications'].append({'field': field, 'source_quote': text, 'reason': 'ambiguous'})
+            break
     return result

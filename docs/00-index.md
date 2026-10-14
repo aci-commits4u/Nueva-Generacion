@@ -37,3 +37,4 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 
 [Conversational final review](final-review-conversation.md) and [revision ledger](conversation-build-ledger.md) record the independent findings, test-driven fixes, choices and hosted release verification.
 - [16 — Product walkthrough](16-product-walkthrough.md): self-explaining overview, tutorial, demo instructions, and design decisions.
+- [18 — Flexible conversation and typed intent](18-flexible-conversation.md): date windows, airport alternatives, stateful interpretation and the boundaries of the flexibility changes.

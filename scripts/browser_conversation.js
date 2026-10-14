@@ -3,6 +3,8 @@ async page => {
  await page.getByRole('button',{name:'New request'}).click();
  await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.getByText('Interpretation settings',{exact:true}).click();
+ await page.getByLabel('AI availability').selectOption('offline');
  await page.getByRole('button',{name:'A flight with missing details',exact:true}).click();
  await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor({timeout:60000});
@@ -12,7 +14,8 @@ async page => {
  await page.getByRole('button',{name:'Send clarification'}).click();
  const clarified=await clarification; if(clarified.status()!==200)throw new Error('Clarification failed: '+clarified.status());
  const draft=await clarified.json();
- if(draft.ai_runs[1].trace.length!==2||draft.fields.nonstop!==true||draft.fields.destination_airports[0]!=='MCO')throw new Error('Expected measured two-stage interpretation and grounded airports');
+ if(draft.mode!=='offline'||draft.fields.nonstop!==true||draft.fields.destination_airports[0]!=='MCO')throw new Error('Expected the explicit offline parser to retain grounded airports');
+ if(draft.questions.some(q=>q.field==='max_connections'))throw new Error('Nonstop requirement triggered a contradictory connection question');
  await page.getByRole('button',{name:'Review requirements',exact:false}).click();
  for(const box of await page.locator('[data-remove-condition]').all())await box.check();
  await page.getByRole('button',{name:'No preference for unanswered optional details'}).click();
@@ -22,7 +25,7 @@ async page => {
  const text=await page.locator('#workspace').innerText();if(!text.includes('Intent-checked')||!text.includes('On hold'))throw new Error('Expected matching and held offers');
  await page.screenshot({path:'artifacts/v2-comparison-desktop.png',fullPage:true});
  const explanation=page.waitForResponse(r=>r.url().endsWith('/explain'));
- await page.locator('[data-explain]').last().click();const narrative=await(await explanation).json();if(narrative.mode!=='live')throw new Error('Foundry explanation unavailable');
+ await page.locator('[data-explain]').last().click();const narrative=await(await explanation).json();if(narrative.mode!=='offline'||!narrative.text)throw new Error('Deterministic explanation unavailable');
  await page.getByRole('button',{name:'Demonstrate the purchase gate'}).click();
  await page.locator('#notice').filter({hasText:'Purchase held'}).waitFor();
  await page.getByRole('button',{name:'Review this difference'}).click();
@@ -37,5 +40,5 @@ async page => {
  if(await page.evaluate(()=>document.documentElement.scrollWidth)>390)throw new Error('Mobile horizontal overflow');
  await page.screenshot({path:'artifacts/v2-receipt-mobile.png',fullPage:true});
  if(errors.length)throw new Error(errors.join('; '));
- return {result:'PASS',pipeline:draft.ai_runs[1].pipeline,stages:2,conversationTurns:draft.messages.length,gate:409,evidence:true,mobileWidth:390,pageErrors:errors};
+ return {result:'PASS',mode:'explicit offline',conversationTurns:draft.messages.length,gate:409,evidence:true,mobileWidth:390,pageErrors:errors};
 }

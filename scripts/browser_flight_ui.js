@@ -3,6 +3,41 @@ async page => {
  await page.setViewportSize({width:1280,height:900});await page.goto(origin+'/?domain=flight');
  await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');
+
+ // Regression: a broad destination should create a useful question rather
+ // than silently selecting one airport. Airport chips are multi-select and
+ // only the explicit submit action sends the answer.
+ await page.getByRole('button',{name:'A flight with missing details',exact:true}).click();
+ await page.getByRole('button',{name:'Start a conversation'}).click();
+ await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
+ const originQuestion=page.locator('[data-question="origin_airports"]');
+ await originQuestion.waitFor();
+ await originQuestion.getByRole('button',{name:'Newark · EWR'}).click();
+ await originQuestion.getByRole('button',{name:'New York · JFK'}).click();
+ if(!(await originQuestion.getByRole('button',{name:/Use 2 airports/}).isEnabled()))throw new Error('Selected airport set did not enable explicit submit');
+ await originQuestion.getByRole('button',{name:/Use 2 airports/}).click();
+ const destinationQuestion=page.locator('[data-question="destination_airports"]');await destinationQuestion.waitFor();
+ await destinationQuestion.getByRole('button',{name:'Orlando · MCO'}).click();
+ await destinationQuestion.getByRole('button',{name:'Miami · MIA'}).click();
+ if(!(await destinationQuestion.getByRole('button',{name:/Use 2 airports/}).isEnabled()))throw new Error('Multiple destination choices were not retained');
+ await destinationQuestion.getByRole('button',{name:/Use 2 airports/}).click();
+ const dateQuestion=page.locator('[data-question="departure_date"]');await dateQuestion.waitFor();
+ await dateQuestion.getByText('Inclusive range',{exact:true}).click();
+ await dateQuestion.locator('#clarify-date-start').fill('2026-11-12');
+ await dateQuestion.locator('#clarify-date-end').fill('2026-11-14');
+ await dateQuestion.getByRole('button',{name:'Use these dates'}).click();
+ await page.waitForFunction(() => {
+  const summary=document.querySelector('#intent-content')?.textContent||'';
+  return ['EWR','JFK','MCO','MIA','Nov 12'].every(value=>summary.includes(value));
+ });
+ const liveSummary=await page.locator('#intent-content').innerText();
+ if(!liveSummary.includes('JFK')||!liveSummary.includes('MCO')||!liveSummary.includes('MIA')||!liveSummary.includes('Nov 12'))throw new Error('Live summary lost airport alternatives or date range');
+
+ // Start a fresh, fully specified draft for the signed-offer and purchase
+ // gate checks below. This keeps the flexible-input coverage independent from
+ // the receipt flow.
+ await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
+ await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');
  await page.getByRole('button',{name:'A fully specified flight'}).click();await page.getByRole('button',{name:'Start a conversation'}).click();
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
  const draftUrl=page.url();await page.getByRole('button',{name:'How it works',exact:true}).click();await page.getByRole('button',{name:'Back to your demo'}).click();await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();

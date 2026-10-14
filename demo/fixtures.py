@@ -9,7 +9,13 @@ def offers_for(approved):
     for kind in ('match','mismatch'):
         o={'id':approved['id']+'-'+kind,'domain':domain,'currency':'USD','total_cents':29500 if kind=='match' else 28000,'scenario':kind,'cabin':'economy','refundable':False,'title':'Direct route' if kind=='match' else 'Lower price, three connections'}
         if domain=='flight':
-            origin=(f.get('origin_airports') or ['EWR'])[0];dest=(f.get('destination_airports') or ['MCO'])[0];day=f.get('departure_date') or '2026-11-12'
+            origin=(f.get('origin_airports') or ['EWR'])[0];dest=(f.get('destination_airports') or ['MCO'])[0]
+            choice=f.get('departure_date')
+            if isinstance(choice,dict):
+                day=choice.get('start') or (choice.get('dates') or [None])[0]
+            else:
+                day=choice
+            day=day or '2026-11-12'
             airports=[origin,dest] if kind=='match' else [origin,'ATL','CLT','TPA',dest]
             # Synthetic fixed offset is disclosed, not asserted as real airport timezone data.
             start=datetime.fromisoformat(day+'T09:00:00-05:00')

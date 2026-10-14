@@ -459,6 +459,52 @@
         "max_total_cents": 29999
       },
       "unsupported_groups": []
+    },
+    {
+      "id": "flexible-date-airports",
+      "split": "regression",
+      "domain": "flight",
+      "message": "Nonstop flight from EWR or JFK to MCO or MIA between November 7 and November 10, 2026, under $400.",
+      "expected_fields": {
+        "origin_airports": [
+          "EWR",
+          "JFK"
+        ],
+        "destination_airports": [
+          "MCO",
+          "MIA"
+        ],
+        "departure_date": {
+          "start": "2026-11-07",
+          "end": "2026-11-10"
+        },
+        "max_total_cents": 39999,
+        "nonstop": true
+      },
+      "unsupported_groups": []
+    },
+    {
+      "id": "named-airport-date-alternatives",
+      "split": "regression",
+      "domain": "flight",
+      "message": "A nonstop flight from Heathrow to SFO on either November 7 or November 10, 2026, under $400.",
+      "expected_fields": {
+        "origin_airports": [
+          "LHR"
+        ],
+        "destination_airports": [
+          "SFO"
+        ],
+        "departure_date": {
+          "dates": [
+            "2026-11-07",
+            "2026-11-10"
+          ]
+        },
+        "max_total_cents": 39999,
+        "nonstop": true
+      },
+      "unsupported_groups": []
     }
   ]
 }

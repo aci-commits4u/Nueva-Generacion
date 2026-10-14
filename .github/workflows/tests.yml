@@ -19,4 +19,52 @@ jobs:
         env:
           MOCK_LLM: '1'
           STORE_BACKEND: sqlite
-      - run: for file in web/*.js web/views/*.js; do node --check "$file"; done
+      - run: |
+          for file in web/*.js web/views/*.js; do
+            node --input-type=module --check < "$file"
+          done
+
+  browser-regression:
+    name: Browser UI regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MOCK_LLM: '1'
+      STORE_BACKEND: sqlite
+      SQLITE_PATH: ${{ runner.temp }}/intent-judge-browser.sqlite3
+      BASE_URL: http://127.0.0.1:8000
+      BROWSER_ARTIFACT_DIR: artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install Python application
+        run: pip install -r requirements-dev.txt
+      - name: Install pinned Playwright harness
+        run: |
+          npm install --prefix "$RUNNER_TEMP/intent-judge-playwright" --no-save --no-package-lock --ignore-scripts playwright@1.64.0
+          "$RUNNER_TEMP/intent-judge-playwright/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check browser harness syntax
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/intent-judge-playwright/node_modules/playwright
+        run: |
+          node --check scripts/run_browser_regressions.mjs
+          node --input-type=module --check < scripts/run_browser_regressions.mjs
+      - name: Start local application
+        run: |
+          mkdir -p "$BROWSER_ARTIFACT_DIR"
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > "$BROWSER_ARTIFACT_DIR/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/intent-judge-uvicorn.pid"
+      - name: Run independent browser journeys
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/intent-judge-playwright/node_modules/playwright
+        run: node scripts/run_browser_regressions.mjs
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intent-judge-browser-regressions
+          path: artifacts
+          if-no-files-found: warn
