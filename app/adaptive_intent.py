@@ -323,6 +323,21 @@ def normalize_plan(raw: Any, *, domain: str, source_text: str,
                 # Merchant/tool prose is never allowed to become a customer
                 # criterion.  Drop the item instead of inventing provenance.
                 continue
+            # ``max_total_cents`` is deliberately narrower than a generic
+            # money mention: the reviewed field represents an all-in amount.
+            # A model can still mention a nightly/per-person/per-room/unit
+            # amount in its criteria, but that source must remain an
+            # unsupported customer condition until an all-in basis is
+            # confirmed.  Check every user source message because an adaptive
+            # turn may keep the original request separate from the latest
+            # reply.
+            unit_priced = False
+            if field == "max_total_cents":
+                from app.ai_grounding import _price_unit_source_span
+                unit_priced = any(
+                    _price_unit_source_span(quote, candidate)
+                    for candidate in _source_texts(source_text, source_messages)
+                )
             status = item.get("status")
             if status not in {"captured", "needs_clarification", "declined", "unsupported"}:
                 # Status is descriptive metadata, never an approval signal.
@@ -334,6 +349,13 @@ def normalize_plan(raw: Any, *, domain: str, source_text: str,
                     status = "captured"
                 else:
                     status = "needs_clarification"
+            if unit_priced:
+                # Keep the stable criterion key/source so the generated
+                # question can ask for the all-in total, while making its
+                # verification state explicit for the UI and evidence log.
+                field = None
+                verification = "unsupported"
+                status = "needs_clarification"
             criteria.append({
                 "key": key[:120], "field": field, "text": text,
                 "source_quote": quote[:500], "kind": kind,
@@ -468,6 +490,10 @@ def merchant_context(domain: str) -> dict[str, Any]:
         "common_misunderstandings": misunderstandings,
         "policies": {
             "currency": "USD",
+            "price_basis": (
+                "max_total_cents is an all-in total for the complete stay or purchase; "
+                "per-night, per-person, per-room, and per-unit amounts require customer confirmation"
+            ),
             "offers_are_synthetic": True,
             "checkout_requires_customer_approval": True,
             "merchant_facts_are_signed": True,
@@ -483,7 +509,10 @@ def retrieve_policy(domain: str) -> dict[str, Any]:
     context["read_only"] = True
     context["policy_text"] = (
         "Synthetic Demo Travel offers disclose all-in price and the fields used "
-        "for intent checks. Customer approval is required before any simulated purchase."
+        "for intent checks. A nightly, per-person, per-room, or per-unit amount "
+        "is not an all-in total; customer confirmation is required before it can "
+        "be converted to an all-in bound. Customer approval is required before "
+        "any simulated purchase."
     )
     return context
 
@@ -575,6 +604,11 @@ def prompt_context(domain: str) -> dict[str, Any]:
                 "when": "When terms or common misunderstanding context could change the next question.",
                 "returns": "merchant policy/context data",
             },
+        ],
+        "interpretation_rules": [
+            "max_total_cents means an all-in total for the complete stay or purchase",
+            "per-night, per-person, per-room, and per-unit prices are not all-in totals",
+            "preserve unit-priced wording and ask the customer to confirm the all-in basis; never multiply automatically",
         ],
         "authority": "read_only_context_only; never approval, consent, payment, or purchase",
     }

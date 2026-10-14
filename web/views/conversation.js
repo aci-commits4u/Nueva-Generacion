@@ -26,7 +26,7 @@ export function conversationMarkup(d,escapeHTML,options={}){
  const questionMarkup=profileStale?`<section class="question-card stale-profile-card" aria-labelledby="stale-profile-title"><span class="eyebrow">SAVED CONVERSATION</span><h2 id="stale-profile-title">This request uses an older task profile.</h2><p class="small">Your original messages and captured details are preserved. Update this saved conversation to reinterpret them under the current rules before you can edit or review it.</p><button type="button" class="primary" id="refresh-profile">Update this saved conversation <span aria-hidden="true">→</span></button></section>`:question?`<section class="question-card adaptive-question" aria-labelledby="next-question-title"><div class="question-copy"><span class="eyebrow">${escapeHTML(question.origin==='merchant'?'FROM THE MERCHANT CONTEXT':'NEXT USEFUL QUESTION')}</span>${clarificationMarkup}${question.source_quote&&!clarification?`<div class="clarification-callout"><span class="eyebrow">FROM YOUR WORDS</span><blockquote>“${escapeHTML(question.source_quote)}”</blockquote></div>`:''}<h2 id="next-question-title">${escapeHTML(question.question||question.text||'What should the agent know before it searches?')}</h2>${question.why?`<p class="question-why"><span aria-hidden="true">↳</span> ${escapeHTML(question.why)}</p>`:''}<p class="small question-instruction">${question.allow_multiple===true||question.answer_kind==='multi'?'Choose every option that works, then confirm.':'Answer this detail, or open the review to edit every captured requirement.'}</p></div><div class="suggestions adaptive-options" data-question="${escapeHTML(question.field||question.id||'adaptive')}">${questionControls(question,d,options,escapeHTML)}</div></section>`:readinessMarkup(plan,d,escapeHTML);
  const grounded=plan.assistant_message||plan.assistantMessage||groundedSummary(d,question);
  const criteriaMarkup=criteriaSnapshot(criteria,d,escapeHTML);
- const observationMarkup=observationsMarkup(observations,escapeHTML);
+ const observationMarkup=observationsMarkup(observations,d,escapeHTML);
  return `<div class="section-head conversation-head"><span class="eyebrow">CLARIFY / A DRAFT, NEVER AN APPROVAL</span><h1>Let’s get your intent right.</h1><p>${profileStale?'Review is paused until this saved conversation is updated.':'The assistant decides what matters next from your request and the available context. You approve the final rules.'}</p></div><div id="conversation-availability" class="availability-card" data-availability data-mode="${escapeHTML(d.mode||'live')}" role="status" aria-live="polite"></div>${plannerMarkup}<div class="messages" aria-label="Your conversation">${messagesMarkup}<div class="message assistant latest-message"><span class="avatar">IJ</span><div><p>${escapeHTML(grounded)}</p>${plan.action?`<small class="message-action">${escapeHTML(actionLabel(plan.action))}</small>`:''}</div></div></div>${questionMarkup}${observationMarkup}${criteriaMarkup}<div class="conversation-bottom"><form id="clarify-form" class="composer"><label class="sr-only" for="clarify-text">Add a detail or change your request</label><textarea id="clarify-text" name="clarification" autocomplete="off" maxlength="1500" minlength="1" rows="2" placeholder="${profileStale?'Update this saved conversation before adding a clarification.':'Add a detail, correction, or preference…'}" required ${controlsDisabled?'disabled':''}></textarea><button class="send" type="submit" aria-label="Send clarification" ${controlsDisabled?'disabled':''}>↑</button></form><div class="composer-help"><span>${profileStale?'Saved conversation paused':d.mode==='live'?'Live Foundry interpretation':'Explicit offline parser'}${profileStale?'':' · '+remaining+' '+followupLabel+' remaining'}</span>${profileStale?'':`<button type="button" class="primary compact-action" id="review-now">Review requirements <span aria-hidden="true">→</span></button>`}</div>${followupLimit?'<p class="small followup-limit">The follow-up allowance for this draft is reached. You can still edit every requirement in review.</p>':''}<details class="trace"><summary>View interpretation record</summary>${runs.map(r=>`<p class="small">Revision ${escapeHTML(r.revision)} · ${escapeHTML(r.pipeline||r.mode||'interpretation')} · ${r.trace?.length||0} model stages${r.trace?.length?' · '+r.trace.reduce((sum,t)=>sum+(Number(t.duration_ms)||0),0)+' ms':''}</p>`).join('')}<p class="small">${escapeHTML(d.explanation||'The model guidance is retained here for review.')}</p><p class="small">Every model stage is validated for field types and source quotations. Models propose drafts; deterministic rules enforce purchases.</p></details></div>`;
 }
 
@@ -114,10 +114,18 @@ function displayField(key,value){
  return `${key.replaceAll('_',' ')}: ${String(value)}`;
 }
 
-function observationsMarkup(observations,escapeHTML){
+function observationsMarkup(observations,d,escapeHTML){
  if(!observations.length)return '';
  const cards=observations.slice(0,2).map((item,index)=>offerObservationCard(item,index,escapeHTML)).join('');
- return `<section class="offer-observations" aria-label="Read-only context returned by an adapter"><div class="offer-context-head"><div><span class="eyebrow">CONTEXT FROM ADAPTER</span><h2>Read-only options returned</h2></div><span class="snapshot-lock">Synthetic demo data</span></div><div class="offer-context-grid">${cards}</div><p class="small">These are merchant-signed facts returned for inspection. Your approval and the deterministic checks happen next.</p></section>`;
+ const caveat=offerContextCaveat(d);
+ return `<section class="offer-observations" aria-label="Read-only context returned by an adapter"><div class="offer-context-head"><div><span class="eyebrow">CONTEXT FROM ADAPTER</span><h2>Read-only options returned</h2></div><span class="snapshot-lock">Synthetic demo data</span></div><div class="offer-context-grid">${cards}</div><p class="small">${escapeHTML(caveat)}</p></section>`;
+}
+
+function offerContextCaveat(d){
+ const unsupported=(d?.unsupported||[]).map(item=>String(item)).join(' ').toLowerCase();
+ if(d?.domain==='flight'&&/round\s*trip|roundtrip/.test(unsupported))return 'These are one-way demo options for clarification; your round-trip condition remains held. Approval and deterministic checks happen next.';
+ if(d?.domain==='hotel')return 'Synthetic context for clarification; not evaluated or bookable yet. Approval and deterministic checks happen next.';
+ return 'Synthetic context for clarification; not evaluated or bookable yet. Approval and deterministic checks happen next.';
 }
 
 function hasExecutedTool(tools){
@@ -138,14 +146,14 @@ function flightFactRows(facts,escapeHTML){
  const date=facts.departure_date||'';
  const time=facts.departure_local||'';
  const stops=Number.isInteger(facts.connection_count)?(facts.connection_count===0?'Nonstop':`${facts.connection_count} connection${facts.connection_count===1?'':'s'}`):'';
- return factRows([[route||'Route not returned',date&&time?`${date} · ${time}`:date||time,Number.isInteger(facts.total_cents)?formatMoney(facts.total_cents):'',stops]],escapeHTML);
+ return factRows([['Route',route||'Route not returned'],['Date / time',date&&time?`${date} · ${time}`:date||time],['All-in total',Number.isInteger(facts.total_cents)?formatMoney(facts.total_cents):'Not returned'],['Itinerary',stops||'Not returned']],escapeHTML);
 }
 
 function hotelFactRows(facts,escapeHTML){
  const dates=facts.checkin_date&&facts.checkout_date?`${facts.checkin_date} → ${facts.checkout_date}`:'';
  const breakfast=facts.breakfast===true?'Breakfast included':facts.breakfast===false?'Room only':'';
  const refundable=facts.refundable===true?'Refundable':facts.refundable===false?'Nonrefundable':'';
- return factRows([[facts.city||'City not returned',dates,Number.isInteger(facts.total_cents)?formatMoney(facts.total_cents):'', [breakfast,refundable].filter(Boolean).join(' · ')]],escapeHTML);
+ return factRows([['Property / city',facts.city||'City not returned'],['Stay dates',dates||'Not returned'],['Total stay',Number.isInteger(facts.total_cents)?formatMoney(facts.total_cents):'Not returned'],['Terms',[breakfast,refundable].filter(Boolean).join(' · ')||'Not returned']],escapeHTML);
 }
 
 function generalFactRows(facts,escapeHTML){
@@ -154,7 +162,7 @@ function generalFactRows(facts,escapeHTML){
 }
 
 function factRows(rows,escapeHTML){
- return `<dl class="offer-fact-list">${rows.flat().filter(Boolean).map((value,index)=>`<div><dt>${index===0?'Route / place':index===1?'Date / time':index===2?'Total':'Terms'}</dt><dd>${escapeHTML(String(value))}</dd></div>`).join('')}</dl>`;
+ return `<dl class="offer-fact-list">${rows.map(([label,value])=>`<div><dt>${escapeHTML(String(label))}</dt><dd>${escapeHTML(String(value||''))}</dd></div>`).join('')}</dl>`;
 }
 
 function clarificationFor(d,field){

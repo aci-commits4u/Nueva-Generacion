@@ -77,7 +77,17 @@ def offline_extract(domain,message):
         if m and key in get_profile(domain)['fields']: fields[key]=value;sources[key]=m.group();consumed.append(m.group())
     money=re.search(r'(under|below|at most|max(?:imum)?|budget(?: of)?)\s*\$?\s*(\d+(?:\.\d{1,2})?)',message,re.I)
     if money:
-        fields['max_total_cents']=int(Decimal(money.group(2))*100)-(1 if money.group(1).lower() in {'under','below'} else 0);sources['max_total_cents']=money.group();consumed.append(money.group())
+        # The emergency parser must obey the same all-in price boundary as the
+        # validated model path.  A unit price such as "nightly under $220"
+        # remains visible as unsupported instead of becoming a total cap that
+        # a later workflow step could accidentally treat as authoritative.
+        from app.ai_grounding import _price_unit_source_span
+        unit_quote = _price_unit_source_span(money.group(), message)
+        if unit_quote:
+            unsupported.append(unit_quote)
+            consumed.append(unit_quote)
+        else:
+            fields['max_total_cents']=int(Decimal(money.group(2))*100)-(1 if money.group(1).lower() in {'under','below'} else 0);sources['max_total_cents']=money.group();consumed.append(money.group())
     if domain=='flight':
         from app.ai_grounding import one_way_quote_supported
         one_way=re.search(r'\bone[- ]way\b|\bonly\s+(?:need|want|book|require)\s+(?:the\s+)?outbound\b|\bonly outbound\b|\boutbound only\b',message,re.I)

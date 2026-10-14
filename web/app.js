@@ -134,6 +134,7 @@ async function refreshAIStatus(silent=true,options={}){
 function errorMessage(error,hasDraft=Boolean(state.draft)){
  const e=errorFromUnknown(error);
  const suffix=e.requestId?` Reference ${e.requestId}.`:'';
+ if(e.code==='request_timeout')return `The service took too long to respond. Your text is preserved. ${hasDraft?'Review the saved draft before trying again.':'No automatic retry was made.'}${suffix}`;
  if(e.status===0)return `The connection was interrupted. Your request is preserved; live availability is shown above.${suffix}`;
  if(e.code==='ai_daily_limit'||e.code==='ai_session_limit'||e.code==='ai_budget_limit')return `${knownReasonCopy({reason:e.publicError})} ${e.retryAfterSeconds?`Availability may return in about ${formatDuration(e.retryAfterSeconds)}.`:''} Your request is preserved.${suffix}`;
  if(e.code==='ai_interpretation')return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. Try again, or adjust a detail.${hasDraft?' You can also review the saved draft.':''}${suffix}`;
@@ -178,8 +179,25 @@ function setComposerBusy(button,isBusy,label=''){
 }
 async function busy(button,fn,label='Working…'){
  const old=button?.textContent,navigation=state.navigation,isComposerSend=button?.classList.contains('send');if(button){button.disabled=true;button.dataset.busy='true';if(isComposerSend)setComposerBusy(button,true,label);else button.textContent=label;}notice();
- try{await fn();}catch(e){await reportError(e,navigation);}finally{if(button){button.disabled=false;if(isComposerSend)setComposerBusy(button,false,old);else button.textContent=old;}}
+ const stopProgress=beginInterpretationProgress(button,label,navigation);
+ try{await fn();}catch(e){await reportError(e,navigation);}finally{stopProgress();if(button){button.disabled=false;if(isComposerSend)setComposerBusy(button,false,old);else button.textContent=old;}}
  if(button){delete button.dataset.busy;renderAvailability();}
+}
+function beginInterpretationProgress(button,label,navigation){
+ if(!/^Interpreting/.test(label)||(state.draft?.mode||state.mode)!=='live')return ()=>{};
+ const form=button?.closest('form');
+ if(!form)return ()=>{};
+ const status=document.createElement('p');
+ status.className='small composer-status';status.setAttribute('role','status');
+ const started=Date.now();
+ const update=()=>{
+  if(!status.isConnected||state.navigation!==navigation)return;
+  const elapsed=Math.floor((Date.now()-started)/1000);
+  status.textContent=`Live AI · ${elapsed}s elapsed. Interpreting your words and reviewing the draft. Requests stop waiting after 90 seconds; your text stays saved.`;
+ };
+ form.after(status);update();
+ const timer=setInterval(update,5000);
+ return ()=>{clearInterval(timer);status.remove();};
 }
 function routeForStage(stage){
  if(stage===0)return '/';
@@ -413,7 +431,7 @@ async function renderQuality(){
   const runtimeRecord=runtimeCounts.length?`<div class="quality-runtime"><span class="eyebrow">RECORDED PIPELINE STAGES</span><p class="small quality-runtime-label">Instrumentation counts model stages, not transactions${q.runtime.updated_at?` · updated ${escapeHTML(q.runtime.updated_at)}`:''}.</p><div class="quality-runtime-counts">${runtimeCounts.map(([key,value])=>`<span><b>${escapeHTML(value)}</b> ${escapeHTML(key.replace(/:/g,' · ').replace(/_/g,' '))}</span>`).join('')}</div>${q.runtime.last_failure?`<p class="small quality-last-failure"><b>Last retained failure:</b> ${escapeHTML(q.runtime.last_failure.stage||'unknown stage')} · ${escapeHTML(q.runtime.last_failure.code||'unknown code')}${q.runtime.last_failure.timestamp?` · ${escapeHTML(q.runtime.last_failure.timestamp)}`:''}</p>`:''}</div>`:'';
   const pipeline=`<div class="pipeline-explainer"><span class="eyebrow">HOW THE PIPELINE IS BOUNDED</span><ol><li><b>01</b><span>Foundry proposes criteria and chooses the next useful action.</span></li><li><b>02</b><span>A fresh review pass compares the original conversation, draft, and returned merchant facts.</span></li><li><b>03</b><span>You review before Verifiable Intent and deterministic offer checks.</span></li></ol></div>`;
   const adaptiveRuns=Array.isArray(q.adaptive_experiments)?q.adaptive_experiments:[];
-  const adaptiveEvidence=adaptiveRuns.length?`<section class="quality-section"><span class="eyebrow">ACTUAL ADAPTIVE FOUNDRY EXPERIMENTS</span><p class="small">Each snapshot preserves successes and failures from a finite live run. These small synthetic samples measure specific behaviors, not overall customer accuracy.</p><div class="quality-grid">${adaptiveRuns.map(run=>`<article><span class="eyebrow">${escapeHTML(run.created_at||'Recorded experiment')}</span><h2>${escapeHTML(run.passed)}<span class="muted"> / ${escapeHTML(run.cases)}</span></h2><p>Cases passed their labeled checks</p><p class="small">${escapeHTML(run.model||'Foundry')} · ${escapeHTML(run.median_ms)} ms median</p></article>`).join('')}</div><p class="small">Question relevance, prior-answer memory, source coverage, merchant-data injection and signed read-only tool evidence are evaluated separately.</p></section>`:'';
+  const adaptiveEvidence=adaptiveRuns.length?`<section class="quality-section"><span class="eyebrow">ACTUAL ADAPTIVE FOUNDRY EXPERIMENTS</span><p class="small">Each snapshot preserves successes and failures from a finite live run. These small synthetic samples measure specific behaviors, not overall customer accuracy.</p><div class="quality-grid">${adaptiveRuns.map(run=>`<article><span class="eyebrow">${escapeHTML(run.created_at||'Recorded experiment')}</span><h2>${escapeHTML(run.passed)}<span class="muted"> / ${escapeHTML(run.cases)}</span></h2><p>Cases passed their labeled checks</p><p class="small">${escapeHTML(run.model||'Foundry')} · ${escapeHTML(run.median_ms)} ms median</p>${run.prompt_version!==q.prompt_version?'<p class="small">This experiment predates the current release.</p>':''}</article>`).join('')}</div><p class="small">Question relevance, prior-answer memory, source coverage, merchant-data injection and signed read-only tool evidence are evaluated separately.</p></section>`:'';
   const monitorVersionNote=q.monitor&&q.prompt_version&&q.monitor.prompt_version!==q.prompt_version?'<p class="small">This saved live check predates the current prompt release. Future daily checks record the prompt version they used.</p>':'';
   $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div>${pipeline}${adaptiveEvidence}<details class="trace"><summary>Historical Foundry evaluation and operational records</summary>${nativeEvaluation}${runtimeRecord}</details><section class="quality-section"><span class="eyebrow">HISTORICAL BENCHMARK SNAPSHOTS</span><p class="small">Retained reports from earlier development runs. They are reference points, not the current native evaluation.</p><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p>${monitorVersionNote}<p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs deterministic checks and nine browser journeys, with screenshots retained. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;
  }

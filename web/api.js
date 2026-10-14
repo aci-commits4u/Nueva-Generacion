@@ -28,9 +28,13 @@ export function errorFromUnknown(error,path=''){
 }
 
 export async function api(path,body){
+ const inference=body!==undefined&&(path==='/api/intents'||/\/(clarify|explain)$/.test(path));
+ const controller=inference?new AbortController():null;
+ const timer=controller?setTimeout(()=>controller.abort(),90_000):null;
+ try{
  let response;
  try{
-  response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'});
+  response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin',...(controller?{signal:controller.signal}:{})});
  }catch(error){throw errorFromUnknown(error,path);}
  let data={};
  try{
@@ -42,4 +46,8 @@ export async function api(path,body){
  }
  if(!response.ok)throw new ApiError(path,response.status,data);
  return data;
+ }catch(error){
+  if(controller?.signal.aborted)throw new ApiError(path,0,{error:{code:'request_timeout',message:'The service took too long to respond.'}},error);
+  throw errorFromUnknown(error,path);
+ }finally{if(timer!==null)clearTimeout(timer);}
 }

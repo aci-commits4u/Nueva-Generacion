@@ -23,6 +23,7 @@ jobs:
           for file in web/*.js web/views/*.js; do
             node --input-type=module --check < "$file"
           done
+      - run: node scripts/test_api_timeout.mjs
 
   browser-regression:
     name: Browser UI regression

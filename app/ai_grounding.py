@@ -522,6 +522,22 @@ def _normalise_fields(
     sources = result["sources"]
     guidance: list[str] = []
     for key in list(fields):
+        if key == "max_total_cents":
+            quote = sources.get(key, "")
+            unit_quote = _price_unit_source_span(quote, message)
+            if unit_quote:
+                # The reviewed field is an all-in total. A nightly, per-person,
+                # per-room, or per-unit amount is a separate customer condition
+                # and must remain visible until the customer confirms an
+                # all-in basis; never multiply it into a total automatically.
+                fields.pop(key, None)
+                sources.pop(key, None)
+                if unit_quote not in result["unsupported"]:
+                    result["unsupported"].append(unit_quote)
+                guidance.append(
+                    "The price is stated per unit; please confirm the all-in total for the full stay or purchase."
+                )
+                continue
         if key == "cabin":
             quote = sources.get(key, "")
             if type(quote) is not str or not quote or not _contains(quote, message):
@@ -698,6 +714,61 @@ _MONEY_TOKEN = re.compile(
     r"(?i)(?:USD\s*\$?\s*|\$\s*)\d[\d,]*(?:\.\d{1,2})?"
     r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:USD|dollars?)\b"
 )
+_PRICE_UNIT_BASIS = re.compile(
+    r"(?i)(?:\bper\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|"
+    r"guest|adult|day|week|month)\b|\b(?:nightly|daily|weekly|monthly)\b|"
+    r"/\s*(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b)"
+)
+_PRICE_UNIT_SUFFIX = re.compile(
+    r"(?i)\s*(?:[,;:()\-/]\s*)?(?:per\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|"
+    r"guest|adult|day|week|month)\b|\b(?:nightly|daily|weekly|monthly)\b|"
+    r"/\s*(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b|"
+    r"(?:for\s+)?each\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b)"
+)
+_PRICE_UNIT_PREFIX = re.compile(
+    r"(?i)(?:"
+    r"\b(?:per\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month))\b"
+    r"|\b(?:nightly|daily|weekly|monthly)\b"
+    r"|\b(?:for\s+)?each\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b"
+    r")(?:\s+(?:rate|price|cost|cap|budget|amount|stay|room|booking|reservation))?\s*$"
+)
+
+
+def _price_unit_source_span(quote: str, message: str) -> str | None:
+    """Return the exact source span when a money bound is unit-based.
+
+    The model may quote only ``under $220`` while the customer wrote ``under
+    $220 per night``. Inspect the immediate source suffix so unit prices cannot
+    be laundered into the all-in ``max_total_cents`` field.
+    """
+    if not isinstance(quote, str) or not isinstance(message, str):
+        return None
+    if _PRICE_UNIT_BASIS.search(quote.translate(_SOURCE_TYPOGRAPHY)):
+        return _source_span(quote, message) or quote
+    source = _source_span(quote, message)
+    if not source:
+        return None
+    start = message.casefold().find(source.casefold())
+    if start < 0:
+        return None
+    tail = message[start + len(source):start + len(source) + 96]
+    suffix = _PRICE_UNIT_SUFFIX.match(tail)
+    if suffix:
+        return message[start:start + len(source) + suffix.end()]
+
+    # A customer can put the unit before the monetary bound ("nightly under
+    # $220" or "at a nightly rate under$220").  Limit the look-behind to the
+    # current punctuation-delimited clause so an earlier nightly amount cannot
+    # taint a separate, explicitly all-in total later in the sentence.
+    clause_start = max(
+        (max(message.rfind(mark, 0, start) for mark in ".,;:!?\n") + 1),
+        0,
+    )
+    prefix = message[clause_start:start]
+    unit_prefix = _PRICE_UNIT_PREFIX.search(prefix)
+    if unit_prefix:
+        return message[clause_start + unit_prefix.start():start + len(source)]
+    return None
 
 
 def _amount_token_cents(token: str) -> int | None:
@@ -792,6 +863,14 @@ def _recover_money_clarification(data: dict, domain: str, message: str) -> dict:
     for item in list(clarifications):
         if (not isinstance(item, dict) or item.get("field") != "max_total_cents"
                 or not isinstance(item.get("source_quote"), str)):
+            continue
+        unit_quote = _price_unit_source_span(item["source_quote"], message)
+        if unit_quote:
+            # Keep the typed clarification for a useful all-in follow-up, while
+            # also preserving the unit-based wording as a deterministic hold.
+            # The amount is never promoted or multiplied automatically.
+            if unit_quote not in result["unsupported"]:
+                result["unsupported"].append(unit_quote)
             continue
         value = _safe_money_clarification(item["source_quote"], message)
         if value is None:
@@ -1177,6 +1256,8 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         if not _airport_quote_supports(value, quote, message, source_messages, key):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "max_total_cents":
+        if _price_unit_source_span(quote, message):
+            raise GroundingFailure("unit-based price is not an all-in total")
         if type(value) is not int or _money_cents(quote) != value:
             raise GroundingFailure("price value is not supported by its source quotation")
     elif key.endswith("date"):
@@ -1697,6 +1778,15 @@ def recover_grounded_parts(
             rejected_fields.append({"field": key, "issue": "source_unquoted",
                                     "source_grounded": False})
             continue
+        if key == "max_total_cents":
+            unit_quote = _price_unit_source_span(quote, message)
+            if unit_quote:
+                if unit_quote not in retained_unsupported:
+                    retained_unsupported.append(unit_quote)
+                rejected_fields.append({"field": key, "issue": "unit_price_not_total",
+                                        "source_grounded": True})
+                rejected_field_keys.add(key)
+                continue
         try:
             grounded = validate_extraction(
                 domain,
