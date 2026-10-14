@@ -341,7 +341,8 @@ def record_usage(usage):
 
 def record_ai_outcome(stage, outcome, request_id=None):
     """Store bounded operational evidence, never prompts or provider payloads."""
-    if stage not in {'preflight','extract','coverage_audit','explain'}:
+    if stage not in {'preflight','extract','coverage_audit','explain',
+                     'adaptive_plan','adaptive_review','adaptive_latest_turn_coverage'}:
         return
     if outcome not in {'passed','ai_configuration','ai_provider','ai_timeout','ai_interpretation',
                        'ai_daily_limit','ai_session_limit','ai_budget_limit','ai_disabled'}:

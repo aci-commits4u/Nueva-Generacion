@@ -116,6 +116,88 @@ def _trusted_observations(tool_result: dict[str, Any] | None) -> list[dict[str, 
     return observations[:8]
 
 
+def _verified_offer_facts(offer: Any) -> dict[str, Any] | None:
+    """Return facts only when the adapter marked the signed payload as trusted."""
+    if not isinstance(offer, dict):
+        return None
+    if (
+        offer.get("signed") is not True
+        or offer.get("provenance") != "merchant-signed checkout payload"
+        or not isinstance(offer.get("offer_hash"), str)
+        or not offer.get("offer_hash", "").strip()
+        or not isinstance(offer.get("facts"), dict)
+    ):
+        return None
+    return offer["facts"]
+
+
+def _candidate_offer_check(domain: str, key: str, requirement: Any,
+                           facts: dict[str, Any] | None) -> dict[str, Any]:
+    """Map the deterministic rules result into an unapproved advisory check."""
+    from app.profile_registry import get_profile
+    from app.rules_engine import evaluate
+
+    base = {
+        "check_id": key,
+        "requirement": deepcopy(requirement),
+        "status": "UNKNOWN",
+        "offer_value": None,
+    }
+    profile = get_profile(domain)
+    if facts is None:
+        base["message"] = "The signed offer facts cannot verify this candidate requirement."
+        return base
+    try:
+        result = evaluate(profile, {key: deepcopy(requirement)}, facts)
+    except (TypeError, ValueError, KeyError):
+        base["message"] = "The signed offer facts cannot verify this candidate requirement."
+        return base
+    checks = result.get("checks") if isinstance(result, dict) else None
+    check = checks[0] if isinstance(checks, list) and checks and isinstance(checks[0], dict) else None
+    if check is None:
+        base["message"] = "The signed offer facts cannot verify this candidate requirement."
+        return base
+    raw_status = check.get("status")
+    if raw_status == "pass":
+        base["status"] = "MATCH"
+        base["offer_value"] = deepcopy(check.get("offer_value"))
+        base["message"] = "The signed merchant fact matches the grounded draft requirement; advisory only."
+    elif raw_status == "fail":
+        base["status"] = "CONFLICT"
+        base["offer_value"] = deepcopy(check.get("offer_value"))
+        base["message"] = "The signed merchant fact conflicts with the grounded draft requirement; advisory only."
+    else:
+        # Rules-engine missing/invalid values are intentionally not surfaced as
+        # offer claims. They remain unknown until a verified fact is available.
+        base["status"] = "UNKNOWN"
+        base["message"] = "Signed merchant facts cannot verify the grounded draft requirement; comparison is unknown."
+    return base
+
+
+def _draft_comparison(domain: str, fields: dict[str, Any], offer: dict[str, Any]) -> dict[str, Any]:
+    """Build an advisory, unapproved comparison for one merchant offer."""
+    facts = _verified_offer_facts(offer)
+    checks = [
+        _candidate_offer_check(domain, key, value, facts)
+        for key, value in list(fields.items())[:30]
+        if isinstance(key, str)
+    ]
+    if not checks:
+        checks = [{
+            "check_id": "candidate_requirements",
+            "requirement": None,
+            "status": "UNKNOWN",
+            "offer_value": None,
+            "message": "No typed candidate requirements were available for comparison.",
+        }]
+    return {
+        "status": "UNAPPROVED",
+        "checks": checks,
+        "advisory": True,
+        "basis": "grounded candidate fields versus verified merchant-signed facts",
+    }
+
+
 def _quote_is_customer_source(quote: Any, source_text: str,
                               source_messages: list[dict[str, Any]] | None) -> bool:
     if not isinstance(quote, str) or not quote.strip():
@@ -785,6 +867,10 @@ def merchant_context(domain: str) -> dict[str, Any]:
             "offers_are_synthetic": True,
             "checkout_requires_customer_approval": True,
             "merchant_facts_are_signed": True,
+            "draft_comparison": (
+                "Read-only advisory comparison only: statuses are UNAPPROVED, MATCH, "
+                "CONFLICT, or UNKNOWN; it never authorizes or purchases an offer"
+            ),
         },
     }
 
@@ -872,7 +958,25 @@ def execute_tool(action: str, *, domain: str, fields: dict[str, Any],
                 "required_fields": sorted(_required_search_fields(domain)),
             }
         fn = overrides.get(action, inspect_offers)
-        return fn(domain, deepcopy(fields))
+        result = fn(domain, deepcopy(fields))
+        if not isinstance(result, dict):
+            return {
+                "tool": action,
+                "status": "malformed_tool_result",
+                "read_only": True,
+            }
+        offers = result.get("offers")
+        if isinstance(offers, list):
+            enriched = []
+            for offer in offers[:8]:
+                if not isinstance(offer, dict):
+                    continue
+                row = deepcopy(offer)
+                row["draft_comparison"] = _draft_comparison(domain, fields, offer)
+                enriched.append(row)
+            result = deepcopy(result)
+            result["offers"] = enriched
+        return result
     fn = overrides.get(action, retrieve_policy)
     return fn(domain)
 

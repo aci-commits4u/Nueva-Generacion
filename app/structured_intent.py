@@ -207,10 +207,12 @@ def response_schema(domain: str, catalog: list[dict[str, str]]) -> dict[str, Any
     # schema validators reject it; hydration still drops unknown refs.
     ref_enum = refs or ["__no_customer_source_ref__"]
     criterion_keys = field_names + refs
+    required_field_names = [
+        field for field, spec in profile_fields.items() if spec.get("required")
+    ]
     field_ref = {"$ref": "#/$defs/profile_field"}
     key_ref = {"$ref": "#/$defs/registered_key"}
     source_ref = {"$ref": "#/$defs/source_ref"}
-    criterion_source_ref = {"anyOf": [{"type": "null"}, source_ref]}
     option = {
         "type": "object", "additionalProperties": False,
         "properties": {"label": {"type": "string"},
@@ -231,15 +233,42 @@ def response_schema(domain: str, catalog: list[dict[str, str]]) -> dict[str, Any
              }, "required": ["criterion_key", "text", "why", "answer_kind", "answer_semantics", "options"]},
         ]
     }
-    criterion = {
+    criterion_kind = {"type": "string", "enum": ["requirement", "preference", "ambiguity"]}
+    criterion_status = {"type": "string", "enum": ["captured", "needs_clarification", "declined", "unsupported"]}
+    profile_criterion_with_ref = {
         "type": "object", "additionalProperties": False,
         "properties": {
-            "key": key_ref,
-            "source_ref": criterion_source_ref,
-            "kind": {"type": "string", "enum": ["requirement", "preference", "ambiguity"]},
-            "status": {"type": "string", "enum": ["captured", "needs_clarification", "declined", "unsupported"]},
+            "key": field_ref,
+            "source_ref": source_ref,
+            "kind": criterion_kind,
+            "status": criterion_status,
         },
         "required": ["key", "source_ref", "kind", "status"],
+    }
+    profile_criterion_missing = {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "key": {"type": "string", "enum": required_field_names or ["__no_required_profile_field__"]},
+            "source_ref": {"type": "null"},
+            "kind": criterion_kind,
+            "status": criterion_status,
+        },
+        "required": ["key", "source_ref", "kind", "status"],
+    }
+    generic_criterion = {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "key": {"type": "string", "enum": refs or ["__no_customer_source_id__"]},
+            "kind": criterion_kind,
+            "status": criterion_status,
+        },
+        "required": ["key", "kind", "status"],
+    }
+    criterion = {
+        "anyOf": [
+            {"anyOf": [profile_criterion_with_ref, profile_criterion_missing]},
+            generic_criterion,
+        ],
     }
     clarification = {
         "type": "object", "additionalProperties": False,
@@ -348,12 +377,19 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
     criteria: list[dict[str, Any]] = []
     criteria_by_key: dict[str, dict[str, Any]] = {}
     for item in raw.get("criteria") or []:
-        if not isinstance(item, dict) or set(item) != {"key", "source_ref", "kind", "status"}:
+        if not isinstance(item, dict) or "key" not in item:
             raise StructuredIntentError("criterion shape is invalid")
-        raw_ref = item.get("source_ref")
         key = item.get("key")
         if key not in registered_keys:
             raise StructuredIntentError("criterion key is out of scope")
+        expected_keys = (
+            {"key", "kind", "status"}
+            if key in refs else
+            {"key", "source_ref", "kind", "status"}
+        )
+        if set(item) != expected_keys:
+            raise StructuredIntentError("criterion shape is invalid")
+        raw_ref = item.get("source_ref") if key in field_names else key
         kind = item.get("kind")
         status = item.get("status")
         if kind not in {"requirement", "preference", "ambiguity"}:
@@ -372,8 +408,6 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
             ref = None
         else:
             ref = require_ref(raw_ref, "criterion")
-            if key in refs and key != ref:
-                raise StructuredIntentError("criterion key and source ref disagree")
         row = {
             "key": key, "field": field,
             "text": refs[ref] if ref is not None else profile_fields[key].get("label", key),

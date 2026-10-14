@@ -106,6 +106,53 @@ def test_source_id_question_binds_criterion_when_model_omits_criteria():
     assert data["question"]["field"] is None
 
 
+def test_generic_criterion_uses_key_as_source_ref_and_rejects_redundant_ref():
+    catalog = [{"id": "t1p0e18hsource", "text": "quiet and walkable"}]
+    wire = {
+        "supported_claims": [], "unsupported": [], "clarifications": [],
+        "criteria": [{"key": catalog[0]["id"], "kind": "ambiguity",
+                      "status": "needs_clarification"}],
+        "action": "ask_user", "assistant_message": "How important is this?",
+        "question": None, "explanation": "Review this condition.",
+        "offer_observations": [],
+    }
+    data = hydrate_response(wire, domain="hotel", catalog=catalog, require_wire=True)
+    assert data["criteria"][0]["source_quote"] == catalog[0]["text"]
+    old_wire = dict(wire, criteria=[{
+        "key": catalog[0]["id"], "source_ref": catalog[0]["id"],
+        "kind": "ambiguity", "status": "needs_clarification",
+    }])
+    try:
+        hydrate_response(old_wire, domain="hotel", catalog=catalog, require_wire=True)
+    except StructuredIntentError:
+        pass
+    else:
+        raise AssertionError("generic criterion must not carry redundant source_ref")
+
+
+def test_null_source_ref_is_only_for_missing_required_profile_field():
+    base = {
+        "supported_claims": [], "unsupported": [], "clarifications": [],
+        "action": "ask_user", "assistant_message": "Clarify.",
+        "question": None, "explanation": "Review.", "offer_observations": [],
+    }
+    missing_city = dict(base, criteria=[{
+        "key": "city", "source_ref": None, "kind": "ambiguity",
+        "status": "needs_clarification",
+    }])
+    assert hydrate_response(missing_city, domain="hotel", catalog=[])["criteria"][0]["field"] == "city"
+    optional_breakfast = dict(base, criteria=[{
+        "key": "breakfast", "source_ref": None, "kind": "ambiguity",
+        "status": "needs_clarification",
+    }])
+    try:
+        hydrate_response(optional_breakfast, domain="hotel", catalog=[])
+    except StructuredIntentError:
+        pass
+    else:
+        raise AssertionError("optional profile field must not omit source_ref")
+
+
 def test_profile_question_derives_matching_field_and_never_accepts_wire_field():
     catalog = [{"id": "t1p0e18hsource", "text": "in Manhattan"}]
     data = hydrate_response({
@@ -194,7 +241,13 @@ def test_schema_is_strict_and_profile_claims_are_typed():
     assert nonstop["required"] == ["field", "value", "source_ref"]
     assert schema["properties"]["question"]["anyOf"][1]["additionalProperties"] is False
     assert "field" not in schema["properties"]["question"]["anyOf"][1]["properties"]
-    assert "field" not in schema["properties"]["criteria"]["items"]["properties"]
+    criterion_variants = schema["properties"]["criteria"]["items"]["anyOf"]
+    generic = next(
+        item for item in criterion_variants
+        if item.get("properties", {}).get("key", {}).get("enum") == ["t1s1c1"]
+    )
+    assert "source_ref" not in generic["properties"]
+    assert generic["required"] == ["key", "kind", "status"]
     # The schema is sent to the provider as JSON, so it must contain no custom
     # Python objects or unserializable enum wrappers.
     json.dumps(schema)

@@ -30,6 +30,23 @@ def test_rejected_global_allowance_does_not_charge_session(budget, monkeypatch):
     assert budget.read('global-ai-budget').get('calls', 0) == 0
 
 
+def test_adaptive_failures_are_observable_without_charging_or_storing_prompts(budget):
+    from app.store import record_ai_outcome
+    record_ai_outcome('adaptive_review', 'ai_interpretation', 'synthetic-ref')
+    record_ai_outcome('adaptive_plan', 'passed', 'synthetic-success')
+    state = budget.read('ai-runtime')
+    assert state['counts'] == {
+        'adaptive_review:ai_interpretation': 1,
+        'adaptive_plan:passed': 1,
+    }
+    assert state['last_failure']['stage'] == 'adaptive_review'
+    assert state['last_failure']['request_id'] == 'synthetic-ref'
+    assert set(state) == {'counts', 'updated_at', 'last_failure'}
+    assert budget.read('global-ai-budget') == {}
+    record_ai_outcome('unreviewed-stage', 'ai_interpretation', 'ignored')
+    assert budget.read('ai-runtime') == state
+
+
 def test_two_stage_reservation_rejects_before_any_provider_slot(budget, monkeypatch):
     from app.store import reserve_ai_calls
     monkeypatch.setenv('AI_DAILY_LIMIT', '1')
