@@ -64,6 +64,31 @@ def test_omitted_unit_suffix_is_recovered_from_customer_source_context():
             "under$220",
             "under$220 for each night",
         ),
+        (
+            "Book a hotel in Boston nightly, under $220.",
+            "under $220",
+            "nightly, under $220",
+        ),
+        (
+            "Book a hotel in Boston nightly: under$220.",
+            "under$220",
+            "nightly: under$220",
+        ),
+        (
+            "Book a hotel in Boston at a nightly rate, under$220.",
+            "under$220",
+            "nightly rate, under$220",
+        ),
+        (
+            "Book a hotel in Boston under$220 a night.",
+            "under$220",
+            "under$220 a night",
+        ),
+        (
+            "Book a hotel in Boston nightly maximum under$220.",
+            "under$220",
+            "nightly maximum under$220",
+        ),
     ],
 )
 def test_unit_price_adjacent_prefix_or_suffix_is_not_an_all_in_total(

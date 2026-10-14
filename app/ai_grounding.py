@@ -723,14 +723,16 @@ _PRICE_UNIT_SUFFIX = re.compile(
     r"(?i)\s*(?:[,;:()\-/]\s*)?(?:per\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|"
     r"guest|adult|day|week|month)\b|\b(?:nightly|daily|weekly|monthly)\b|"
     r"/\s*(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b|"
-    r"(?:for\s+)?each\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b)"
+    r"(?:for\s+)?each\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b|"
+    r"a\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b)"
 )
 _PRICE_UNIT_PREFIX = re.compile(
     r"(?i)(?:"
     r"\b(?:per\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month))\b"
     r"|\b(?:nightly|daily|weekly|monthly)\b"
     r"|\b(?:for\s+)?each\s+(?:night|person|travell?er|room|unit|item|guest|adult|day|week|month)\b"
-    r")(?:\s+(?:rate|price|cost|cap|budget|amount|stay|room|booking|reservation))?\s*$"
+    r")(?:\s+(?:rate|price|cost|cap|budget|amount|stay|room|booking|reservation|maximum|max))?"
+    r"\s*[,\:]?\s*$"
 )
 
 
@@ -761,7 +763,7 @@ def _price_unit_source_span(quote: str, message: str) -> str | None:
     # current punctuation-delimited clause so an earlier nightly amount cannot
     # taint a separate, explicitly all-in total later in the sentence.
     clause_start = max(
-        (max(message.rfind(mark, 0, start) for mark in ".,;:!?\n") + 1),
+        (max(message.rfind(mark, 0, start) for mark in ".;!?\n") + 1),
         0,
     )
     prefix = message[clause_start:start]
