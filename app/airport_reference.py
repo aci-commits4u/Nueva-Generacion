@@ -61,6 +61,12 @@ _FIELD_DESTINATION_END = re.compile(
     re.I,
 )
 _FIELD_ARROW = re.compile(r"(?:→|->|➝|⟶|—>|–>)")
+_FIELD_NAMED_ORIGIN = re.compile(
+    r"\b(?:departure|departing|origin)\s+airports?\b", re.I
+)
+_FIELD_NAMED_DESTINATION = re.compile(
+    r"\b(?:arrival|arriving|destination)\s+airports?\b", re.I
+)
 _ROUTE_FILLER_WORDS = frozenset(
     {
         "a", "an", "the", "book", "find", "me", "i", "need", "want",
@@ -618,6 +624,19 @@ def airport_field_scope(text: str, field: str) -> str:
 
 def _airport_field_scope_clause(text: str, field: str, *, allow_compact: bool) -> str | None:
     """Scope one route clause, returning ``None`` when it addresses neither endpoint."""
+    # In a correction such as ``limit the departure airports to Heathrow`` the
+    # word ``to`` assigns a value to the named field; it is not a route
+    # destination marker.  Handle these clauses before generic directional
+    # matching so the opposite endpoint is not overwritten.
+    named_scope = _named_airport_assignment_scope(text, field)
+    if named_scope is not None:
+        return named_scope
+    opposite_field = (
+        "destination_airports" if field == "origin_airports" else "origin_airports"
+    )
+    if _named_airport_assignment_scope(text, opposite_field) is not None:
+        return None
+
     # A short arrow route is a first-class route expression.  Handle it before
     # generic ``to`` matching so prose such as ``I want to go to Toronto`` does
     # not leave the earlier ``to`` as the destination marker.
@@ -684,14 +703,50 @@ def _airport_field_scope_clause(text: str, field: str, *, allow_compact: bool) -
     return text if allow_compact else None
 
 
+def _named_airport_assignment_scope(text: str, field: str) -> str | None:
+    """Return the value in a named airport-field assignment, if present."""
+    marker_pattern = (
+        _FIELD_NAMED_ORIGIN
+        if field == "origin_airports"
+        else _FIELD_NAMED_DESTINATION
+    )
+    markers = list(marker_pattern.finditer(text))
+    marker = markers[-1] if markers else None
+    if not marker:
+        return None
+    # The assignment operator must be adjacent to the named field (apart from
+    # small adverbs/punctuation).  Searching the entire remainder would turn
+    # ``departure airports for a flight from London to Toronto`` into a false
+    # departure assignment to Toronto.
+    assignment = re.match(
+        r"\s*[,=:;-]?\s*(?:(?:only|just|specifically|please|now|actually|instead)\s+)*"
+        r"to\b\s*(?:(?:only|just|specifically|please)\s+)*",
+        text[marker.end():],
+        re.I,
+    )
+    if not assignment:
+        return None
+    start = marker.end() + assignment.end()
+    value = text[start:]
+    opposite_pattern = (
+        _FIELD_NAMED_DESTINATION
+        if field == "origin_airports"
+        else _FIELD_NAMED_ORIGIN
+    )
+    opposite = opposite_pattern.search(value)
+    if opposite:
+        value = value[:opposite.start()]
+    return _trim_route_scope(value)
+
+
 def _trim_route_scope(value: str) -> str:
     """Remove route punctuation and conjunctions left before a marker."""
-    value = value.strip(" \t,:-")
+    value = value.strip(" \t,:-.!?;")
     # ``leaving London and arriving Toronto`` leaves ``and`` immediately
     # before the arrival marker.  It is grammar, not part of the place.
     while re.search(r"\s+(?:and|then)\s*$", value, re.I):
         value = re.sub(r"\s+(?:and|then)\s*$", "", value, flags=re.I)
-    return value.strip(" \t,:-")
+    return value.strip(" \t,:-.!?;")
 
 
 def _route_prefix_is_plausible(prefix: str, *, compact: bool = True) -> bool:

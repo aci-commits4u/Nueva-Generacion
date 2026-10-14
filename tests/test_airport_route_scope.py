@@ -313,3 +313,110 @@ def test_explicit_code_mixed_with_city_does_not_narrow_the_city_silently():
         "source_quote": "LCY or London",
         "reason": "ambiguous",
     }]
+
+
+def test_named_departure_airport_correction_treats_to_as_assignment():
+    text = "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    assert airport_field_scope(text, "origin_airports") == (
+        "London Heathrow and London Gatwick only"
+    )
+    assert airport_field_scope(text, "destination_airports") == ""
+    result = validate_extraction(
+        "flight",
+        text,
+        envelope(
+            {"origin_airports": ["LHR", "LGW"]},
+            {"origin_airports": text},
+        ),
+    )
+    assert result["fields"]["origin_airports"] == ["LHR", "LGW"]
+
+
+def test_named_arrival_airport_correction_treats_to_as_assignment():
+    text = "Actually, limit the arrival airports to Toronto Pearson and Toronto City only."
+    assert airport_field_scope(text, "origin_airports") == ""
+    assert airport_field_scope(text, "destination_airports") == (
+        "Toronto Pearson and Toronto City only"
+    )
+    result = validate_extraction(
+        "flight",
+        text,
+        envelope(
+            {"destination_airports": ["YYZ", "YTZ"]},
+            {"destination_airports": text},
+        ),
+    )
+    assert result["fields"]["destination_airports"] == ["YYZ", "YTZ"]
+
+
+def test_named_correction_in_full_history_updates_one_role_and_preserves_the_other():
+    text = (
+        "Book a nonstop flight from London to Toronto.\n"
+        "Depart from LHR or LGW.\n"
+        "Arrive at YYZ or YTZ.\n"
+        "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    )
+    assert airport_field_scope(text, "origin_airports") == (
+        "London Heathrow and London Gatwick only"
+    )
+    assert airport_field_scope(text, "destination_airports") == "YYZ or YTZ"
+    result = validate_extraction(
+        "flight",
+        text,
+        envelope(
+            {
+                "origin_airports": ["LHR", "LGW"],
+                "destination_airports": ["YYZ", "YTZ"],
+            },
+            {"origin_airports": text, "destination_airports": text},
+        ),
+    )
+    assert result["fields"] == {
+        "origin_airports": ["LHR", "LGW"],
+        "destination_airports": ["YYZ", "YTZ"],
+    }
+
+
+def test_departure_noun_does_not_capture_a_later_route_to_marker():
+    scope_text = "Choose a departure airport for a flight from London to Toronto."
+    assert airport_field_scope(scope_text, "origin_airports") == "London"
+    assert airport_field_scope(scope_text, "destination_airports") == "Toronto"
+    # Keep the grounding half explicit so it tests the scope boundary without
+    # conflating it with the separate city-only ambiguity rule.
+    text = "Choose a departure airport for a flight from London (LHR) to Toronto (YYZ)."
+    result = validate_extraction(
+        "flight",
+        text,
+        envelope(
+            {
+                "origin_airports": ["LHR"],
+                "destination_airports": ["YYZ"],
+            },
+            {"origin_airports": text, "destination_airports": text},
+        ),
+    )
+    assert result["fields"] == {
+        "origin_airports": ["LHR"],
+        "destination_airports": ["YYZ"],
+    }
+
+
+def test_combined_named_airport_assignments_stop_at_the_opposite_field():
+    text = "Set departure airports to LHR and arrival airports to YYZ."
+    assert airport_field_scope(text, "origin_airports") == "LHR"
+    assert airport_field_scope(text, "destination_airports") == "YYZ"
+    result = validate_extraction(
+        "flight",
+        text,
+        envelope(
+            {
+                "origin_airports": ["LHR"],
+                "destination_airports": ["YYZ"],
+            },
+            {"origin_airports": text, "destination_airports": text},
+        ),
+    )
+    assert result["fields"] == {
+        "origin_airports": ["LHR"],
+        "destination_airports": ["YYZ"],
+    }

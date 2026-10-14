@@ -64,3 +64,8 @@ The upstream draft checker does not natively support our custom constraint. We v
 See [AI evaluation and conversation](docs/15-ai-evaluation-and-conversation.md) for experimental results, known failures, the daily canary, and budget limits. The Quality view shows recorded results; none of these results guarantee complete intent understanding.
 
 The product now starts with an overview and a **Show me how** walkthrough. Read [the tutorial guide](docs/16-product-walkthrough.md) for the five stages and working demo controls. The tutorial makes no paid model calls; **Try the demo** opens the actual Foundry workflow.
+
+The [route-choice incident and repair](docs/21-route-choice-reliability.md)
+records the London→Toronto failure, role-scoped global airport choices,
+source-linked corrections, explicit saved-conversation refresh, and the
+separate regression and native acceptance evidence.

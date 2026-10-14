@@ -1,5 +1,6 @@
 """Profile-driven clarification without AI consent or guessed preferences."""
 from app.profile_registry import get_profile,digest
+from app.ai_config import PROMPT_VERSION
 from app.airport_reference import (
     airport_context_for_field,
     airport_field_scope,
@@ -176,6 +177,42 @@ def _question_airport_options_are_current(question, draft):
     return True
 
 
+def _adaptive_engine_version_current(draft):
+    """Return whether the latest versioned adaptive run uses this engine.
+
+    Version metadata is intentionally advisory for older or synthetic drafts:
+    an absent trace or absent ``prompt_version`` cannot prove staleness.  Once
+    a live adaptive run records a version, however, a mismatch means its
+    saved interpretation predates the current correction rules and requires
+    the explicit profile refresh path.
+    """
+    if not isinstance(draft, dict) or draft.get('mode') != 'live':
+        return True
+    pipeline = draft.get('pipeline')
+    # Early live adaptive drafts did not copy the pipeline to the top-level
+    # record, but their server-owned adaptive plan is unambiguous evidence of
+    # which interpretation path produced them.
+    adaptive = pipeline == 'adaptive' or (
+        pipeline is None and isinstance(draft.get('adaptive_plan'), dict)
+    )
+    if not adaptive:
+        return True
+    runs = draft.get('ai_runs')
+    if not isinstance(runs, list) or not runs:
+        return True
+    latest = runs[-1]
+    if not isinstance(latest, dict) or not isinstance(latest.get('trace'), list):
+        return True
+    versions = [
+        trace.get('prompt_version')
+        for trace in latest.get('trace')
+        if isinstance(trace, dict) and isinstance(trace.get('prompt_version'), str)
+    ]
+    if not versions:
+        return True
+    return all(version == PROMPT_VERSION for version in versions)
+
+
 def question_contract_current(draft):
     """Return whether a stored adaptive question is safe to use as-is.
 
@@ -193,6 +230,8 @@ def question_contract_current(draft):
         return True
     if pipeline not in {None, 'adaptive'}:
         return True
+    if not _adaptive_engine_version_current(draft):
+        return False
     plan = draft.get('adaptive_plan')
     if not isinstance(plan, dict):
         return False
@@ -1240,6 +1279,14 @@ def _clarification_field_supported(domain,field,item,latest_turn,messages):
     quote=item.get('source_quote') if isinstance(item,dict) else None
     if field not in get_profile(domain).get('fields',{}) or not _quote_in_latest_turn(quote,latest_turn):
         return False
+    # Airport prose is endpoint-scoped before generic grounding runs.  Words
+    # such as ``to`` can occur inside an origin assignment (``limit the
+    # departure airports to Heathrow``); the shared route parser knows that
+    # grammar, while the broad clarification hints do not.  An empty scope is
+    # explicit evidence that this quote belongs to the opposite endpoint.
+    if domain == 'flight' and field in {'origin_airports', 'destination_airports'}:
+        if not airport_field_scope(quote, field):
+            return False
     # Grounding may provide a richer semantic-unit map as it evolves. Keep
     # this call optional so conversation state remains usable with older code.
     try:
@@ -1286,6 +1333,8 @@ def merge_revision_state(domain,current,proposed,latest_turn,messages,structured
     fields=deepcopy(previous_fields)
     sources=deepcopy(previous_sources)
     changes=[]
+    all_declines=declined_preferences(domain,messages)
+    latest_declines=declined_preferences(domain,[messages[-1]] if messages else [])
     bound_airport_choices = {}
     if isinstance(structured_answer, dict):
         field = structured_answer.get('field')
@@ -1300,11 +1349,47 @@ def merge_revision_state(domain,current,proposed,latest_turn,messages,structured
                 'source': source,
                 'question_id': structured_answer.get('question_id'),
             }
+    # A later source-backed clarification reopens the airport field.  It must
+    # be identified before replaying the historical widget answer, otherwise
+    # the old complete set would be re-applied after the clarification below.
+    latest_reopen_fields = set()
+    if not bound_airport_choices:
+        for item in proposed_clarifications or []:
+            field = item.get('field') if isinstance(item, dict) else None
+            if (field in {'origin_airports', 'destination_airports'}
+                    and field in fields
+                    and field not in latest_declines
+                    and _clarification_field_supported(domain, field, item, latest_turn, messages)):
+                latest_reopen_fields.add(field)
     for field in ('origin_airports', 'destination_airports'):
         if field in bound_airport_choices:
             continue
         choice = _latest_bound_airport_choice(domain, field, messages)
         if choice:
+            proposed_value = proposed_fields.get(field)
+            proposed_quote = proposed_sources.get(field)
+            newer_customer_correction = (
+                field not in latest_reopen_fields
+                and isinstance(proposed_value, list)
+                and bool(proposed_value)
+                and isinstance(proposed_quote, str)
+                and proposed_quote.strip() != str(choice.get('source') or '').strip()
+                # Re-running the reviewer for the same widget answer often
+                # emits a narrower source substring (for example, ``LCY``
+                # from ``LCY or LHR``).  That is not a new customer turn and
+                # must stay subordinate to the bound complete set.
+                and str(latest_turn or '').strip() != str(choice.get('source') or '').strip()
+                and _quote_in_latest_turn(proposed_quote, latest_turn)
+            )
+            # Once a previous revision accepted a newer source, the historical
+            # widget sentence is evidence only. It must never resurrect the
+            # older set on a later model omission.
+            newer_saved_source = (
+                isinstance(sources.get(field), str)
+                and sources.get(field).strip() != str(choice.get('source') or '').strip()
+            )
+            if newer_customer_correction or field in latest_reopen_fields or newer_saved_source:
+                continue
             bound_airport_choices[field] = choice
             old_value = fields.get(field)
             if old_value != choice['values']:
@@ -1318,8 +1403,6 @@ def merge_revision_state(domain,current,proposed,latest_turn,messages,structured
                 })
             fields[field] = deepcopy(choice['values'])
             sources[field] = choice['source']
-    all_declines=declined_preferences(domain,messages)
-    latest_declines=declined_preferences(domain,[messages[-1]] if messages else [])
     latest_reopens={}
     for item in proposed_clarifications or []:
         field=item.get('field') if isinstance(item,dict) else None

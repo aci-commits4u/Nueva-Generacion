@@ -79,6 +79,39 @@ production UAT. The new route browser suite uses intercepted UI responses and
 therefore is not live-AI evidence. The independent native production retest
 of the original route remains pending.
 
+## Blind native retest on v8
+
+Source `cab3888dd3e919eebee1500c42b282efc88212f9` deployed READY as
+`dpl_8jgXnKtet1MvvRrcUvyHBNr6eQrmCI` after CI run `38586292355` reported 478
+pytest tests and ten browser flows. The independent blind native retest still
+failed after four live turns. It used no retry, fallback, or Explain action.
+
+The tester entered the exact London-to-Toronto request. The model asked,
+“Which airport would you like to depart from in London?” The tester selected
+the genuine UK options `LHR`, `LGW`, and `LCY`. The next question correctly
+asked, “Which airport would you like to arrive at in Toronto?” and the tester
+selected both `YTZ` and `YYZ`. The complete route then held November 12,
+nonstop, and `29999` cents with no airport loop.
+
+The tester next entered: “Actually, limit the departure airports to London
+Heathrow and London Gatwick only.” The natural-language correction updated the
+generic live criteria to `LHR`/`LGW`, but the unapproved typed summary and
+review origin still contained `LHR`, `LGW`, and `LCY`. The tester stopped before
+approval and before the second test case.
+
+The failed native session is preserved at
+`https://intent-judge-perfected.vercel.app/?intent=qgaDKDrg2tz0rghU4AEABQ`.
+The tester opened Review only after entering the correction, so this was
+backend typed-state propagation, not a cached sidebar edit.
+
+The two primary causes were fixed in the working tree: the old widget set was
+reapplied after a later customer correction, and named departure airports
+containing “to” were misread as a destination. Additional review found paired
+named assignments mixing endpoint roles and a wrong-field clarification
+reopening the opposite endpoint. Scoped operators, endpoint bounds, and a
+target-role guard now address those paths. The deployed v8 release is still
+not accepted; native UAT will be retaken only after the hotfix is READY.
+
 ## Follow-up fixes and guards
 
 Independent review found and fixed two more geographic failure classes:
@@ -94,19 +127,20 @@ State guards now mark a legacy question/plan mismatch as
 `clarification_current: false` through a read-only GET. An explicit refresh
 reinterprets the full saved history and revokes prior approval. A completed
 receipt remains immutable. New tests also protect an empty question list from
-binding a reply to a stale planner question.
+binding a reply to a stale planner question. The version guard marks known
+older live trace prompt versions stale for explicit refresh, with
+`v9-customer-corrections` preventing persisted v8 state from appearing current.
 
-The final offline pytest count moved from 473 to 478 passing tests. JavaScript
+The final offline pytest count moved from 473 to 488 passing tests. JavaScript
 syntax, the clean-diff check, and the 90-second API deadline check pass without
-automatic retry. All ten browser flows pass in 18,767 ms against a local
-offline server: the first six use explicit offline mode, and the final four
-use intercepted fixtures. This is regression evidence, not ten live-AI
-journeys.
+automatic retry. All ten browser flows pass in 20,478 ms against a local
+offline server, including fixture coverage for correction and sidebar/review
+consistency. This remains regression evidence, not ten live-AI journeys.
 
-The source commit and deployment of these fixes are next; blind native
-production UAT remains pending. Existing tests, local integration, and the
-earlier EWR→LIS walkthrough must not be reported as proof that the public
+The source commit for the merge-precedence hotfix and its deployment are still
+pending. Existing tests, local integration, the initial v8 no-loop path, and
+the earlier EWR→LIS walkthrough must not be reported as proof that the public
 native route is fixed. No release or complete-accuracy claim is made until a
-fresh native retest covers the exact route, preserves both airport sets, and
-demonstrates that London is not asked repeatedly.
+fresh native retest preserves airport sets, applies a natural-language
+correction to the typed review state, and completes approval safely.
 

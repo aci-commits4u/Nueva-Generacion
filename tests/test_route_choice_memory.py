@@ -193,6 +193,225 @@ def test_bound_airport_answer_cannot_be_narrowed_by_model_source_substring():
     assert merged["sources"]["origin_airports"] == "Depart from LCY or LHR."
 
 
+def test_later_free_text_airport_correction_replaces_old_widget_set():
+    """A newer customer correction supersedes the earlier complete widget set."""
+    current = _draft()
+    current["fields"].update({
+        "origin_airports": ["LHR", "LGW", "LCY"],
+        "destination_airports": ["YTZ", "YYZ"],
+        "nonstop": True,
+    })
+    current["sources"].update({
+        "origin_airports": "Depart from LHR or LGW or LCY.",
+        "destination_airports": "Arrive at YTZ or YYZ.",
+        "nonstop": "nonstop",
+    })
+    current["messages"].append({
+        "role": "user",
+        "content": current["sources"]["origin_airports"],
+        "reply_to": _question("Which London departure airports work for you?"),
+    })
+    latest = "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    messages = current["messages"] + [{"role": "user", "content": latest}]
+    merged = merge_revision_state(
+        "flight",
+        current,
+        {
+            "fields": {
+                "origin_airports": ["LHR", "LGW"],
+                "destination_airports": ["YTZ", "YYZ"],
+                "departure_date": "2026-11-12",
+                "max_total_cents": 29999,
+                "nonstop": True,
+            },
+            "sources": {
+                "origin_airports": latest,
+                "destination_airports": "Arrive at YTZ or YYZ.",
+                "departure_date": "2026-11-12",
+                "max_total_cents": "under $300",
+                "nonstop": "nonstop",
+            },
+            "clarifications": [],
+        },
+        latest,
+        messages,
+    )
+
+    assert merged["fields"]["origin_airports"] == ["LHR", "LGW"]
+    assert merged["fields"]["destination_airports"] == ["YTZ", "YYZ"]
+    assert merged["fields"]["departure_date"] == "2026-11-12"
+    assert merged["fields"]["max_total_cents"] == 29999
+    assert merged["fields"]["nonstop"] is True
+    assert merged["sources"]["origin_airports"] == latest
+    assert merged["changes"] == [{
+        "field": "origin_airports",
+        "kind": "corrected",
+        "old_value": ["LHR", "LGW", "LCY"],
+        "new_value": ["LHR", "LGW"],
+        "old_source_quote": "Depart from LHR or LGW or LCY.",
+        "new_source_quote": latest,
+    }]
+
+
+def test_ambiguous_latest_airport_question_reopens_only_that_field():
+    """An explicit new ambiguity can reopen origin without losing destination."""
+    current = _draft()
+    current["fields"].update({
+        "origin_airports": ["LHR", "LGW", "LCY"],
+        "destination_airports": ["YTZ", "YYZ"],
+    })
+    current["sources"].update({
+        "origin_airports": "Depart from LHR or LGW or LCY.",
+        "destination_airports": "Arrive at YTZ or YYZ.",
+    })
+    current["messages"].append({
+        "role": "user",
+        "content": "Depart from LHR or LGW or LCY.",
+        "reply_to": _question("Which London departure airports work for you?"),
+    })
+    latest = "Which London departure airports should I use?"
+    messages = current["messages"] + [{
+        "role": "user",
+        "content": latest,
+        "reply_to": {"field": "origin_airports"},
+    }]
+    merged = merge_revision_state(
+        "flight",
+        current,
+        {
+            "fields": {"destination_airports": ["YTZ", "YYZ"]},
+            "sources": {"destination_airports": "Arrive at YTZ or YYZ."},
+            "clarifications": [{
+                "field": "origin_airports",
+                "source_quote": latest,
+                "kind": "ambiguity",
+            }],
+        },
+        latest,
+        messages,
+    )
+
+    assert "origin_airports" not in merged["fields"]
+    assert merged["fields"]["destination_airports"] == ["YTZ", "YYZ"]
+    assert merged["clarifications"] == [{
+        "field": "origin_airports",
+        "source_quote": latest,
+        "kind": "ambiguity",
+    }]
+
+
+def test_origin_correction_cannot_reopen_destination_from_generic_to_word():
+    """An origin-only correction must not clear the saved arrival airports."""
+    current = _draft()
+    current["fields"].update({
+        "origin_airports": ["LHR", "LGW", "LCY"],
+        "destination_airports": ["YTZ", "YYZ"],
+    })
+    current["sources"].update({
+        "origin_airports": "Depart from LHR or LGW or LCY.",
+        "destination_airports": "Arrive at YTZ or YYZ.",
+    })
+    current["messages"].extend([
+        {
+            "role": "user",
+            "content": "Depart from LHR or LGW or LCY.",
+            "reply_to": _question("Which London departure airports work for you?"),
+        },
+        {
+            "role": "user",
+            "content": "Arrive at YTZ or YYZ.",
+            "reply_to": {
+                **_question("Which Toronto arrival airports work for you?"),
+                "field": "destination_airports",
+                "criterion_key": "destination_airports",
+            },
+        },
+    ])
+    latest = "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    messages = current["messages"] + [{"role": "user", "content": latest}]
+    merged = merge_revision_state(
+        "flight",
+        current,
+        {
+            "fields": {
+                "origin_airports": ["LHR", "LGW"],
+                "destination_airports": ["YTZ", "YYZ"],
+            },
+            "sources": {
+                "origin_airports": latest,
+                "destination_airports": "Arrive at YTZ or YYZ.",
+            },
+            "clarifications": [{
+                "field": "destination_airports",
+                "source_quote": latest,
+                "kind": "ambiguity",
+            }],
+        },
+        latest,
+        messages,
+    )
+
+    assert merged["fields"]["origin_airports"] == ["LHR", "LGW"]
+    assert merged["fields"]["destination_airports"] == ["YTZ", "YYZ"]
+    assert not any(item.get("field") == "destination_airports" for item in merged["clarifications"])
+
+
+def test_arrival_correction_cannot_reopen_origin():
+    """An arrival-only correction must preserve the saved departure set."""
+    current = _draft()
+    current["fields"].update({
+        "origin_airports": ["LHR", "LGW", "LCY"],
+        "destination_airports": ["YTZ", "YYZ"],
+    })
+    current["sources"].update({
+        "origin_airports": "Depart from LHR or LGW or LCY.",
+        "destination_airports": "Arrive at YTZ or YYZ.",
+    })
+    current["messages"].extend([
+        {
+            "role": "user",
+            "content": "Depart from LHR or LGW or LCY.",
+            "reply_to": _question("Which London departure airports work for you?"),
+        },
+        {
+            "role": "user",
+            "content": "Arrive at YTZ or YYZ.",
+            "reply_to": {
+                **_question("Which Toronto arrival airports work for you?"),
+                "field": "destination_airports",
+                "criterion_key": "destination_airports",
+            },
+        },
+    ])
+    latest = "Actually, limit the arrival airports to Toronto Pearson only."
+    messages = current["messages"] + [{"role": "user", "content": latest}]
+    merged = merge_revision_state(
+        "flight",
+        current,
+        {
+            "fields": {
+                "origin_airports": ["LHR", "LGW", "LCY"],
+                "destination_airports": ["YYZ"],
+            },
+            "sources": {
+                "origin_airports": "Depart from LHR or LGW or LCY.",
+                "destination_airports": latest,
+            },
+            "clarifications": [{
+                "field": "origin_airports",
+                "source_quote": latest,
+                "kind": "ambiguity",
+            }],
+        },
+        latest,
+        messages,
+    )
+
+    assert merged["fields"]["origin_airports"] == ["LHR", "LGW", "LCY"]
+    assert merged["fields"]["destination_airports"] == ["YYZ"]
+    assert not any(item.get("field") == "origin_airports" for item in merged["clarifications"])
+
+
 def test_airport_question_options_are_server_scoped_and_multi_select():
     draft = _draft()
     result = apply_adaptive_plan(
@@ -374,6 +593,65 @@ def test_api_typed_choice_survives_narrow_reviewer_response(client, monkeypatch)
     assert reloaded["fields"]["origin_airports"] == ["LCY", "LHR"]
 
 
+def test_api_later_free_text_correction_survives_reload_and_review(client, monkeypatch):
+    """A later customer correction reaches the persisted review/sidebar state."""
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: _api_proposal(),
+    )
+    draft = client.post("/api/intents", json={
+        "domain": "flight",
+        "mode": "live",
+        "message": "Book a nonstop flight from London to Toronto on 2026-11-12 under $300.",
+    }).json()
+    question = draft["questions"][0]
+
+    # The first review returns a narrow value, but the typed answer binds all
+    # three airports selected by the customer.
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: _api_proposal(
+            origin=["LHR"], origin_source="Depart from LHR.", action="review_required"
+        ),
+    )
+    first = client.post(f"/api/intents/{draft['id']}/clarify", json={
+        "revision": draft["revision"],
+        "message": "Depart from LHR or LGW or LCY.",
+        "structured_answer": {
+            "question_id": question["question_id"],
+            "field": "origin_airports",
+            "values": ["LHR", "LGW", "LCY"],
+        },
+    })
+    assert first.status_code == 200, first.text
+    first_draft = first.json()
+    assert first_draft["fields"]["origin_airports"] == ["LHR", "LGW", "LCY"]
+
+    latest = "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: _api_proposal(
+            origin=["LHR", "LGW"], origin_source=latest, action="review_required"
+        ),
+    )
+    corrected = client.post(f"/api/intents/{draft['id']}/clarify", json={
+        "revision": first_draft["revision"],
+        "message": latest,
+    })
+    assert corrected.status_code == 200, corrected.text
+    corrected_draft = corrected.json()
+    assert corrected_draft["fields"]["origin_airports"] == ["LHR", "LGW"]
+    assert corrected_draft["sources"]["origin_airports"] == latest
+    assert corrected_draft["fields"]["destination_airports"] == ["YYZ", "YTZ"]
+
+    reloaded = client.get(f"/api/intents/{draft['id']}")
+    assert reloaded.status_code == 200
+    reloaded_draft = reloaded.json()
+    assert reloaded_draft["fields"]["origin_airports"] == ["LHR", "LGW"]
+    assert reloaded_draft["sources"]["origin_airports"] == latest
+    assert reloaded_draft["fields"]["destination_airports"] == ["YYZ", "YTZ"]
+
+
 def test_question_contract_detects_legacy_plan_split_without_mutating_draft():
     draft = _draft()
     draft.update({
@@ -451,6 +729,131 @@ def test_get_marks_malformed_live_contract_stale_without_provider_or_write(clien
     assert calls == []
     stored = get_store().read(sid)["drafts"][draft["id"]]
     assert stored["adaptive_plan"]["question"] == "legacy malformed"
+
+
+def test_versioned_live_adaptive_contract_marks_only_known_old_engine_stale():
+    base = {
+        "domain": "flight",
+        "mode": "live",
+        "pipeline": "adaptive",
+        "adaptive_plan": {"action": "review_required", "question": None},
+        "questions": [],
+    }
+    old = deepcopy(base)
+    old["ai_runs"] = [{
+        "trace": [{"stage": "adaptive_plan", "prompt_version": "intent-envelope-v8-route-choices"}],
+    }]
+    assert question_contract_current(old) is False
+
+    unknown = deepcopy(base)
+    unknown["ai_runs"] = [{"trace": []}]
+    assert question_contract_current(unknown) is True
+
+    legacy = deepcopy(old)
+    legacy["pipeline"] = "audited"
+    assert question_contract_current(legacy) is True
+
+
+def test_old_versioned_live_draft_requires_explicit_refresh_and_replays_correction(client, monkeypatch):
+    """A known old adaptive run is stale until refresh reinterprets full history."""
+    from app.ai_config import PROMPT_VERSION
+
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: _api_proposal(),
+    )
+    draft = client.post("/api/intents", json={
+        "domain": "flight",
+        "mode": "live",
+        "message": "Book a nonstop flight from London to Toronto on 2026-11-12 under $300.",
+    }).json()
+    sid = client.cookies["ij_session"]
+    latest = "Actually, limit the departure airports to London Heathrow and London Gatwick only."
+    old_messages = [
+        deepcopy(draft["messages"][0]),
+        {
+            "role": "user",
+            "content": "Depart from LHR or LGW or LCY.",
+            "reply_to": {"field": "origin_airports"},
+        },
+        {
+            "role": "user",
+            "content": "Arrive at YTZ or YYZ.",
+            "reply_to": {"field": "destination_airports"},
+        },
+        {"role": "user", "content": latest},
+    ]
+    old_state = {
+        "fields": {
+            "origin_airports": ["LHR", "LGW", "LCY"],
+            "destination_airports": ["YTZ", "YYZ"],
+            "departure_date": "2026-11-12",
+            "max_total_cents": 29999,
+            "nonstop": True,
+        },
+        "sources": {
+            "origin_airports": "Depart from LHR or LGW or LCY.",
+            "destination_airports": "Arrive at YTZ or YYZ.",
+            "departure_date": "2026-11-12",
+            "max_total_cents": "under $300",
+            "nonstop": "nonstop",
+        },
+        "messages": old_messages,
+        "revision": 4,
+        "ai_runs": [{
+            "trace": [{"stage": "adaptive_plan", "prompt_version": "intent-envelope-v8-route-choices"}],
+        }],
+        "approved": {"id": "old-approval"},
+        "offer_views": [{"id": "old-offer"}],
+    }
+    get_store().mutate(sid, lambda state: state["drafts"][draft["id"]].update(old_state))
+    before = deepcopy(get_store().read(sid)["drafts"][draft["id"]])
+
+    # GET only reports the stale contract; it must not silently call the model
+    # or rewrite the saved interpretation.
+    calls = []
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: calls.append(True) or pytest.fail("GET must not refresh AI state"),
+    )
+    stale = client.get(f"/api/intents/{draft['id']}")
+    assert stale.status_code == 200
+    assert stale.json()["clarification_current"] is False
+    assert stale.json()["refresh_required"] is True
+    assert calls == []
+    assert get_store().read(sid)["drafts"][draft["id"]] == before
+
+    refreshed_proposal = _api_proposal(
+        origin=["LHR", "LGW"], origin_source=latest, action="review_required"
+    )
+    refreshed_proposal["trace"] = [{
+        "stage": "adaptive_plan", "prompt_version": PROMPT_VERSION,
+    }]
+    refresh_calls = []
+    monkeypatch.setattr(
+        "app.foundry_client.extract",
+        lambda *args, **kwargs: refresh_calls.append(kwargs) or refreshed_proposal,
+    )
+    refreshed = client.post(f"/api/intents/{draft['id']}/refresh-profile", json={
+        "revision": before["revision"],
+        "time_zone": "UTC",
+    })
+    assert refreshed.status_code == 200, refreshed.text
+    result = refreshed.json()
+    assert len(refresh_calls) == 1
+    assert refresh_calls[0]["source_text"].splitlines()[-1] == latest
+    assert result["fields"]["origin_airports"] == ["LHR", "LGW"]
+    assert result["sources"]["origin_airports"] == latest
+    assert result["fields"]["destination_airports"] == ["YTZ", "YYZ"]
+    assert result["fields"]["departure_date"] == "2026-11-12"
+    assert result["fields"]["max_total_cents"] == 29999
+    assert result["fields"]["nonstop"] is True
+    assert result["ai_runs"][-1]["trace"][-1]["prompt_version"] == PROMPT_VERSION
+    assert not result.get("approved")
+    assert not result.get("offer_views")
+    assert result["clarification_current"] is True
+    events = get_store().read(sid)["events"]
+    assert any(event["kind"] == "authorization_revoked_by_reinterpretation" for event in events)
 
 
 def test_refresh_stale_clarification_revokes_old_approval_and_binds_new_question(client, monkeypatch):

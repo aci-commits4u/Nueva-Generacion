@@ -3,7 +3,45 @@
 Intent Judge is implemented on `victor/perfected` at https://intent-judge-perfected.vercel.app. Live Foundry now generates the next useful question and can choose bounded read-only merchant context, followed by a fresh source review. Customer approval and deterministic validation over signed merchant facts remain separate. The overview and five-step tutorial explain the product; the commerce inventory and purchase are explicitly simulated. See [the adaptive engine](19-adaptive-intent-engine.md) and [native UAT](20-adaptive-native-uat.md).
 
 
-## Adaptive release verification — October 14
+## Route-choice repair — October 14
+
+Runtime source `cab3888dd3e919eebee1500c42b282efc88212f9` is deployed READY as
+`dpl_8jgXnKtet1MvvRrcUvyHBNr6eQrm` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38586292355](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38586292355)
+passed **478 pytest tests**, all **ten browser journeys**, JavaScript syntax,
+and the client deadline check. Local verification also passed 478 tests and
+ten journeys. Those browser regressions use explicit offline interpretation
+or intercepted UI responses; they are separate from live Foundry acceptance.
+
+The real London→Toronto failure is preserved in
+[the route-choice incident record](21-route-choice-reliability.md).
+Airport candidates now come from separate route roles in the global catalog.
+City-only model guesses remain ambiguous, explicit multi-airport answers
+retain every choice, and later corrections preserve unrelated fields. Route
+scoping covers forward, reversed, depart/arrive, and arrow phrasing. The UI
+shows one active question and uses the same question binding as the server.
+Inconsistent saved questions require an explicit refresh, preserve history,
+and revoke previous approval; completed receipts stay immutable.
+
+Hosted script bytes match committed source. Health confirms live Foundry,
+simulated commerce, and Azure state. The public Quality endpoint reports
+`intent-envelope-v8-route-choices`; historical model evaluations are not
+current-release accuracy. The first independent native production walkthrough found a correction
+propagation failure after four live turns: the model criteria reflected
+`LHR/LGW`, but typed fields still contained `LCY`. The tester stopped before
+approval. This deployment is not accepted; the failure and forthcoming
+hotfix/retest are recorded in the route-choice incident document.
+
+The authorized configuration is now $20 ordinary plus the full $10 emergency
+reservation, bounded by the existing $30 cap and unchanged 500-stage lifetime
+ceiling. The daily interactive cap is 200 stages and a new session allows 24
+stages, with two model stages per interpretation and eleven follow-up turns.
+No reservation or counter was reset. Pre-UAT readback records 348 stages and
+2,184 cents conservatively reserved, with 114 interactive stages remaining
+for the UTC day and 152 lifetime stages remaining. These are application
+limits, not Azure charges or a student-credit balance.
+
+## Earlier adaptive release verification — October 14 (historical)
 
 The current candidate replaces live fixed-field questioning with a shared adaptive Foundry planner and a fresh source/offer review pass. The model generates questions and selects read-only actions; the harness also requires signed offer facts before reviewing a fully specified flight/hotel draft. The original conversation, source-linked criteria, exact customer answers, and real tool results are retained. Generic conditions without a validator hold checkout. Explicit no-preference clauses populate review choices; silence does not. See [the adaptive engine contract](19-adaptive-intent-engine.md).
 
@@ -68,7 +106,7 @@ Synthetic offers use fixed inventory prices and controlled fixtures adapted to t
 
 ## Budget safeguards
 
-Reuse the existing model; no paid deployment upgrade. Each live request has a token bound, no SDK auto-retries, an atomic global reservation and small session/day quotas. The ordinary money cap is $20, enforced atomically and independently from a 500-stage ceiling. Past $0.10 reservations are retained; future bounded stages reserve $0.02 each. No counter or past money was reset. The additional emergency allowance is explicitly capped at $2; unused authorized headroom remains disabled. These limits are conservative application reservations, not billed Azure spend.
+Reuse the existing model; no paid deployment upgrade. Each live request has a token bound, no SDK auto-retries, an atomic global reservation and small session/day quotas. The ordinary money cap is $20, enforced atomically and independently from a 500-stage ceiling. Past $0.10 reservations are retained; future bounded stages reserve $0.02 each. No counter or past money was reset. The additional emergency allowance is explicitly configured at $10, bounded by the combined $30 cap. Daily and per-session capacity remain finite. These limits are conservative application reservations, not billed Azure spend.
 
 Official Azure Retail Prices API on October 13, 2026 listed gpt-oss-120B global meters in westus2 at $0.15 per million input tokens and $0.60 per million output tokens; Data Zone rates were $0.165/$0.66. Recorded token usage is stored separately from conservative reservations. Storage adds very small metered costs. Actual remaining student credit and unrelated subscription activity are not claimed or inferred from our application ledger.
 
