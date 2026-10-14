@@ -1720,7 +1720,7 @@ def _bare_date_condition(phrase):
 
 
 _GEO_PATTERN = re.compile(
-    r'^(?:(from|to|in)\s+)?(fl|florida|the state of florida|new york|new york city|nyc|'
+    r'^(?:(?:a|an|the)\s+)?(?:flight\s+)?(?:(from|to|in)\s+)?(fl|florida|the state of florida|new york|new york city|nyc|'
     r'chicago|chi|washington|new england|usa|united states|the united states)$', re.I)
 
 

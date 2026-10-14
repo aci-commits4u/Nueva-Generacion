@@ -107,3 +107,21 @@ def test_negation_of_one_amenity_does_not_change_another():
     text = 'No refundable fare, but breakfast is required.'
     result = validate_extraction('hotel', text, envelope({'breakfast': True}, {'breakfast': 'breakfast'}))
     assert result['fields']['breakfast'] is True
+
+
+def test_flight_location_phrase_is_resolved_by_customer_selected_florida_airports():
+    text='I need a flight to Florida with a checked bag.\nArrive at MCO or MIA.'
+    result=validate_extraction('flight',text,envelope(
+        {'destination_airports':['MCO','MIA']},
+        {'destination_airports':'Arrive at MCO or MIA.'},
+        ['flight to Florida','checked bag']))
+    assert result['unsupported']==['checked bag']
+    assert result['fields']['destination_airports']==['MCO','MIA']
+
+
+def test_qualified_flight_location_phrase_and_mismatched_airport_remain_held():
+    text='A flight to Florida with a checked bag.\nArrive at LAX.'
+    result=validate_extraction('flight',text,envelope(
+        {'destination_airports':['LAX']},{'destination_airports':'Arrive at LAX.'},
+        ['flight to Florida','flight to Florida with a checked bag']))
+    assert result['unsupported']==['flight to Florida','flight to Florida with a checked bag']
