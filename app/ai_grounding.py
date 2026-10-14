@@ -1062,6 +1062,109 @@ def _integer_with_unit_supports(value: int, quote: str, unit: str) -> bool:
     return parsed == value
 
 
+def _adaptive_integer_reply_supports(
+    key: str,
+    value: int,
+    quote: str,
+    domain: str,
+    source_messages: list[dict] | None,
+) -> bool:
+    """Bind a bare hotel count only to the server's exact typed question.
+
+    ``1`` and ``2`` are useful answers to generated ``rooms``/``adults``
+    questions, but a bare integer has no trustworthy unit in the text itself.
+    This narrow bridge therefore requires the latest stored customer turn to
+    be digits only and its server-owned question to identify the exact hotel
+    field.  It deliberately does not apply to money, flights, or arbitrary
+    integer fields, and it never accepts a client-supplied question marker.
+    """
+    if domain != 'hotel' or key not in {'rooms', 'adults'}:
+        return False
+    if type(value) is not int or type(quote) is not str or not source_messages:
+        return False
+
+    # The latest customer turn must itself be the short answer.  Looking back
+    # through history would let an unrelated earlier ``1`` satisfy a later
+    # question, even when the model quoted that old token.
+    customer_turns = [
+        item for item in source_messages
+        if isinstance(item, dict) and item.get('role') in {'user', 'customer'}
+    ]
+    if not customer_turns:
+        return False
+    latest = customer_turns[-1]
+    content = latest.get('content')
+    if type(content) is not str or not re.fullmatch(r'\d+', content.strip()):
+        return False
+    answer = content.strip()
+    if quote.strip() != answer or not re.fullmatch(r'\d+', quote.strip()):
+        return False
+    try:
+        parsed = int(answer)
+    except ValueError:
+        return False
+    if parsed != value:
+        return False
+
+    reply_to = latest.get('reply_to')
+    if not isinstance(reply_to, dict):
+        return False
+    try:
+        from app.conversation import is_trusted_adaptive_question
+    except (ImportError, TypeError):
+        is_trusted_adaptive_question = None
+
+    adaptive = reply_to.get('origin') == 'ai'
+    if adaptive:
+        # The contract itself is server-generated and integrity checked.  A
+        # bare field name in a forged reply_to object is not enough.
+        if is_trusted_adaptive_question is None or not is_trusted_adaptive_question(
+            reply_to, domain=domain
+        ):
+            return False
+        if reply_to.get('answer_kind') != 'number':
+            return False
+        if reply_to.get('response_type') not in {'number', 'single', 'text'}:
+            return False
+    else:
+        # Preserve the deterministic offline/legacy path, but only for the
+        # exact reviewed profile question.  Static wording is never trusted
+        # for an unknown field or a vague guest-count question.
+        spec = get_profile(domain).get('fields', {}).get(key, {})
+        if spec.get('type') != 'integer' or reply_to.get('question') != spec.get('question'):
+            return False
+        if reply_to.get('field') != key:
+            return False
+        if reply_to.get('response_type') not in {'number', 'single'}:
+            return False
+
+    # The semantic target must identify the exact count.  ``guests`` alone is
+    # intentionally insufficient to establish the ``adults`` requirement.
+    if reply_to.get('field') != key or reply_to.get('criterion_key', key) != key:
+        return False
+    question_text = reply_to.get('question')
+    if type(question_text) is not str:
+        return False
+    semantic = r'\brooms?\b' if key == 'rooms' else r'\badults?\b'
+    if not re.search(semantic, question_text, re.I):
+        return False
+
+    spec = get_profile(domain).get('fields', {}).get(key, {})
+    if spec.get('type') != 'integer':
+        return False
+    minimum = spec.get('min')
+    maximum = spec.get('max')
+    if isinstance(minimum, int) and parsed < minimum:
+        return False
+    if isinstance(maximum, int) and parsed > maximum:
+        return False
+    try:
+        validate_fields(get_profile(domain), {key: parsed})
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _time_in_quote(value: str, quote: str) -> bool:
     return clock_time_in_quote(value,quote)
 
@@ -1106,7 +1209,10 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key in {"rooms", "adults"}:
         unit = "room" if key == "rooms" else "adult"
-        if not _integer_with_unit_supports(value, quote, unit):
+        if (not _integer_with_unit_supports(value, quote, unit)
+                and not _adaptive_integer_reply_supports(
+                    key, value, quote, domain, source_messages
+                )):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "cabin":
         if not _cabin_quote_supports(value, quote, domain):

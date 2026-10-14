@@ -69,4 +69,14 @@ class DisputeRequest(StrictModel):
 
 class ClarifyRequest(StrictModel):
     revision: int
-    message: str = Field(min_length=2,max_length=1500)
+    # A one-character answer is valid for typed follow-ups (for example,
+    # ``1`` room or ``2`` adults).  Whitespace-only replies are rejected
+    # separately so lowering this bound cannot create empty turns.
+    message: str = Field(min_length=1,max_length=1500)
+
+    @field_validator('message')
+    @classmethod
+    def nonempty_message(cls, value):
+        if not value.strip():
+            raise ValueError('message must contain a non-whitespace answer')
+        return value
