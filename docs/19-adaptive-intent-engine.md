@@ -99,5 +99,28 @@ Live is the standard mode. The offline parser is an explicit emergency mode
 for disconnected demonstrations; it is never a silent fallback for a failed
 Foundry request.
 
+## Observed price and date failures
+
+Native UAT found a material interpretation error: a hotel request for **under
+$220 per night** became a $219.99 all-in stay cap. Unit prices now remain
+separate unsupported conditions until the customer confirms the supported
+all-in total. The same guard applies to live grounding, plan metadata, and the
+explicit offline parser. It never multiplies a nightly price automatically.
+
+The follow-up also exposed compressed hotel dates and an envelope mismatch.
+An exact same-month range such as `November 2–4, 2026` can now ground both
+field-specific endpoints. A source copied redundantly beside an unresolved
+field is removed only when the same typed field and exact customer quote are
+already represented by a valid clarification; other orphan sources still
+fail closed. Questions must target an existing criterion or a missing required
+profile field.
+
+Prompt release `intent-envelope-v7-clarification-contract` passed one fresh
+live evaluation of the literal hotel UAT request, retaining both dates and
+generating an all-in budget question. The preceding v6 diagnostic failure is
+archived unchanged. The earlier 8/8 run belongs to v5; Quality identifies older
+experiments as historical rather than current-release accuracy. See
+[the native UAT record](20-adaptive-native-uat.md).
+
 
 Both model roles can still omit an arbitrary semantic condition. Source grounding checks what was returned; it does not mathematically prove completeness. The approval screen preserves the original transcript and criteria record, and the customer can add a missed requirement before signing. A red-team API test deliberately omits “quiet” and verifies that adding it during review holds checkout.

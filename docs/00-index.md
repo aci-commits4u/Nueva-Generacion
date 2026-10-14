@@ -39,3 +39,4 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 - [16 — Product walkthrough](16-product-walkthrough.md): self-explaining overview, tutorial, demo instructions, and design decisions.
 - [18 — Flexible conversation and typed intent](18-flexible-conversation.md): date windows, airport alternatives, stateful interpretation and the boundaries of the flexibility changes.
 - [19 — Adaptive intent engine](19-adaptive-intent-engine.md): the shared model-directed loop, read-only merchant context, domain adapters, trust boundary, and current evidence limits.
+- [20 — Adaptive native UAT](20-adaptive-native-uat.md): UI-only deployed walkthrough, signed synthetic receipt verification, held unsupported paths, and evidence limits.
