@@ -31,7 +31,6 @@ jobs:
     env:
       MOCK_LLM: '1'
       STORE_BACKEND: sqlite
-      SQLITE_PATH: ${{ runner.temp }}/intent-judge-browser.sqlite3
       BASE_URL: http://127.0.0.1:8000
       BROWSER_ARTIFACT_DIR: artifacts
     steps:
@@ -52,6 +51,8 @@ jobs:
         run: |
           node --check scripts/run_browser_regressions.mjs
           node --input-type=module --check < scripts/run_browser_regressions.mjs
+      - name: Configure isolated SQLite path
+        run: echo "SQLITE_PATH=$RUNNER_TEMP/intent-judge-browser.sqlite3" >> "$GITHUB_ENV"
       - name: Start local application
         run: |
           mkdir -p "$BROWSER_ARTIFACT_DIR"
