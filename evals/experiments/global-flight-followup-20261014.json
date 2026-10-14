@@ -1,0 +1,238 @@
+{
+  "kind": "live reproduction of independent native UAT failure",
+  "request": "Please find a one-way nonstop economy flight for one adult from Copenhagen Airport in Denmark (CPH) to Seoul Incheon International Airport in South Korea (ICN). I can depart on any date from May 5 through May 9, 2027, with May 7 preferred. Keep the all-in fare under $1,200 USD, and show departures between 8 a.m. and 8 p.m. A standard economy seat is fine, and I have no refundability preference.",
+  "original_uat_reference": "ea199b6e65db",
+  "records": [
+    {
+      "raw": {
+        "fields": {
+          "max_total_cents": 120000,
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "sources": {
+          "max_total_cents": "under $1,200 USD",
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "between 8 a.m. and 8 p.m.",
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested flight criteria are captured in supported fields; no ambiguous or unsupported conditions were found."
+      },
+      "trace": {
+        "stage": "extract",
+        "model": "gpt-oss-120b",
+        "duration_ms": 12156,
+        "tokens": {
+          "completion_tokens": 590,
+          "prompt_tokens": 2337,
+          "total_tokens": 2927,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "55f811add8b5494a8315af9abbe5706b",
+        "prompt_version": "intent-envelope-v4-stateful-choices",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      "validation_failure": {
+        "type": "GroundingFailure",
+        "message": "price value is not supported by its source quotation"
+      }
+    },
+    {
+      "raw": {
+        "fields": {
+          "max_total_cents": 120000,
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "sources": {
+          "max_total_cents": "under $1,200 USD",
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "between 8 a.m. and 8 p.m.",
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested flight criteria are captured in supported fields; no ambiguous or unsupported conditions were found."
+      },
+      "trace": {
+        "stage": "coverage_audit",
+        "model": "gpt-oss-120b",
+        "duration_ms": 4022,
+        "tokens": {
+          "completion_tokens": 347,
+          "prompt_tokens": 2781,
+          "total_tokens": 3128,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "312c47e18e224fe58556b2a9f0c79171",
+        "prompt_version": "intent-envelope-v4-stateful-choices",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      "validation_failure": {
+        "type": "GroundingFailure",
+        "message": "price value is not supported by its source quotation"
+      }
+    }
+  ],
+  "timestamp": "2026-10-14T02:15:42.245391+00:00",
+  "pipeline_failure": {
+    "type": "AIServiceError",
+    "message": "Live AI proposed a value that is not grounded in your words."
+  },
+  "reserved_stages": 2,
+  "reserved_cents_delta": 4,
+  "compiler_pipeline_replay": {
+    "kind": "stored-real-responses-no-new-inference",
+    "fresh_model_accuracy": false,
+    "result": {
+      "fields": {
+        "origin_airports": [
+          "CPH"
+        ],
+        "destination_airports": [
+          "ICN"
+        ],
+        "departure_date": {
+          "start": "2027-05-05",
+          "end": "2027-05-09"
+        },
+        "nonstop": true,
+        "departure_window": [
+          "08:00",
+          "20:00"
+        ],
+        "cabin": "economy",
+        "trip_type": "one_way",
+        "max_total_cents": 119999
+      },
+      "sources": {
+        "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+        "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+        "departure_date": "any date from May 5 through May 9, 2027",
+        "nonstop": "nonstop",
+        "departure_window": "between 8 a.m. and 8 p.m.",
+        "cabin": "economy",
+        "trip_type": "one-way",
+        "max_total_cents": "under $1,200 USD"
+      },
+      "unsupported": [
+        "for one adult",
+        "May 7 preferred"
+      ],
+      "clarifications": [],
+      "explanation": "Review the captured requirements and any details that still need clarification.",
+      "mode": "live",
+      "model": null,
+      "pipeline": "audited",
+      "trace": [
+        {
+          "stage": "extract",
+          "model": "gpt-oss-120b",
+          "duration_ms": 12156,
+          "tokens": {
+            "completion_tokens": 590,
+            "prompt_tokens": 2337,
+            "total_tokens": 2927,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null,
+            "audio_prompt_tokens": 0
+          },
+          "response_id": "55f811add8b5494a8315af9abbe5706b",
+          "prompt_version": "intent-envelope-v4-stateful-choices",
+          "reasoning_effort": "low",
+          "output_format": "plain-json",
+          "grounding_recoveries": [],
+          "replayed_without_inference": true
+        },
+        {
+          "stage": "coverage_audit",
+          "model": "gpt-oss-120b",
+          "duration_ms": 4022,
+          "tokens": {
+            "completion_tokens": 347,
+            "prompt_tokens": 2781,
+            "total_tokens": 3128,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null,
+            "audio_prompt_tokens": 0
+          },
+          "response_id": "312c47e18e224fe58556b2a9f0c79171",
+          "prompt_version": "intent-envelope-v4-stateful-choices",
+          "reasoning_effort": "low",
+          "output_format": "plain-json",
+          "grounding_recoveries": [],
+          "replayed_without_inference": true,
+          "partial_recovery": {
+            "recovered_fields": [
+              "cabin",
+              "departure_date",
+              "departure_window",
+              "destination_airports",
+              "max_total_cents",
+              "nonstop",
+              "origin_airports",
+              "trip_type"
+            ],
+            "rejected_fields": [
+              {
+                "field": "max_total_cents",
+                "issue": "grounding_failed",
+                "source_grounded": true
+              }
+            ],
+            "rejected_clarifications": [],
+            "source_grounded": true
+          }
+        }
+      ]
+    }
+  }
+}

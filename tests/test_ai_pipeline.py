@@ -39,6 +39,58 @@ def test_stage_trace_is_real_and_validated(monkeypatch):
  assert r['fields']['nonstop'] is True and 'approved' not in r
 
 
+def test_audited_mixed_quality_draft_retains_real_global_requirements(monkeypatch):
+ """Reproduce the native CPH/ICN failure without another paid provider call."""
+ from copy import deepcopy
+ from app.ai_pipeline import run_pipeline
+ message=('Please find a one-way nonstop economy flight for one adult from Copenhagen '
+  'Airport in Denmark (CPH) to Seoul Incheon International Airport in South Korea (ICN). '
+  'I can depart on any date from May 5 through May 9, 2027, with May 7 preferred. '
+  'Keep the all-in fare under $1,200 USD, and show departures between 8 a.m. and 8 p.m.')
+ draft={
+  'fields':{'max_total_cents':120000,'origin_airports':['CPH'],
+   'destination_airports':['ICN'],'departure_date':{'start':'2027-05-05','end':'2027-05-09'},
+   'nonstop':True,'departure_window':['08:00','20:00'],'cabin':'economy','trip_type':'one-way'},
+  'sources':{'max_total_cents':'under $1,200 USD',
+   'origin_airports':'Copenhagen Airport in Denmark (CPH)',
+   'destination_airports':'Seoul Incheon International Airport in South Korea (ICN)',
+   'departure_date':'any date from May 5 through May 9, 2027','nonstop':'nonstop',
+   'departure_window':'between 8 a.m. and 8 p.m.','cabin':'economy','trip_type':'one-way'},
+  'unsupported':[],'clarifications':[],
+  'explanation':'All criteria were captured with no unsupported conditions.',
+ }
+ reservations=[]
+ calls=[]
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',
+  lambda session,stages,**kw:reservations.append(stages))
+ def call(stage,*args,**kwargs):
+  calls.append(stage)
+  return deepcopy(draft),{'stage':stage,'model':'test','duration_ms':1,'tokens':{}}
+ monkeypatch.setattr('app.ai_pipeline.call_json',call)
+ r=run_pipeline('flight',message,'session',variant='audited')
+ assert reservations==[2] and calls==['extract','coverage_audit']
+ assert r['mode']=='live' and r['fields']['max_total_cents']==119999
+ assert r['fields']['origin_airports']==['CPH'] and r['fields']['destination_airports']==['ICN']
+ assert r['fields']['departure_date']=={'start':'2027-05-05','end':'2027-05-09'}
+ assert r['fields']['departure_window']==['08:00','20:00']
+ assert 'for one adult' in r['unsupported'] and 'May 7 preferred' in r['unsupported']
+ assert r['trace'][1]['partial_recovery']['rejected_fields']==[
+  {'field':'max_total_cents','issue':'grounding_failed','source_grounded':True}]
+ assert 'approved' not in r and 'decision' not in r and 'recovery' not in r
+
+
+@pytest.mark.parametrize('malformed', [False, True])
+def test_audit_recovery_cannot_accept_all_unquoted_or_malformed_fields(monkeypatch,malformed):
+ from app.ai_pipeline import run_pipeline
+ monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:2)
+ draft={'fields':{'origin_airports':['CPH']},'sources':{'origin_airports':'invented city'},
+  'unsupported':[],'clarifications':[],'explanation':'Review.'}
+ if malformed: draft['extra']='unreviewed metadata'
+ monkeypatch.setattr('app.ai_pipeline.call_json',
+  lambda stage,*a,**k:(draft,{'stage':stage,'tokens':{}}))
+ with pytest.raises(ValueError):run_pipeline('flight','I want a flight','s',variant='audited')
+
+
 def test_audit_cannot_remove_unsupported_condition(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:1)

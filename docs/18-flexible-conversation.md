@@ -148,3 +148,91 @@ credit. Final hosted deployment, fresh blind UI walkthroughs, and the remaining
 UAT checks are recorded separately when completed; this document does not mark
 them complete.
 
+## Verification and failure truth at the release checkpoint
+
+The current source checkpoint is `07b5c618ae0ab33c4f17b486030ddc34f5e27d35`.
+Its Vercel production deployment is READY as
+`dpl_DcXbAqVG1BeebBisE4Thh8GgNpSN`, with the main alias
+`https://intent-judge-perfected.vercel.app`. Local verification at this
+checkpoint reports 315 tests passing with one upstream warning. A separate
+fresh-local browser pass reports eight checks passing. CI run
+`38498845176` subsequently completed successfully with the same 315-test and
+eight-browser-check result. A final deployment/native-original checkpoint is
+still separate and is not claimed here.
+
+The earlier public `5e` release had eight actual public-browser checks and a
+native walkthrough of the exact Florida request. That walkthrough used four
+audited sends (eight model stages) and retained the approved `$199.99` limit,
+EWR origin, the explicitly chosen MCO-or-MIA destination set, the inclusive
+October 14–21 window, and nonstop. No unsupported condition or repeated
+clarification remained. The two fixed synthetic offers at $295 and $280 both
+correctly held on the budget check, and the purchase gate refused them. A first
+native Florida variant still left the raw marker `flight to Florida`; the later
+`5e` change removed only the bare geographic marker after actual Florida
+airports were selected. Unrelated baggage and LAX-mismatch cases continued to
+hold and were not counted as solved by that narrow geo fix.
+
+The independent global CPH-to-ICN request exposed a separate real failure on
+that release (reference `c213b8782aee`). The paid two-stage reproduction is
+archived in `evals/experiments/global-flight-clock-20261014.json`. The extractor
+returned `120000` cents for “under 1,200,” which is the wrong strict price
+interpretation. The coverage auditor classified the price as a clarification,
+and the grounding layer rejected the exact `08–20` time window because the
+customer wrote dotted meridiems such as `8 a.m.` and `8 p.m.`. Both model stages
+also omitted “one adult” and “May 7 preferred.” The bounded source-coverage
+guard preserves those phrases as unsupported because the current flight profile
+cannot enforce passenger quantity or date priority; the hard May 5–9 window is
+retained.
+
+The temporal parser fix now accepts dotted and colon meridiem forms without
+inventing minutes or turning `8 p.m.` into `08:00`. The archived failure and any
+compiler replay remain historical evidence; they are not new inference and do
+not establish that the final native global repeat has passed. That repeat was
+still pending at this checkpoint.
+
+The choice-flow fixes retain selected airports and never auto-send a customer
+turn. Airport selections remain disabled while interpretation is pending rather
+than disappearing. Empty airport and date `Use` controls remain disabled until
+their values are ready, airport names render with an explicit “or,” and an
+interpretation failure does not force the user into offline mode. These are
+interaction fixes; they do not convert a provider failure into a successful AI
+interpretation.
+
+## Follow-up verification and bounded recovery
+
+The original native global repeat on source `07b` still failed, reference
+`ea199b6e65db`. Both actual model stages emitted `120000` cents for “under
+$1,200,” although the strict integer-cents value is `119999`. The retained
+failure and its `compiler_pipeline_replay` are in
+`evals/experiments/global-flight-followup-20261014.json`; the replay used no
+new inference and does not change the original model result. A new final
+deployment/native-original run was still pending at this checkpoint and must
+not be described as accepted.
+
+The audited recovery is deliberately bounded. When a candidate contains a
+`GroundingFailure`, actual quote-grounded fields that are independently safe
+are preserved, while the bad value is quarantined. The exact money quote is
+compiled deterministically to `119999`; other ambiguities remain
+clarifications. Unknown customer scope remains preserved instead of being
+truncated. Malformed envelopes, all-unsafe candidates, and provider errors
+still return a typed failure. This recovery improves salvage of a partially
+valid response without allowing the model to approve or invent a requirement.
+
+A separate fully supported CPH-to-ICN request on source `07b`, without the
+unsupported “one adult” or “May 7 preferred” clauses, passed one audited send.
+It recorded only explicit no-preference choices that were actually specified;
+the fixed $295 offer passed, the $280 offer held, and the purchase had zero
+exceptions. The receipt was `C0tDj0mquiQsJq3876IMig`, intent
+`km6P1yIlwOhENx5P2jmCsA`, and the 34.1 KB evidence JSON was downloaded and
+reloaded. The evidence was checked for the canonical digest, trusted issuer
+and merchant signatures, exact offer hash, approved-requirements digest,
+native VI evidence, and the final analyst recommendation. This is a bounded
+successful path, not evidence that the failed original global request is fixed
+in every form.
+
+The durable ledger stood at 236 reserved stages and 1,960 reserved cents
+($19.60) at this checkpoint. That is additive application accounting, not a
+claim about remaining Azure student credit. Seven legacy demo aliases retain
+direct city normalization for compatibility; other catalog cities remain
+ambiguous until the customer chooses an airport.
+

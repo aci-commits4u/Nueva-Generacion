@@ -25,6 +25,7 @@ from app.ai_grounding import (
     reconcile_supported_conditions,
     reconcile_one_way_unsupported,
     recovery_records,
+    recover_grounded_parts,
     remove_resolved_field_markers,
     valid_candidate_clarifications,
     valid_candidate_fields,
@@ -241,6 +242,34 @@ def _validate_or_raise(domain, source_text, candidate, *, stage, source_messages
                        stage=stage, cause=exc)
 
 
+def _validate_audited_draft(domain, source_text, audited, audit_trace, source_messages):
+    """Quarantine an invalid field without discarding independent customer facts.
+
+    Only a parseable, strictly shaped live audit can use this path. Each retained
+    field still passes ordinary source grounding and typed validation. Provider,
+    schema, and capacity failures retain their existing typed failure behavior.
+    This produces an unapproved draft, never a transaction decision.
+    """
+    try:
+        return validate_extraction(domain, source_text, audited,
+                                   source_messages=source_messages)
+    except GroundingFailure:
+        recovered = recover_grounded_parts(
+            domain, source_text, audited, source_messages=source_messages
+        )
+        if recovered is not None:
+            diagnostics = recovered.pop('recovery')
+            final = _validate_or_raise(domain, source_text, recovered,
+                                       stage='coverage_audit',
+                                       source_messages=source_messages)
+            audit_trace['partial_recovery'] = diagnostics
+            return final
+    except (EnvelopeFailure, ValueError):
+        pass
+    return _validate_or_raise(domain, source_text, audited, stage='coverage_audit',
+                              source_messages=source_messages)
+
+
 def _merge_or_raise(*groups, stage):
     """Merge bounded requirements while keeping capacity failures actionable."""
     try:
@@ -354,8 +383,7 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
         _record_outcome('extract', 'passed', traces[0].get('response_id') if traces else None)
     else:
         _record_outcome('extract', 'ai_interpretation', traces[0].get('response_id') if traces else None)
-    final = _validate_or_raise(domain, source_text, audited, stage='coverage_audit',
-                               source_messages=source_messages)
+    final = _validate_audited_draft(domain, source_text, audited, audit_trace, source_messages)
     if candidate_valid:
         final = preserve_valid_candidate(candidate_valid, final, domain, source_text)
     if candidate_clarifications:

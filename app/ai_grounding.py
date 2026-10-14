@@ -1468,6 +1468,220 @@ def validate_extraction(domain: str, message: str, data: dict,
     return canonical
 
 
+def _partial_recovery_shape(domain: str, data: object) -> tuple[dict, dict] | None:
+    """Validate the bounded outer envelope before attempting field salvage."""
+    if not isinstance(data, dict) or set(data) != EXPECTED_KEYS:
+        return None
+    fields, sources = data.get("fields"), data.get("sources")
+    unsupported, clarifications = data.get("unsupported"), data.get("clarifications")
+    explanation = data.get("explanation")
+    if (not isinstance(fields, dict) or not isinstance(sources, dict)
+            or set(fields) != set(sources) or len(fields) > 30
+            or not isinstance(unsupported, list) or len(unsupported) > 20
+            or not isinstance(clarifications, list) or len(clarifications) > 20
+            or not isinstance(explanation, str) or not explanation.strip()
+            or len(explanation) > 1500):
+        return None
+    if any(type(item) is not str or not item.strip() or len(item) > 2500
+           for item in unsupported):
+        return None
+    seen: set[str] = set()
+    for item in clarifications:
+        if type(item) is not dict or set(item) != {"field", "source_quote", "reason"}:
+            return None
+        field, quote, reason = item["field"], item["source_quote"], item["reason"]
+        if (type(field) is not str or not field.strip()
+                or type(quote) is not str or not quote.strip() or len(quote) > 2500
+                or type(reason) is not str or reason not in CLARIFICATION_REASONS
+                or field in seen):
+            return None
+        seen.add(field)
+    return deepcopy(data), get_profile(domain)
+
+
+def _partial_recovery_issue(exc: Exception | None, *, source_grounded: bool) -> str:
+    """Map local validation failures to bounded trace-safe categories."""
+    if not source_grounded:
+        return "source_unquoted"
+    if isinstance(exc, EnvelopeFailure):
+        return "invalid_typed_value"
+    if isinstance(exc, GroundingFailure):
+        return "grounding_failed"
+    return "field_validation_failed"
+
+
+def _partial_field_envelope(key: str, value, quote: str) -> dict:
+    return {
+        "fields": {key: deepcopy(value)},
+        "sources": {key: quote},
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "Review the independently grounded requirements.",
+    }
+
+
+def recover_grounded_parts(
+    domain: str,
+    message: str,
+    data: object,
+    source_messages: list[dict] | None = None,
+) -> dict | None:
+    """Salvage independently grounded parts of a parseable live proposal.
+
+    The helper is intentionally separate from the normal all-or-nothing
+    validator.  It accepts only a strict five-key envelope, validates each
+    proposed field through the same compiler/grounding path, and retains a
+    rejected field only as a source-linked clarification when the customer's
+    words really mention that reviewed field.  It never invents a value or
+    uses an offline parser.  ``None`` means no usable field or trusted
+    clarification survived and the caller must keep the typed failure.
+
+    The returned ``recovery`` object is internal trace metadata.  Callers must
+    remove it before passing the envelope to a public schema validator.
+    """
+    shaped = _partial_recovery_shape(domain, data)
+    if shaped is None or not isinstance(message, str) or not message:
+        return None
+    raw, profile = shaped
+    canonical = _restore_source_spans(raw, message)
+    accepted_fields: dict = {}
+    accepted_sources: dict = {}
+    accepted_clarifications: list[dict] = []
+    retained_unsupported = list(dict.fromkeys(canonical["unsupported"]))
+    rejected_fields: list[dict] = []
+    rejected_clarifications: list[dict] = []
+    generated_clarifications: list[dict] = []
+    rejected_field_keys: set[str] = set()
+
+    for key, value in canonical["fields"].items():
+        quote = canonical["sources"].get(key)
+        source_grounded = isinstance(quote, str) and bool(quote.strip()) and _contains(quote, message)
+        if key not in profile["fields"]:
+            if source_grounded and quote not in retained_unsupported:
+                retained_unsupported.append(quote)
+            rejected_fields.append({"field": key, "issue": "unsupported_profile_field",
+                                    "source_grounded": source_grounded})
+            continue
+        if not source_grounded:
+            rejected_fields.append({"field": key, "issue": "source_unquoted",
+                                    "source_grounded": False})
+            continue
+        try:
+            grounded = validate_extraction(
+                domain,
+                message,
+                _partial_field_envelope(key, value, quote),
+                source_messages=source_messages,
+            )
+        except (EnvelopeFailure, GroundingFailure, ValueError) as exc:
+            rejected_field_keys.add(key)
+            rejected_fields.append({
+                "field": key,
+                "issue": _partial_recovery_issue(exc, source_grounded=True),
+                "source_grounded": True,
+            })
+            if (not any(item.get("field") == key for item in canonical["clarifications"])
+                    and clarification_field_supported(
+                        key, quote, domain, source_messages=source_messages
+                    )):
+                generated_clarifications.append({
+                    "field": key, "source_quote": quote, "reason": "ambiguous"
+                })
+            continue
+        if key in grounded["fields"] and key in grounded["sources"]:
+            accepted_fields[key] = deepcopy(grounded["fields"][key])
+            accepted_sources[key] = deepcopy(grounded["sources"][key])
+        else:
+            rejected_fields.append({"field": key, "issue": "field_not_retained",
+                                    "source_grounded": True})
+
+    # Process each model clarification independently.  A valid explicit money
+    # clarification may compile into max_total_cents through the ordinary
+    # bounded money compiler; all other valid clarifications remain omitted
+    # fields awaiting customer review.
+    for item in [*canonical["clarifications"], *generated_clarifications]:
+        field, quote, reason = item["field"], item["source_quote"], item["reason"]
+        source_grounded = _contains(quote, message)
+        if field not in profile["fields"]:
+            if source_grounded and quote not in retained_unsupported:
+                retained_unsupported.append(quote)
+            rejected_clarifications.append({"field": field, "issue": "unsupported_profile_field",
+                                            "source_grounded": source_grounded})
+            continue
+        if field in canonical["fields"] and field not in rejected_field_keys:
+            rejected_clarifications.append({"field": field, "issue": "field_and_clarification_conflict",
+                                            "source_grounded": source_grounded})
+            continue
+        if not source_grounded or not clarification_field_supported(
+            field, quote, domain, source_messages=source_messages
+        ):
+            rejected_clarifications.append({"field": field, "issue": _partial_recovery_issue(
+                None, source_grounded=source_grounded
+            ), "source_grounded": source_grounded})
+            continue
+        try:
+            grounded = validate_extraction(
+                domain,
+                message,
+                {
+                    "fields": {}, "sources": {}, "unsupported": [],
+                    "clarifications": [
+                        {"field": field, "source_quote": quote, "reason": reason}
+                    ],
+                    "explanation": "Review the independently grounded clarification.",
+                },
+                source_messages=source_messages,
+            )
+        except (EnvelopeFailure, GroundingFailure, ValueError) as exc:
+            rejected_clarifications.append({"field": field, "issue": _partial_recovery_issue(
+                exc, source_grounded=True
+            ), "source_grounded": True})
+            continue
+        for grounded_key, grounded_value in grounded["fields"].items():
+            accepted_fields[grounded_key] = deepcopy(grounded_value)
+            accepted_sources[grounded_key] = deepcopy(grounded["sources"][grounded_key])
+        if field in grounded["fields"]:
+            continue
+        matching = [candidate for candidate in grounded["clarifications"]
+                    if candidate.get("field") == field]
+        if matching and not any(candidate.get("field") == field
+                                for candidate in accepted_clarifications):
+            accepted_clarifications.append(deepcopy(matching[0]))
+
+    if not accepted_fields and not accepted_clarifications:
+        return None
+    # The public envelope has a bounded unsupported/clarification budget.  A
+    # scope-preservation pass may add customer conditions to an otherwise
+    # valid proposal, so fail closed instead of truncating those conditions.
+    if len(retained_unsupported) > 20 or len(accepted_clarifications) > 20:
+        return None
+    result = {
+        "fields": accepted_fields,
+        "sources": accepted_sources,
+        "unsupported": retained_unsupported,
+        "clarifications": accepted_clarifications,
+        # The provider's explanation describes its untrusted whole-envelope
+        # judgment and can contradict the recovered scope flags.  Keep the
+        # public draft neutral; the original explanation remains in the raw
+        # experiment trace owned by the caller.
+        "explanation": (
+            "Review the captured requirements and any details that still "
+            "need clarification."
+        ),
+        "recovery": {
+            "recovered_fields": sorted(accepted_fields),
+            "rejected_fields": rejected_fields[:30],
+            "rejected_clarifications": rejected_clarifications[:20],
+            "source_grounded": True,
+        },
+    }
+    result = _preserve_flight_scope_conditions(result, domain, message)
+    result["unsupported"] = list(dict.fromkeys(result["unsupported"]))
+    if len(result["unsupported"]) > 20:
+        return None
+    return result
+
+
 def _preserve_flight_scope_conditions(data,domain,message):
     """Retain explicit quantities and date priorities this profile cannot enforce.
 
