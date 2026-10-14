@@ -37,7 +37,14 @@ function invalidateSessionStatus(){
 }
 function setClarificationControls(intentId,disabled){
  if(state.stage!==2||state.draft?.id!==intentId)return;
- document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply],[data-airport-choice],[data-airport-submit],[data-airport-search],[data-airport-search-choice],[data-date-choice-send]').forEach(control=>{control.disabled=disabled;control.toggleAttribute('aria-busy',disabled);});
+ document.querySelectorAll('#clarify-form button,#clarify-form textarea,[data-reply],[data-airport-choice],[data-airport-submit],[data-airport-search],[data-airport-search-choice],[data-airport-remove],[data-date-choice-send]').forEach(control=>{
+  control.disabled=disabled;
+  if(!disabled){
+   if(control.matches('[data-airport-submit]'))control.disabled=airportSelection.values.size===0;
+   else if(control.matches('[data-date-choice-send]'))control.disabled=control.dataset.ready!=='true';
+  }
+  control.toggleAttribute('aria-busy',disabled);
+ });
  const review=$('#review-now');
  if(review){review.disabled=disabled;review.toggleAttribute('aria-busy',disabled);}
 }
@@ -78,7 +85,7 @@ function knownReasonCopy(status){
  if(code==='ai_disabled')return 'Live Foundry is disabled in this environment.';
  if(code==='ai_provider')return 'Live Foundry is unavailable right now.';
  if(code==='ai_timeout')return 'Live Foundry did not finish this request.';
- if(code==='ai_interpretation')return 'The live interpretation could not be validated.';
+ if(code==='ai_interpretation')return 'I couldn’t safely interpret every detail of that request.';
  if(code==='ai_status_unavailable'||code==='ai_status_error')return 'Live availability could not be confirmed.';
  return reason?.message||'Live Foundry availability could not be confirmed.';
 }
@@ -127,7 +134,8 @@ function errorMessage(error,hasDraft=Boolean(state.draft)){
  const suffix=e.requestId?` Reference ${e.requestId}.`:'';
  if(e.status===0)return `The connection was interrupted. Your request is preserved; live availability is shown above.${suffix}`;
  if(e.code==='ai_daily_limit'||e.code==='ai_session_limit'||e.code==='ai_budget_limit')return `${knownReasonCopy({reason:e.publicError})} ${e.retryAfterSeconds?`Availability may return in about ${formatDuration(e.retryAfterSeconds)}.`:''} Your request is preserved.${suffix}`;
- if(e.code==='ai_configuration'||e.code==='ai_disabled'||e.code==='ai_provider'||e.code==='ai_timeout'||e.code==='ai_interpretation'){const recovery=hasDraft?'Choose the explicit offline parser or review the current draft.':'Choose the explicit offline parser to continue.';return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. ${recovery}${suffix}`;}
+ if(e.code==='ai_interpretation')return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. Try again, or adjust a detail.${hasDraft?' You can also review the saved draft.':''}${suffix}`;
+ if(e.code==='ai_configuration'||e.code==='ai_disabled'||e.code==='ai_provider'||e.code==='ai_timeout'){const recovery=hasDraft?'Choose the explicit offline parser or review the current draft.':'Choose the explicit offline parser to continue.';return `${knownReasonCopy({reason:e.publicError})} Your request is preserved. ${recovery}${suffix}`;}
  if(/\/api\/intents/.test(e.path||''))return `${e.message||'The request could not be completed.'} Your request is preserved.${suffix}`;
  return `${e.message||'The request could not be completed.'}${suffix}`;
 }
@@ -306,7 +314,7 @@ function renderConversation(){
    }
    const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});
    if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;
-   state.clarifyEdit=null;state.draft=draft;render();
+   state.clarifyEdit=null;state.draft=draft;clearAirportSelection();render();
   },'Interpreting your clarification…').finally(()=>{clarificationRequests.delete(d.id);setClarificationControls(d.id,false);});
  };
  $('#clarify-form').onsubmit=e=>{e.preventDefault();clearAirportSelection();send($('#clarify-text').value);};
@@ -342,7 +350,6 @@ function renderConversation(){
  document.querySelector('[data-airport-submit]')?.addEventListener('click',()=>{
   if(!airportSelection.values.size)return;
   const codes=[...airportSelection.values],prefix=question?.field==='origin_airports'?'Depart from':'Arrive at';
-  clearAirportSelection();
   send(`${prefix} ${codes.join(' or ')}.`);
  });
  const airportSearch=document.querySelector('[data-airport-search]');
@@ -368,6 +375,7 @@ function renderConversation(){
    if(mode==='range'){const start=$('#clarify-date-start')?.value,end=$('#clarify-date-end')?.value;valid=validDate(start)&&validDate(end)&&start<=end;}
    if(mode==='dates'){const values=($('#clarify-date-list')?.value||'').split(',').map(value=>value.trim()).filter(Boolean);valid=values.length>0&&values.length<=20&&values.every(validDate)&&new Set(values).size===values.length;}
    submit.disabled=!valid;
+   submit.dataset.ready=String(valid);
   };
   modeInputs.forEach(input=>input.addEventListener('change',syncDateControls));
   dateControls.querySelectorAll('input[type="date"],#clarify-date-list').forEach(input=>input.addEventListener('input',syncDateControls));
@@ -474,6 +482,7 @@ function displayValue(check,value){
  if(check.check_id==='trip_type'&&value==='one_way')return 'One-way';
  if(typeof value==='boolean')return value?'Yes':'No';
  if(check.check_id==='departure_date')return formatDateChoice(value);
+ if(['origin_airports','destination_airports'].includes(check.check_id)&&Array.isArray(value))return value.join(' or ');
  return Array.isArray(value)?value.join(' – '):String(value);
 }
 function formatDateChoice(value){

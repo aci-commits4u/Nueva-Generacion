@@ -125,3 +125,31 @@ def test_qualified_flight_location_phrase_and_mismatched_airport_remain_held():
         {'destination_airports':['LAX']},{'destination_airports':'Arrive at LAX.'},
         ['flight to Florida','flight to Florida with a checked bag']))
     assert result['unsupported']==['flight to Florida','flight to Florida with a checked bag']
+
+
+def test_dotted_clock_window_and_unimplemented_flight_conditions_survive_model_omissions():
+    text='A flight for one adult on any date from May 5 through May 9, 2027, with May 7 preferred. Depart between 8 a.m. and 8 p.m.'
+    result=validate_extraction('flight',text,envelope(
+        {'departure_date':{'start':'2027-05-05','end':'2027-05-09'},'departure_window':['08:00','20:00']},
+        {'departure_date':'May 5 through May 9, 2027','departure_window':'between 8 a.m. and 8 p.m.'}))
+    assert result['fields']['departure_window']==['08:00','20:00']
+    assert result['fields']['departure_date']=={'start':'2027-05-05','end':'2027-05-09'}
+    assert result['unsupported']==['for one adult','May 7 preferred']
+    with pytest.raises(GroundingFailure):
+        validate_extraction('flight','Between 8 am and 8 pm.',envelope(
+            {'departure_window':['08:07','20:00']},{'departure_window':'Between 8 am and 8 pm.'}))
+
+
+def test_explicit_dotted_times_resolve_vague_period_and_keep_correct_meridiem():
+    text='Depart in the morning, specifically between 8 a.m. and 11 a.m.'
+    result=validate_extraction('flight',text,envelope(
+        {'departure_window':['08:00','11:00']},{'departure_window':text}))
+    assert result['fields']['departure_window']==['08:00','11:00']
+    assert result['clarifications']==[]
+    text='Depart between 8:00 p.m. and 9:00 p.m.'
+    result=validate_extraction('flight',text,envelope(
+        {'departure_window':['20:00','21:00']},{'departure_window':text}))
+    assert result['fields']['departure_window']==['20:00','21:00']
+    with pytest.raises(GroundingFailure):
+        validate_extraction('flight',text,envelope(
+            {'departure_window':['08:00','09:00']},{'departure_window':text}))

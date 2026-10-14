@@ -80,6 +80,15 @@ _ISO_DISCRETE_SPAN = re.compile(
 _NUMERIC_DATE = re.compile(
     rf"\b(?P<a>\d{{1,2}})/(?P<b>\d{{1,2}})/(?P<year>{_YEAR_PATTERN})\b"
 )
+_CLOCK_TOKEN = re.compile(
+    r"(?ix)(?<!\d)(?:"
+    r"(?P<hour12>0?[1-9]|1[0-2])(?:\:(?P<minute12>[0-5][0-9]))?\s*"
+    r"(?P<meridiem>[ap]\s*\.??\s*m\s*\.?)"
+    r"|"
+    r"(?P<hour24>0?[0-9]|1[0-9]|2[0-3]):(?P<minute24>[0-5][0-9])"
+    r"(?!\s*[ap]\s*\.?\s*m\s*\.?)"
+    r")(?!(?:\d|[A-Za-z]))"
+)
 
 # A date phrase marked as soft/approximate is useful review context but is not
 # safe enough to turn into a hard date.  This check runs before parsing so
@@ -161,6 +170,42 @@ def _numeric_to_date(match: re.Match[str]) -> date | None:
     except (TypeError, ValueError):
         return None
     return None
+
+
+def extract_clock_times(quote: str) -> list[str]:
+    """Return canonical ``HH:MM`` times explicitly written in a quote.
+
+    Both machine-style ``20:00`` and human-style ``8 p.m.`` are accepted. A
+    bare number is deliberately ignored so dates and prices cannot become
+    times by accident.
+    """
+
+    if not isinstance(quote, str) or not quote.strip() or len(quote) > 500:
+        return []
+    result: list[str] = []
+    for match in _CLOCK_TOKEN.finditer(quote):
+        if match.group("hour24") is not None:
+            hour = int(match.group("hour24"))
+            minute = int(match.group("minute24"))
+        else:
+            hour = int(match.group("hour12"))
+            minute = int(match.group("minute12") or "00")
+            if match.group("meridiem").casefold().replace(" ", "").replace(".", "") == "pm" and hour != 12:
+                hour += 12
+            elif match.group("meridiem").casefold().replace(" ", "").replace(".", "") == "am" and hour == 12:
+                hour = 0
+        normalized = f"{hour:02d}:{minute:02d}"
+        if normalized not in result:
+            result.append(normalized)
+    return result
+
+
+def clock_time_in_quote(value: str, quote: str) -> bool:
+    """Check whether a canonical ``HH:MM`` requirement is source-grounded."""
+
+    if not isinstance(value, str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+        return False
+    return value in extract_clock_times(quote)
 
 
 def _iso(value: date) -> str:

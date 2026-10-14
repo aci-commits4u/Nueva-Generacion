@@ -19,7 +19,7 @@ from app.airport_reference import (
     quote_supports_airport,
 )
 from app.profile_registry import get_profile, validate_fields
-from app.temporal import expand_date_quote, reference_for_quote, resolve_date_choice
+from app.temporal import expand_date_quote, reference_for_quote, resolve_date_choice, clock_time_in_quote, extract_clock_times
 
 
 LEGACY_KEYS = {"fields", "sources", "unsupported", "explanation"}
@@ -1038,21 +1038,7 @@ def _integer_with_unit_supports(value: int, quote: str, unit: str) -> bool:
 
 
 def _time_in_quote(value: str, quote: str) -> bool:
-    if value in quote:
-        return True
-    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", value)
-    if not match:
-        return False
-    hour, minute = int(match.group(1)), match.group(2)
-    if hour == 0:
-        twelve_hour, meridiem = 12, "am"
-    elif hour == 12:
-        twelve_hour, meridiem = 12, "pm"
-    elif hour < 12:
-        twelve_hour, meridiem = hour, "am"
-    else:
-        twelve_hour, meridiem = hour - 12, "pm"
-    return bool(re.search(rf"\b0?{twelve_hour}(?::?{minute})?\s*{meridiem}\b", quote, re.I))
+    return clock_time_in_quote(value,quote)
 
 
 def _ground_field(key: str, value, quote: str, message: str, domain: str,
@@ -1139,11 +1125,6 @@ _AMBIGUOUS_WINDOW = re.compile(
     re.I,
 )
 _ARRIVAL_WINDOW = re.compile(r"\b(?:arrive|arrival|land|landing)\b", re.I)
-_EXPLICIT_CLOCK = re.compile(
-    r"\b(?:[01]?\d|2[0-3]):[0-5]\d\s*(?:am|pm)?\b"
-    r"|\b(?:1[0-2]|0?[1-9])\s*(?:am|pm)\b",
-    re.I,
-)
 
 
 def _yearless_date_quote(quote: str) -> bool:
@@ -1192,7 +1173,7 @@ def _recover_safe_field_uncertainty(data: dict, domain: str, message: str,
             guidance.append(f"Please specify the year for {key.replace('_', ' ')}.")
             continue
         if (key == "departure_window" and _AMBIGUOUS_WINDOW.search(quote)
-                and not _EXPLICIT_CLOCK.search(quote)):
+                and not extract_clock_times(quote)):
             fields.pop(key, None)
             sources.pop(key, None)
             if _ARRIVAL_WINDOW.search(quote):
@@ -1372,7 +1353,7 @@ def recovery_records(data: object, domain: str, message: str,
               and not _shared_hotel_year_supports(value, quote, message, domain, key)):
             reason = "year_missing"
         elif (key == "departure_window" and _AMBIGUOUS_WINDOW.search(quote)
-              and not _EXPLICIT_CLOCK.search(quote)):
+              and not extract_clock_times(quote)):
             reason = "arrival_window_unsupported" if _ARRIVAL_WINDOW.search(quote) else "window_ambiguous"
         elif key in {"nonstop", "refundable", "breakfast", "accessible"}:
             no_requirement = _NO_REQUIREMENT_BOOLEAN.search(quote)
@@ -1466,6 +1447,7 @@ def validate_extraction(domain: str, message: str, data: dict,
         canonical, domain, message, source_messages=source_messages
     )
     canonical = _recover_money_clarification(canonical, domain, message)
+    canonical = _preserve_flight_scope_conditions(canonical, domain, message)
     canonical = _recover_unknown_clarifications(canonical, domain, message)
     canonical = _reconcile_one_way_unsupported(canonical)
     if (len(canonical["unsupported"]) > 20
@@ -1484,6 +1466,31 @@ def validate_extraction(domain: str, message: str, data: dict,
             raise EnvelopeFailure("null fields are not customer no-preference choices")
         _ground_field(key, value, canonical["sources"].get(key), message, domain, source_messages)
     return canonical
+
+
+def _preserve_flight_scope_conditions(data,domain,message):
+    """Retain explicit quantities and date priorities this profile cannot enforce.
+
+    These are source-linked coverage checks, not extra purchase requirements.
+    The model must not silently discard a single traveler or a preferred date
+    merely because a general itinerary remains otherwise representable.
+    """
+    if domain!='flight':
+        return data
+    result=deepcopy(data)
+    number=r'(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)'
+    quantity=re.compile(r'\b(?:for\s+)?'+number+r'\s+(?:adults?|children|kids?|passengers?|travelers?|travellers?)\b',re.I)
+    month=r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+    day=month+r'\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+(?:19|20)\d{2})?'
+    priority=re.compile(r'\b(?:'+day+r'\s+(?:is\s+)?preferred|(?:prefer(?:ably)?|ideally)\s+'+day+r')\b',re.I)
+    for pattern in (quantity,priority):
+        for match in pattern.finditer(message):
+            phrase=match.group(0)
+            represented=any(_contains(phrase,item) for item in result['unsupported'])
+            represented=represented or any(_contains(phrase,item.get('source_quote','')) for item in result['clarifications'])
+            if not represented:
+                result['unsupported'].append(phrase)
+    return result
 
 
 def bounded_unsupported(data: object, message: str | None = None,

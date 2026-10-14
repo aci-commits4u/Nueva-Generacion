@@ -1,0 +1,217 @@
+{
+  "kind": "live reproduction of independent native UAT failure",
+  "request": "Please find a one-way nonstop economy flight for one adult from Copenhagen Airport in Denmark (CPH) to Seoul Incheon International Airport in South Korea (ICN). I can depart on any date from May 5 through May 9, 2027, with May 7 preferred. Keep the all-in fare under $1,200 USD, and show departures between 8 a.m. and 8 p.m. A standard economy seat is fine, and I have no refundability preference.",
+  "original_uat_reference": "c213b8782aee",
+  "records": [
+    {
+      "raw": {
+        "fields": {
+          "max_total_cents": 120000,
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "sources": {
+          "max_total_cents": "under $1,200 USD",
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "departures between 8 a.m. and 8 p.m.",
+          "cabin": "standard economy seat",
+          "trip_type": "one-way"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "All requested conditions map to supported fields; no ambiguities or unsupported criteria."
+      },
+      "trace": {
+        "stage": "extract",
+        "model": "gpt-oss-120b",
+        "duration_ms": 3734,
+        "tokens": {
+          "completion_tokens": 415,
+          "prompt_tokens": 2337,
+          "total_tokens": 2752,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "406c6f8c251049e5a47a4bd4e1060f15",
+        "prompt_version": "intent-envelope-v4-stateful-choices",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      "validation_failure": {
+        "type": "GroundingFailure",
+        "message": "price value is not supported by its source quotation"
+      },
+      "compiler_replay_failure": {
+        "type": "GroundingFailure",
+        "message": "price value is not supported by its source quotation"
+      },
+      "scope_replay_failure": {
+        "type": "GroundingFailure",
+        "message": "price value is not supported by its source quotation"
+      }
+    },
+    {
+      "raw": {
+        "fields": {
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one-way"
+        },
+        "sources": {
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "departures between 8 a.m. and 8 p.m.",
+          "cabin": "standard economy seat",
+          "trip_type": "one-way"
+        },
+        "unsupported": [],
+        "clarifications": [
+          {
+            "field": "max_total_cents",
+            "source_quote": "under $1,200 USD",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "All explicit conditions are captured; budget limit is ambiguous and requires clarification."
+      },
+      "trace": {
+        "stage": "coverage_audit",
+        "model": "gpt-oss-120b",
+        "duration_ms": 3078,
+        "tokens": {
+          "completion_tokens": 472,
+          "prompt_tokens": 2781,
+          "total_tokens": 3253,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "audio_prompt_tokens": 0
+        },
+        "response_id": "42e6d41b381f4ee3b636f2c370b77a11",
+        "prompt_version": "intent-envelope-v4-stateful-choices",
+        "reasoning_effort": "low",
+        "output_format": "plain-json",
+        "grounding_recoveries": []
+      },
+      "validation_failure": {
+        "type": "GroundingFailure",
+        "message": "departure window is not supported by its source quotation"
+      },
+      "compiler_replay_after_clock_fix": {
+        "fields": {
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one_way",
+          "max_total_cents": 119999
+        },
+        "sources": {
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "departures between 8 a.m. and 8 p.m.",
+          "cabin": "standard economy seat",
+          "trip_type": "one-way",
+          "max_total_cents": "under $1,200 USD"
+        },
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "Review the proposed requirements."
+      },
+      "compiler_replay_with_scope_conditions": {
+        "fields": {
+          "origin_airports": [
+            "CPH"
+          ],
+          "destination_airports": [
+            "ICN"
+          ],
+          "departure_date": {
+            "start": "2027-05-05",
+            "end": "2027-05-09"
+          },
+          "nonstop": true,
+          "departure_window": [
+            "08:00",
+            "20:00"
+          ],
+          "cabin": "economy",
+          "trip_type": "one_way",
+          "max_total_cents": 119999
+        },
+        "sources": {
+          "origin_airports": "Copenhagen Airport in Denmark (CPH)",
+          "destination_airports": "Seoul Incheon International Airport in South Korea (ICN)",
+          "departure_date": "any date from May 5 through May 9, 2027",
+          "nonstop": "nonstop",
+          "departure_window": "departures between 8 a.m. and 8 p.m.",
+          "cabin": "standard economy seat",
+          "trip_type": "one-way",
+          "max_total_cents": "under $1,200 USD"
+        },
+        "unsupported": [
+          "for one adult",
+          "May 7 preferred"
+        ],
+        "clarifications": [],
+        "explanation": "Review the proposed requirements."
+      }
+    }
+  ],
+  "timestamp": "2026-10-14T01:46:51.078113+00:00",
+  "pipeline_failure": {
+    "type": "AIServiceError",
+    "message": "Live AI proposed a value that is not grounded in your words."
+  },
+  "reserved_stages": 2,
+  "reserved_cents_delta": 4
+}
