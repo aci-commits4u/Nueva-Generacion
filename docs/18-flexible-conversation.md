@@ -148,9 +148,9 @@ credit. Final hosted deployment, fresh blind UI walkthroughs, and the remaining
 UAT checks are recorded separately when completed; this document does not mark
 them complete.
 
-## Verification and failure truth at the release checkpoint
+## Verification and failure truth at the 07b checkpoint
 
-The current source checkpoint is `07b5c618ae0ab33c4f17b486030ddc34f5e27d35`.
+The earlier source checkpoint was `07b5c618ae0ab33c4f17b486030ddc34f5e27d35`.
 Its Vercel production deployment is READY as
 `dpl_DcXbAqVG1BeebBisE4Thh8GgNpSN`, with the main alias
 `https://intent-judge-perfected.vercel.app`. Local verification at this
@@ -158,7 +158,7 @@ checkpoint reports 315 tests passing with one upstream warning. A separate
 fresh-local browser pass reports eight checks passing. CI run
 `38498845176` subsequently completed successfully with the same 315-test and
 eight-browser-check result. A final deployment/native-original checkpoint is
-still separate and is not claimed here.
+still separate at this historical 07b checkpoint and is documented below.
 
 The earlier public `5e` release had eight actual public-browser checks and a
 native walkthrough of the exact Florida request. That walkthrough used four
@@ -220,9 +220,12 @@ valid response without allowing the model to approve or invent a requirement.
 
 A separate fully supported CPH-to-ICN request on source `07b`, without the
 unsupported “one adult” or “May 7 preferred” clauses, passed one audited send.
-It recorded only explicit no-preference choices that were actually specified;
-the fixed $295 offer passed, the $280 offer held, and the purchase had zero
-exceptions. The receipt was `C0tDj0mquiQsJq3876IMig`, intent
+The interpretation preserved the customer's named requirements while leaving
+other optional fields unspecified until review. At review, the traveler
+explicitly chose no preference for maximum connections, maximum duration, and
+refundability; the model also recorded the named refundability preference as
+no requirement. The fixed $295 offer passed, the $280 offer held, and the
+purchase had zero exceptions. The receipt was `C0tDj0mquiQsJq3876IMig`, intent
 `km6P1yIlwOhENx5P2jmCsA`, and the 34.1 KB evidence JSON was downloaded and
 reloaded. The evidence was checked for the canonical digest, trusted issuer
 and merchant signatures, exact offer hash, approved-requirements digest,
@@ -235,4 +238,84 @@ The durable ledger stood at 236 reserved stages and 1,960 reserved cents
 claim about remaining Azure student credit. Seven legacy demo aliases retain
 direct city normalization for compatibility; other catalog cities remain
 ambiguous until the customer chooses an airport.
+
+## Historical `a837` runtime checkpoint and original native UAT
+
+The final runtime source is `a83728acce48c6f90932d3e5eeb094da580ef79f`.
+Vercel reports READY deployment `dpl_6SV1t3p9MUWXhxAWMkfPdD2xxNqg` at the
+main alias `https://intent-judge-perfected.vercel.app`. CI run
+`38510739078` completed successfully with 325 pytest tests and eight browser
+checks in 13.441 seconds. Root's fresh isolated local run reached the same
+325-test and eight-browser-check result in 13.485 seconds. No source change was
+made for the repeat verification.
+
+All eight public checks against `a837` passed in 79.342 seconds. The original
+native UI-only walkthrough also completed successfully with the exact full
+original CPH-to-ICN request quoted earlier in the project history. It used one
+audited live send (two model stages), with no retry and no offline substitution.
+The supported requirements were captured correctly: strict `119999` cents,
+the inclusive May 5–9 window, an 08:00–20:00 departure window, nonstop,
+one-way, and the requested cabin.
+
+The review kept the unknown conditions visible: `one adult`, the duplicate
+`for one adult`, and `May 7 preferred`. The traveler removed none of them.
+The approved record retained that unknown-condition evidence, both fixed
+offers held, and the purchase gate returned HTTP 409 because the conditions
+are non-waivable. No receipt was created. Screenshot evidence is archived at
+`artifacts/native-global-original-before-warning-tidy.png`; the intent is
+`-A-u2kGtz8iIiZyyJ5tWDg`.
+
+An earlier local browser attempt timed out two suites because timers reached
+1,901,784 ms and 893,970 ms against a 60,000 ms target. Its artifacts are
+archived in `final-local-interrupted-browser-run.json` and those suites were
+not counted as passing. The later fresh isolated run is the result recorded
+above.
+
+The earlier pending wording referred to this pre-UAT checkpoint and is now
+superseded by the native result above. The earlier `c213b8782aee` and
+`ea199b6e65db` failures remain retained as failure evidence; the successful
+walkthrough does not erase them.
+
+After the accepted walkthrough, root's local suite reached 327 tests while
+reviewing a narrow duplicate-one-adult guard. That tidy is limited to the
+optional `for ` coverage comparison and removes no other unknown condition.
+The tidy now has its own runtime checkpoint below. This document makes no
+future budget-balance claim.
+
+## Latest tidy runtime and final native UAT
+
+The latest tidy source is `6ce8f47b6b0e54a59d8b5294c0682f5b06b0cd06`.
+Vercel reports READY deployment `dpl_HzsX6VonVZBcJtzj4kTKYPUh5CBj` at the
+main alias `https://intent-judge-perfected.vercel.app`. CI run
+`38511227162` completed successfully with 327 tests and eight browser checks.
+The narrow tidy is the duplicate-one-adult comparison
+guard described above; it does not remove any other unknown condition.
+
+The accepted original native walkthrough on `a837` remains historical evidence
+for the exact CPH-to-ICN request. Its review retained the duplicate one-adult
+condition visibly and correctly held the purchase gate. The fresh-shopper
+original native walkthrough on `6ce8` then completed with the exact full
+original CPH-to-ICN request: one audited live send, two model stages, no retry,
+and no offline substitution. Its intent is `maht467MisAsh1O4uoECog`.
+
+All supported requirements were correct: strict `119999` cents, CPH-to-ICN,
+the inclusive May 5–9 window, an 08:00–20:00 departure window, nonstop,
+economy, and one-way. Exactly two unsupported conditions remained visible,
+`one adult` and `May 7 preferred`, each once; no answered question repeated.
+The traveler left every removal flag unchecked. Explicit no-preference choices
+were used only for the omitted optional maximum-connections, maximum-duration,
+and refundability fields. The approved record retained both unknown conditions.
+
+Both fixed offers held and the purchase gate returned HTTP 409. No purchase or
+receipt was created for this unknown-condition case. The screenshot was saved
+and visually inspected at `artifacts/native-global-original-final.png`.
+The earlier `a837` result, including its duplicate one-adult condition, and the
+`c213b8782aee`/`ea199b6e65db` failures remain historical evidence.
+
+After this send, the durable ledger read back at 240 reserved stages and 1,968
+reserved cents ($19.68), up from 238 stages and 1,964 cents after only two
+additional stages. Ordinary application headroom was 32 cents; emergency
+capacity remained disabled. Health reported LIVE configured operation, offline
+false, and durable Azure storage. These are accounting and runtime readbacks,
+not a claim about remaining Azure student credit or future budget.
 
