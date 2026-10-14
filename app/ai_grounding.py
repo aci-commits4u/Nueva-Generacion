@@ -1700,8 +1700,12 @@ def _preserve_flight_scope_conditions(data,domain,message):
     for pattern in (quantity,priority):
         for match in pattern.finditer(message):
             phrase=match.group(0)
-            represented=any(_contains(phrase,item) for item in result['unsupported'])
-            represented=represented or any(_contains(phrase,item.get('source_quote','')) for item in result['clarifications'])
+            # "one adult" already covers "for one adult". Keep the actual
+            # model wording rather than adding a second warning for the same
+            # quantity; a different count or a bare "one" cannot cover it.
+            criterion = re.sub(r'\Afor\s+', '', phrase, flags=re.I) if pattern is quantity else phrase
+            represented=any(_contains(criterion,item) for item in result['unsupported'])
+            represented=represented or any(_contains(criterion,item.get('source_quote','')) for item in result['clarifications'])
             if not represented:
                 result['unsupported'].append(phrase)
     return result

@@ -148,6 +148,29 @@ def test_unknown_conditions_remain_held_alongside_recovered_fields():
     assert result["unsupported"] == ["round trip", "checked bag"]
 
 
+def test_existing_passenger_condition_is_retained_once_without_dropping_other_scope():
+    from app.ai_grounding import validate_extraction
+    message = "A nonstop flight for one adult under $300, with May 7 preferred."
+    result = validate_extraction("flight", message, envelope(
+        {"nonstop": True, "max_total_cents": 29999},
+        {"nonstop": "nonstop", "max_total_cents": "under $300"},
+        unsupported=["one adult", "May 7 preferred"],
+    ))
+    assert result["unsupported"] == ["one adult", "May 7 preferred"]
+
+
+def test_different_or_incomplete_passenger_flag_does_not_hide_requested_quantity():
+    from app.ai_grounding import validate_extraction
+    message = "A nonstop flight for one adult under $300."
+    for existing in ("one", "two adults"):
+        result = validate_extraction("flight", message, envelope(
+            {"nonstop": True, "max_total_cents": 29999},
+            {"nonstop": "nonstop", "max_total_cents": "under $300"},
+            unsupported=[existing],
+        ))
+        assert "for one adult" in result["unsupported"]
+
+
 def test_scope_preservation_overflow_fails_closed_without_truncating_conditions():
     message = (
         "Fly from EWR to CPH on 2026-11-12 for 2 adults; "
