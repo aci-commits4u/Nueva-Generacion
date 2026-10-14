@@ -69,3 +69,8 @@ The [route-choice incident and repair](docs/21-route-choice-reliability.md)
 records the London→Toronto failure, role-scoped global airport choices,
 source-linked corrections, explicit saved-conversation refresh, and the
 separate regression and native acceptance evidence.
+
+[Messy live user testing](docs/22-messy-user-testing.md) records unfamiliar
+flight and hotel requests typed into the deployed chatbot, the observed
+failures, planner repairs, and the v10 London correction acceptance. It keeps
+real model behavior separate from offline regressions and harness failures.

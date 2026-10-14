@@ -60,17 +60,74 @@ An archived v6 raw-model mismatch between `price_limit_basis` and
 useful planner question when the model's field names do not match its contract.
 That artifact is diagnostic context, not proof that it caused this hotel run.
 
-## Repair direction and limits
+## v10 follow-up
 
-The planned repair adds general planner rejection feedback to the second
-Foundry role and emits sanitized diagnostic codes. It keeps the fail-closed
-behavior: no static fallback question or alias guess will be used. Frontend
-guidance is being revised to use dollar examples without inventing dates, and
-the adaptive prompt version is `v10-planner-repair-feedback`.
+Runtime `e289d14d4461bf006296d3cd534bb72c5168a461` is READY as
+`dpl_Gt7ZpCUmVx3UgfTEBhNo8akBJ9tA`, using prompt
+`intent-envelope-v10-planner-repair-feedback`. CI run
+`38595018587` passed 500 pytest tests and ten browser suites; the offline and
+intercepted browser results are separate from live Foundry behavior.
 
-Tests, deployment, and a fresh native retest of these messy cases are pending.
-The flight recovery is evidence that the UI can preserve messy constraints
-after a delayed response; the hotel result shows that the shared planner can
-still stop without asking the most useful question. These five sends do not
+The same Tbilisi prompt now generated a useful date question at about 20
+seconds. After the visible clarification, the UI retained April 3–7, 2027 and
+asked a second useful question for the total USD budget at about 45 seconds.
+The review visibly retained the original five unsupported conditions: the
+foreign-currency nightly preference, quiet and walkable location, late
+check-in, twin beds, and avoiding party hostels. It did not show the typed
+`$175` USD nightly cap or the optional April 8 extension from the clarification,
+so the artifact did not prove that those new conditions survived the review.
+Azure matching-draft readback now confirms that both v10 model roles omitted
+the `$175` nightly cap and April 8 extension before UI review. This is a
+provider coverage failure, not a sidebar rendering issue. Asking for a total
+USD amount after a nightly cap was correct because those are different
+constraints. There was no approval or purchase.
+
+The London portion consumed two fresh contexts. The first stopped on a harness
+locator/text change before selection; the second selected `YTZ` and `YYZ`, but
+the bounded runner stopped when the button changed from “Choose one or more →”
+to “Use 2 airports →”. It never reached the departure question, natural-
+language correction, or review. Those four v10 live sends are evidence of
+improved hotel planning and a test-harness/control-label boundary, not proof
+that the London correction path passed. The isolated contexts are now closed.
+
+The repair adds planner rejection feedback to the second Foundry role and
+sanitized diagnostic codes. It keeps the fail-closed behavior: no static
+fallback question or alias guess is used. Frontend guidance uses dollar
+examples without inventing dates.
+
+## Targeted provider experiment
+
+A targeted v11 provider experiment used a new payload and prompt. It retained
+the `$175` USD nightly cap but still omitted the optional April 8 extension
+after two model stages. The saved failure artifact is
+`artifacts/planner-v11-live-coverage-experiment.json`; it must remain separate
+from the UI UAT and is not a replacement for the v10 report.
+
+The next repair is a narrow cross-domain literal money/date coverage guard
+with prompt version `v12-literal-coverage`. When an exact customer clause is
+not represented, the server will preserve it as unsupported while still
+allowing the model to generate a useful question. This does not guarantee
+complete coverage, add static questions, grant AI approval, or introduce a
+third model call or automatic retry. The v12 deployment and UAT are pending.
+
+## Persistent London acceptance
+
+The final persistent headless London context completed exactly four live
+sends. The full v10 run therefore consumed eight sends and sixteen model
+stages: hotel initial plus clarification, two earlier harness-limited London
+contexts, and this final four-send London run. The final report is
+`artifacts/messy-hidden-v10-final-20261014/REPORT.md`, with structured evidence
+in `london-final.json`.
+
+The model asked for departure airports first and arrival airports second. The
+tester selected `LHR`, `LGW`, and `LCY`, then `YTZ` and `YYZ`, using the actual
+`Use 3 airports` and `Use 2 airports` controls. After the exact correction
+“Actually, limit the departure airports to London Heathrow and London Gatwick
+only,” both the live summary and first review showed `LHR`/`LGW` with no `LCY`.
+The `YTZ`/`YYZ` set, November 12, 2026, nonstop, and `$299.99` remained
+present. London was not asked again. No purchase was attempted.
+
+This is a successful persistent UI correction path. The hotel clarification
+retention issue remains under diagnosis, and these eight v10 sends do not
 establish arbitrary-request accuracy, production readiness, or fewer disputes.
 

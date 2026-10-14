@@ -40,5 +40,5 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 - [18 — Flexible conversation and typed intent](18-flexible-conversation.md): date windows, airport alternatives, stateful interpretation and the boundaries of the flexibility changes.
 - [19 — Adaptive intent engine](19-adaptive-intent-engine.md): the shared model-directed loop, read-only merchant context, domain adapters, trust boundary, and current evidence limits.
 - [20 — Adaptive native UAT](20-adaptive-native-uat.md): UI-only deployed walkthrough, signed synthetic receipt verification, held unsupported paths, and evidence limits.
-- [21 — Route-choice reliability](21-route-choice-reliability.md): the native London→Toronto ambiguity failure, role-scoped airport fixes, quota boundary, and pending retest.
+- [21 — Route-choice reliability](21-route-choice-reliability.md): the native London→Toronto ambiguity failure, role-scoped fixes, v9 observed acceptance, and evidence boundary.
 - [22 — Messy hidden user testing](22-messy-user-testing.md): latency, currency/date guidance, a held Tbilisi hotel case, and the pending planner-repair path.

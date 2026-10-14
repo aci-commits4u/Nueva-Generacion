@@ -3,7 +3,54 @@
 Intent Judge is implemented on `victor/perfected` at https://intent-judge-perfected.vercel.app. Live Foundry now generates the next useful question and can choose bounded read-only merchant context, followed by a fresh source review. Customer approval and deterministic validation over signed merchant facts remain separate. The overview and five-step tutorial explain the product; the commerce inventory and purchase are explicitly simulated. See [the adaptive engine](19-adaptive-intent-engine.md) and [native UAT](20-adaptive-native-uat.md).
 
 
-## Route-choice repair — October 14
+## Current planner repair — October 14
+
+Runtime source `e289d14d4461bf006296d3cd534bb72c5168a461` is deployed READY as
+`dpl_Gt7ZpCUmVx3UgfTEBhNo8akBJ9tA` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38595018587](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38595018587)
+passed **500 pytest tests**, all **ten browser journeys**, JavaScript syntax,
+and the client deadline check. The browser regressions use explicit offline
+interpretation or intercepted responses and are separate from live user testing.
+Local verification passed the same 500 tests and ten journeys.
+
+Prompt `intent-envelope-v10-planner-repair-feedback` gives the second Foundry
+role sanitized feedback when the first role's proposed question fails the
+actual planner contract. The model must repair its generated question or hold
+the draft; the change adds neither a static fallback question nor another
+model call. Customer-facing money questions use dollars, foreign prices remain
+separate conditions, and date questions avoid invented calendar examples.
+
+Independent hidden-browser testing used literal customer requests, real live
+Foundry responses, DOM typing and clicks, and no direct API calls or mocks.
+The Tbilisi request that previously stopped without a question now asks for
+concrete stay dates, retains April 3–7, 2027 after a customer answer, and asks
+for an all-in USD total. Unsupported preferences remain held; this is a
+clarification result, not a completed hotel purchase. Two London starts stopped
+because the test harness did not recognize changing control labels, before
+submitting airport answers. Their calls and failures remain recorded separately.
+The final London acceptance passed in one persistent headless context with
+four live sends: original request, three departure choices, two arrival
+choices, then the exact correction limiting departures to Heathrow and
+Gatwick. Both the live summary and first review retained only LHR/LGW,
+YTZ/YYZ, November 12, 2026, nonstop, and $299.99. No satisfied airport
+question reappeared. Across the v10 hotel, interrupted harness runs, and
+final London acceptance, eight live sends consumed sixteen model stages.
+See [the full messy user test record](22-messy-user-testing.md).
+
+The published endpoint confirms live Foundry, Azure state, synthetic commerce,
+and prompt v10. Testing runs headless while Victor uses the Mac; it does not
+open windows, switch desktops, or change application focus. The prior native
+v9 purchase and cryptographically checked receipt remain historical evidence
+below, not a claim of an additional v10 purchase.
+
+Final read-only ledger state records **392 model stages / $22.72 conservatively
+reserved**. Seventy stages remain for this UTC day and 108 under the unchanged
+500-stage lifetime ceiling. A fresh session allows twelve two-stage
+interpretations. The $20 ordinary plus $10 emergency application cap remains
+$30; historical counters and reservations were not reset. These numbers are
+application limits, not Azure charges or a remaining student-credit balance.
+
+## Route-choice repair — October 14 (v9 checkpoint)
 
 Runtime source `483cec80b3fcb3d7e42a1c2d674a8fed80f52e81` is deployed READY as
 `dpl_MbrTKqjci751XHEJR1tZBXeBfAGj` at **https://intent-judge-perfected.vercel.app**.

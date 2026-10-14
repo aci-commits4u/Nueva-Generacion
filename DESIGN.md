@@ -139,3 +139,28 @@ to their actual endpoint, and refuses wrong-field ambiguity updates. Known
 older live adaptive versions require a visible, explicit refresh so a saved
 incorrect draft cannot silently appear current. The four-turn failed session
 and the final native retest are retained separately in the incident record.
+
+## October 14 planner feedback and hidden acceptance
+
+An independently chosen hotel request exposed a genuine adaptive failure:
+the draft held safely but produced no useful next question. The second Foundry
+role now receives bounded, sanitized rejection codes from the actual planner
+normalization. It must repair its own question or leave the draft held. This
+preserves model-generated questioning without adding a canned question,
+guessing field aliases, or making a third inference call. Exact raw output
+was not retained for the failing hotel run, so an archived malformed-key case
+is a known failure path rather than a proven explanation of that run.
+
+Budget questions use customer-facing dollar amounts and preserve foreign-currency
+and nightly limits separately from the total USD field. Date questions ask
+for the customer's dates without invented calendar examples. Unsupported
+conditions still require support or an explicit customer removal before checkout.
+The v10 hidden hotel retest produced useful date and total-budget questions;
+it does not establish arbitrary-request accuracy or a completed hotel booking.
+
+Victor is using the Mac while this work continues. Further acceptance runs use
+headless Chrome, actual DOM typing and clicks, and independent unfamiliar requests.
+They must not bring up visible windows, change application focus, or switch
+desktops. Harness failures stay separate from application failures and consume
+their original recorded budget. Tests and outcomes are preserved in
+`docs/22-messy-user-testing.md`.
