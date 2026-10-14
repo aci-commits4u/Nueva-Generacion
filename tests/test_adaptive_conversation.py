@@ -247,6 +247,62 @@ def test_original_no_preference_clauses_fill_typed_none_and_skip_questions():
     assert any(item.get("field") == "city" for item in result["clarifications"])
 
 
+def test_natural_optional_breakfast_language_compiles_to_reviewable_none():
+    phrases = [
+        "Find a hotel in Tbilisi. Breakfast is completely optional and I can skip it.",
+        "Find a hotel in Tbilisi. Breakfast can be optional.",
+        "Find a hotel in Tbilisi. Leave breakfast optional.",
+        "Find a hotel in Tbilisi. Optional breakfast.",
+        "Find a hotel in Tbilisi. I can skip breakfast.",
+    ]
+    for phrase in phrases:
+        draft = _hotel_draft(messages=[{"role": "user", "content": phrase}])
+        extraction = _extraction(
+            question=_question(field="breakfast", criterion_key="breakfast",
+                               text="Would you like breakfast included?"),
+            criteria=[_criterion("breakfast", "breakfast")],
+            domain="hotel",
+            fields=deepcopy(draft["fields"]),
+            sources=deepcopy(draft["sources"]),
+        )
+        result = apply_adaptive_plan(draft, extraction)
+
+        declined = declined_preferences("hotel", draft["messages"])
+        assert set(declined) == {"breakfast"}
+        assert result["fields"]["breakfast"] is None
+        assert "breakfast" in result["sources"]["breakfast"].casefold()
+        assert result["questions"] == []
+        breakfast = next(item for item in result["generic_criteria"] if item["key"] == "breakfast")
+        assert breakfast["status"] == "declined"
+
+
+def test_optional_breakfast_is_field_local_and_not_optional_is_positive():
+    text = "Find a hotel in Tbilisi. Breakfast is optional, but refundable is required."
+    assert set(declined_preferences("hotel", [{"role": "user", "content": text}])) == {"breakfast"}
+
+    for required in (
+        "Find a hotel in Tbilisi. Breakfast is not optional.",
+        "Find a hotel in Tbilisi. Breakfast isn't optional.",
+        "Find a hotel in Tbilisi. Breakfast cannot be optional.",
+        "Find a hotel in Tbilisi. I cannot skip breakfast.",
+        "Find a hotel in Tbilisi. I can't skip breakfast.",
+        "Find a hotel in Tbilisi. I don't skip breakfast.",
+    ):
+        assert declined_preferences("hotel", [{"role": "user", "content": required}]) == {}
+
+    later_required = [
+        {"role": "user", "content": "Find a hotel in Tbilisi. Breakfast is optional."},
+        {"role": "user", "content": "Actually, breakfast is required."},
+    ]
+    assert declined_preferences("hotel", later_required) == {}
+
+    same_turn_reversal = "Find a hotel in Tbilisi. Breakfast is optional, but breakfast is required."
+    assert declined_preferences("hotel", [{"role": "user", "content": same_turn_reversal}]) == {}
+
+    independent_comma = "Find a hotel in Tbilisi. Breakfast is required, cancellation is optional."
+    assert set(declined_preferences("hotel", [{"role": "user", "content": independent_comma}])) == {"refundable"}
+
+
 def test_silence_does_not_compile_optional_none():
     draft = _hotel_draft()
     result = apply_adaptive_plan(

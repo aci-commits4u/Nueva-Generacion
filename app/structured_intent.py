@@ -251,7 +251,7 @@ def response_schema(domain: str, catalog: list[dict[str, str]]) -> dict[str, Any
             "key": {"type": "string", "enum": required_field_names or ["__no_required_profile_field__"]},
             "source_ref": {"type": "null"},
             "kind": criterion_kind,
-            "status": criterion_status,
+            "status": {"type": "string", "enum": ["needs_clarification"]},
         },
         "required": ["key", "source_ref", "kind", "status"],
     }

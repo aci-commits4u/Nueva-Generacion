@@ -153,6 +153,15 @@ def test_null_source_ref_is_only_for_missing_required_profile_field():
         raise AssertionError("optional profile field must not omit source_ref")
 
 
+def test_adaptive_prompt_treats_optional_conditions_as_nonbinding():
+    from app.ai_pipeline import prompt
+
+    text = prompt("hotel", "adaptive", "adaptive_review")
+    assert "optional, not required, can skip" in text
+    assert "do not turn it into a hard requirement" in text
+    assert "do not encode it as a false boolean" in text
+
+
 def test_profile_question_derives_matching_field_and_never_accepts_wire_field():
     catalog = [{"id": "t1p0e18hsource", "text": "in Manhattan"}]
     data = hydrate_response({
@@ -248,6 +257,10 @@ def test_schema_is_strict_and_profile_claims_are_typed():
     )
     assert "source_ref" not in generic["properties"]
     assert generic["required"] == ["key", "kind", "status"]
+    missing_profile = criterion_variants[0]["anyOf"][1]
+    assert missing_profile["properties"]["status"] == {
+        "type": "string", "enum": ["needs_clarification"]
+    }
     # The schema is sent to the provider as JSON, so it must contain no custom
     # Python objects or unserializable enum wrappers.
     json.dumps(schema)

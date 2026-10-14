@@ -316,7 +316,16 @@ def declined_preferences(domain,messages):
         'max_connections':r'connections?|layovers?', 'cabin':r'cabin',
         'trip_type':r'trip type', 'rooms':r'rooms?',
     }
-    declined={}
+    # Keep the latest field-local preference state rather than letting a
+    # positive statement about another field cancel an earlier decline.  This
+    # matters for compact hotel requests such as ``breakfast is optional, but
+    # refundable is required``.
+    state={}
+
+    def set_state(field, declined, quote=None):
+        if field in profile['fields'] and not profile['fields'][field].get('required'):
+            state[field] = (declined, quote)
+
     for message in messages or []:
         if message.get('role') not in {'user','customer'}:continue
         text=message.get('content','')
@@ -324,7 +333,7 @@ def declined_preferences(domain,messages):
         field=reply.get('field');spec=profile['fields'].get(field,{})
         if (spec and not spec.get('required') and reply.get('question')==spec['question']
                 and re.fullmatch(r'(?:no(?: thanks)?|no preference)[.!?, ]*',text.strip(),re.I)):
-            declined[field]=text
+            set_state(field, True, text)
         # Adaptive questions are generated at runtime, so their wording is
         # intentionally not compared with the profile's static question.  A
         # short No/No-preference reply is trusted only when the server-owned
@@ -333,15 +342,20 @@ def declined_preferences(domain,messages):
         if (field and spec and not spec.get('required')
                 and is_trusted_adaptive_question(reply, domain=domain)
                 and re.fullmatch(r'(?:no(?: thanks)?|no preference)[.!?, ]*', text.strip(), re.I)):
-            declined[field]=text
-        for clause in re.split(r'[.!?;\n]|\bbut\b|\bhowever\b|\band\s+(?=I\s+(?:require|need|want)\b)',text,flags=re.I):
-            declines=re.search(r'\bno preference\b|\bno (?:need|requirement)\b|\b(?:do not|don[’\']t)\s+(?:require|need|care)\b|\bnot (?:required|needed)\b',clause,re.I)
+            set_state(field, True, text)
+        for clause in _preference_clauses(text):
             for key,term in terms.items():
-                explicit_no_requirement=re.search(r'\bno\s+(?:'+term+r')\s+requirement\b',clause,re.I)
-                if ((declines or explicit_no_requirement) and key in profile['fields'] and not profile['fields'][key].get('required')
-                        and re.search(r'\b(?:'+term+r')\b',clause,re.I)):
-                    declined[key]=clause.strip()
-    return declined
+                if key not in profile['fields'] or profile['fields'][key].get('required'):
+                    continue
+                preference = _field_preference_state(key, clause, term=term)
+                if preference == 'declined':
+                    set_state(key, True, clause.strip())
+                elif preference == 'positive':
+                    set_state(key, False)
+    return {
+        field: quote for field, (is_declined, quote) in state.items()
+        if is_declined and isinstance(quote, str)
+    }
 
 
 _OPTIONAL_DECLINE_TERMS = {
@@ -359,6 +373,69 @@ _OPTIONAL_DECLINE_TERMS = {
 }
 
 
+_PREFERENCE_SPLIT_MARKER = re.compile(
+    r'[.!?;\n]|\bbut\b|\bhowever\b|'
+    r',(?=[^.!?;\n]{0,120}\b(?:required|require|need|needs|needed|must|essential|mandatory|optional|prefer|preferably|ideally|no\s+preference|no\s+need|no\s+requirement|do\s+not|don[’\']t|can\s+skip|skip)\b)|'
+    # Split a coordinated clause only when the right side introduces its own
+    # preference marker.  ``breakfast and cancellation`` must remain one
+    # shared no-preference clause, while ``breakfast optional and refundable
+    # required`` must stay field-local.
+    r'\band\b(?=[^.!?;\n]{0,120}\b(?:required|require|need|needs|needed|must|essential|mandatory|optional|prefer|preferably|ideally|no\s+preference|no\s+need|no\s+requirement|do\s+not|don[’\']t|can\s+skip|skip)\b)',
+    re.I,
+)
+
+
+def _preference_clauses(text):
+    if not isinstance(text, str):
+        return []
+    return [clause.strip() for clause in _PREFERENCE_SPLIT_MARKER.split(text) if clause.strip()]
+
+
+def _field_preference_state(field, clause, *, term=None):
+    """Classify only the preference language attached to one field clause."""
+    if not isinstance(clause, str):
+        return None
+    term = term or _OPTIONAL_DECLINE_TERMS.get(field)
+    if not term or not re.search(r'\b(?:' + term + r')\b', clause, re.I):
+        return None
+    decline_matches = list(re.finditer(
+        r'\bno\s+preference\b|\bno\s+(?:need|requirement)\b|'
+        r'\b(?:do\s+not|don[’\']t|does\s+not|doesn[’\']t)\s+(?:require|need|care)\b|'
+        r'\bnot\s+(?:required|needed)\b|'
+        r'\bno\s+(?:' + term + r')\s+requirement\b',
+        clause, re.I,
+    ))
+    # ``optional`` is a customer-owned no-preference statement when it is
+    # attached to this field.  Guard ``not optional`` so a hard requirement is
+    # never compiled as a decline.  The skip/omit forms cover natural wording
+    # such as ``I can skip breakfast``.
+    optional_matches = []
+    for match in re.finditer(
+        r'\b(?:' + term + r')\b[^,.!?;\n]{0,80}\boptional\b|'
+        r'\boptional\s+(?:' + term + r')\b|'
+        r'\b(?:can|could|may)\s+(?:skip|omit|go\s+without)\s+(?:the\s+)?(?:' + term + r')\b|'
+        r'\b(?:skip|omit|go\s+without)\s+(?:the\s+)?(?:' + term + r')\b',
+        clause, re.I,
+    ):
+        nearby = clause[max(0, match.start() - 24):match.end() + 24]
+        if not re.search(r'\b(?:not|isn[’\']t|is\s+not|cannot|can[’\']t|should\s+not|shouldn[’\']t)\s+(?:be\s+)?optional\b', nearby, re.I) and not re.search(
+                r'\b(?:cannot|can[’\']t|don[’\']t|do\s+not|doesn[’\']t|does\s+not|shouldn[’\']t|should\s+not)\s+skip\b',
+                nearby, re.I,
+        ):
+            optional_matches.append(match)
+    decline_matches.extend(optional_matches)
+    positive_matches = list(re.finditer(
+        r'\b(?:require|requires|required|need|needs|needed|must|essential|mandatory|'
+        r'include|included|prefer|preferably|ideally)\b|\b(?:not|isn[’\']t|is\s+not|cannot|can[’\']t|should\s+not|shouldn[’\']t)\s+(?:be\s+)?optional\b',
+        clause, re.I,
+    ))
+    if not decline_matches and not positive_matches:
+        return None
+    last_decline = max((match.end() for match in decline_matches), default=-1)
+    last_positive = max((match.end() for match in positive_matches), default=-1)
+    return 'declined' if last_decline >= last_positive else 'positive'
+
+
 def _latest_optional_decline_sources(domain, messages):
     """Return only the latest explicit optional declines by field.
 
@@ -371,16 +448,6 @@ def _latest_optional_decline_sources(domain, messages):
     parsed = declined_preferences(domain, messages)
     if not parsed:
         return {}
-    decline_pattern = re.compile(
-        r'\b(?:no\s+preference|no\s+(?:need|requirement)|'
-        r'(?:do\s+not|don[’\']t)\s+(?:require|need|care)|'
-        r'not\s+(?:required|needed))\b', re.I,
-    )
-    positive_pattern = re.compile(
-        r'\b(?:actually\s+)?(?:require|need|want|must|prefer|'
-        r'required|essential|important|include|including)\b|\b(?:yes|yeah)\b',
-        re.I,
-    )
     latest = {}
     for index, message in enumerate(messages or []):
         if not isinstance(message, dict) or message.get('role') not in {'user', 'customer'}:
@@ -411,19 +478,21 @@ def _latest_optional_decline_sources(domain, messages):
                 ))
             )
             direct_no_preference = direct_no_preference or static_no_preference
-            if not field_mentioned and not direct_no_preference:
-                continue
-            decline_matches = list(decline_pattern.finditer(text))
-            positive_matches = list(positive_pattern.finditer(text))
             if direct_no_preference:
-                decline_matches.append(re.match(r'.*', text, re.S))
-            last_decline = max((match.end() for match in decline_matches), default=-1)
-            last_positive = max((match.end() for match in positive_matches), default=-1)
-            if last_decline < 0 and last_positive < 0:
+                latest[field] = (index, quote)
+                continue
+            if not field_mentioned:
+                continue
+            states = [
+                _field_preference_state(field, clause)
+                for clause in _preference_clauses(text)
+            ]
+            states = [state for state in states if state is not None]
+            if not states:
                 # Mentioning an optional field without a preference marker is
                 # not enough to erase a previous choice.
                 continue
-            if last_decline >= last_positive:
+            if states[-1] == 'declined':
                 latest[field] = (index, quote)
             else:
                 latest[field] = (index, None)
