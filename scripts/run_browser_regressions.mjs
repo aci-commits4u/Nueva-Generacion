@@ -25,6 +25,7 @@ const allSuiteNames = [
   'browser_availability_races',
   'browser_uat_guards',
   'browser_adaptive',
+  'browser_route_choices',
 ];
 const suiteNames = (process.env.BROWSER_SUITES
   ? process.env.BROWSER_SUITES.split(',').map((name) => name.trim()).filter(Boolean)

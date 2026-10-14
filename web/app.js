@@ -223,7 +223,7 @@ async function returnToDemo(){
  await Promise.allSettled([...(pendingIntents.get(id)||[])]);
  const draft=await api('/api/intents/'+id);
  if(!currentRequest(navigation,id))return;
- if(draft.profile_current===false&&!draft.latest_purchase){reopenLiveIntake(draft);return;}
+ if((draft.profile_current===false||draft.clarification_current===false)&&!draft.latest_purchase){reopenLiveIntake(draft);return;}
  let stage=previous===3?3:2,offers=[],decisions={};
  if(draft.latest_purchase)stage=5;
  else if(draft.approved){
@@ -298,7 +298,7 @@ function renderSummary(){
  const visibleEntries=entries.filter(([k,f])=>d.fields[k]!==undefined||f.required||clarificationFor(d,k));
  const rows=visibleEntries.map(([k,f])=>{const open=d.fields[k]===undefined,clarification=clarificationFor(d,k),clarificationNote=open&&clarification?.source_quote&&clarification.source_quote!==d.sources[k]?`<small class="clarification-source">From your words: “${escapeHTML(clarification.source_quote)}”</small>`:'',openLabel=f.required?'Still open':'Needs your choice';return `<div class="summary-rule${open?' unresolved':''}"><b>${escapeHTML(k==='max_total_cents'?'Maximum all-in price':f.label)}</b><span>${open?`<em>${openLabel}</em>`:valueFor(k,d.fields[k])}</span>${d.sources[k]?`<small>“${escapeHTML(d.sources[k])}”</small>`:''}${clarificationNote}</div>`;}).join('');
  const summaryCounts=`<span><b>${captured}</b> captured</span>${openRequired?`<span><b>${openRequired}</b> still open</span>`:''}`;
- const profileStale=d.profile_current===false;
+ const profileStale=d.profile_current===false||d.clarification_current===false;
  $('#intent-content').innerHTML=`<span class="eyebrow">${d.approved?'APPROVED BY YOU':profileStale?'SAVED DRAFT':'UNAPPROVED DRAFT'}</span><h2>Your requirements</h2><p class="small">${d.approved?'Your signed rules for this offer.':profileStale?'Captured values are read-only until this saved conversation is updated.':'Captured values stay visible while you clarify.'}</p><div class="summary-counts">${summaryCounts}</div><div class="summary-rules">${rows}</div>${d.unsupported.length?`<div class="unsupported"><b>Needs additional support</b><ul>${d.unsupported.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul><p class="small">These conditions remain held.</p></div>`:''}<p class="small summary-note">You approve the rules; signed merchant facts are checked before checkout.</p>`;
 }
 function renderIntake(){
@@ -311,7 +311,7 @@ function renderIntake(){
  $('#intake-form').onsubmit=e=>{e.preventDefault();state.message=$('#request-text').value;busy(e.submitter,async()=>{const navigation=state.navigation,generation=sessionGeneration;if(state.mode==='live'){const status=await refreshAIStatus(true,{generation});if(generation!==sessionGeneration)return;if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});}const draft=await api('/api/intents',{domain:state.domain,message:state.message,mode:state.mode,time_zone:browserTimeZone()});if(!currentRequest(navigation))return;state.draft=draft;transition(2);},'Interpreting and checking coverage…');};
 }
 function renderConversation(){
- const d=state.draft,question=d.questions?.[0]||null,profileStale=d.profile_current===false;
+ const d=state.draft,question=d.questions?.[0]||null,profileStale=d.profile_current===false||d.clarification_current===false;
  if(adaptiveSelection.intentId!==d.id||adaptiveSelection.revision!==d.revision||adaptiveSelection.questionId!==question?.id){adaptiveSelection.intentId=d.id;adaptiveSelection.revision=d.revision;adaptiveSelection.questionId=question?.id||null;adaptiveSelection.values=new Set();}
  syncAirportSelection(d,question);
  $('#workspace').innerHTML=conversationMarkup(d,escapeHTML,{selectedAirports:[...airportSelection.values],profileStale});
@@ -324,7 +324,7 @@ function renderConversation(){
   if(!currentRequest(navigation,d.id))return;
   state.reviewEdits=null;state.clarifyEdit=null;state.draft=updated;state.domain=updated.domain;state.mode=updated.mode;state.offers=[];state.decisions={};state.receipt=null;transition(2);
  },'Updating this saved conversation…');
- const send=text=>{
+ const send=(text,structuredAnswer=null)=>{
   if(profileStale||clarificationRequests.has(d.id))return;
   const navigation=state.navigation,generation=sessionGeneration,inputSnapshot=$('#clarify-text')?.value??'';
   clarificationRequests.add(d.id);state.clarifyEdit={id:d.id,revision:d.revision,value:inputSnapshot};setClarificationControls(d.id,true);
@@ -334,7 +334,7 @@ function renderConversation(){
     if(generation!==sessionGeneration)return;
     if(!liveAvailable(status))throw new ApiError('/api/ai/status',503,{detail:knownReasonCopy(status),error:{code:statusReason(status)?.code||'ai_status_unavailable',message:knownReasonCopy(status),retry_after_seconds:statusReason(status)?.retry_after_seconds||null}});
    }
-   const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text});
+   const draft=await trackedApi(d.id,`/api/intents/${d.id}/clarify`,{revision:d.revision,message:text,...(structuredAnswer?{structured_answer:structuredAnswer}:{})});
    if(!currentRequest(navigation,d.id)||state.draft.revision!==d.revision)return;
    state.clarifyEdit=null;state.draft=draft;clearAirportSelection();render();
   },'Interpreting your clarification…').finally(()=>{clarificationRequests.delete(d.id);setClarificationControls(d.id,false);});
@@ -374,6 +374,7 @@ function renderConversation(){
  };
  document.querySelectorAll('[data-airport-choice]').forEach(button=>button.onclick=()=>{
   const code=button.dataset.airportChoice;
+  if(!airportSelection.values.has(code)&&airportSelection.values.size>=10){notice('Choose up to 10 airports. Remove a selection before adding another.');return;}
   if(airportSelection.values.has(code))airportSelection.values.delete(code);else airportSelection.values.add(code);
   syncAirportSelectionUI();
  });
@@ -381,7 +382,7 @@ function renderConversation(){
  document.querySelector('[data-airport-submit]')?.addEventListener('click',()=>{
   if(!airportSelection.values.size)return;
   const codes=[...airportSelection.values],prefix=question?.field==='origin_airports'?'Depart from':'Arrive at';
-  send(`${prefix} ${codes.join(' or ')}.`);
+  send(`${prefix} ${codes.join(' or ')}.`,{question_id:question.question_id||question.id,field:question.field,values:codes});
  });
  const airportSearch=document.querySelector('[data-airport-search]');
  const airportSearchResults=document.querySelector('[data-airport-search-results]');
@@ -389,7 +390,7 @@ function renderConversation(){
   const searchNavigation=state.navigation,searchIntent=d.id,searchRevision=d.revision,searchField=question?.field;
   let searchTimer=null,searchVersion=0;
   const searchIsCurrent=version=>version===searchVersion&&searchNavigation===state.navigation&&state.draft?.id===searchIntent&&state.draft?.revision===searchRevision&&state.draft?.questions?.[0]?.field===searchField;
-  const bindSearchResults=()=>airportSearchResults.querySelectorAll('[data-airport-search-choice]').forEach(button=>button.onclick=()=>{const code=button.dataset.airportSearchChoice;if(airportSelection.values.has(code))airportSelection.values.delete(code);else airportSelection.values.add(code);syncAirportSelectionUI();});
+  const bindSearchResults=()=>airportSearchResults.querySelectorAll('[data-airport-search-choice]').forEach(button=>button.onclick=()=>{const code=button.dataset.airportSearchChoice;if(!airportSelection.values.has(code)&&airportSelection.values.size>=10){notice('Choose up to 10 airports. Remove a selection before adding another.');return;}if(airportSelection.values.has(code))airportSelection.values.delete(code);else airportSelection.values.add(code);syncAirportSelectionUI();});
   const showResults=airports=>{airportSearchResults.innerHTML=airports.slice(0,6).map(airport=>{const code=escapeHTML(airport.code),selected=airportSelection.values.has(airport.code);const location=[airport.city,airport.region,airport.country].filter(Boolean).join(' · ');return `<button type="button" class="airport-result${selected?' selected':''}" data-airport-search-choice="${code}" aria-pressed="${selected}" role="option"><b>${escapeHTML(airport.name||airport.code)} · ${code}</b><span>${escapeHTML(location||'Airport identity')}</span></button>`;}).join('');bindSearchResults();syncAirportSelectionUI();};
   airportSearch.addEventListener('input',()=>{const query=airportSearch.value.trim().slice(0,80);searchVersion++;const version=searchVersion;clearTimeout(searchTimer);if(!query){airportSearchResults.innerHTML='';return;}airportSearchResults.innerHTML='<span class="small airport-search-status">Searching the airport catalog…</span>';searchTimer=setTimeout(async()=>{try{const result=await api('/api/airports?q='+encodeURIComponent(query));if(!searchIsCurrent(version))return;showResults(Array.isArray(result.airports)?result.airports:[]);if(!result.airports?.length)airportSearchResults.innerHTML='<span class="small airport-search-status">No airport identity matches yet.</span>';}catch(error){if(!searchIsCurrent(version))return;airportSearchResults.innerHTML='<span class="small airport-search-status">Airport search is unavailable. You can keep typing and try again.</span>';}} ,220);});
  }
@@ -433,7 +434,7 @@ async function renderQuality(){
   const adaptiveRuns=Array.isArray(q.adaptive_experiments)?q.adaptive_experiments:[];
   const adaptiveEvidence=adaptiveRuns.length?`<section class="quality-section"><span class="eyebrow">ACTUAL ADAPTIVE FOUNDRY EXPERIMENTS</span><p class="small">Each snapshot preserves successes and failures from a finite live run. These small synthetic samples measure specific behaviors, not overall customer accuracy.</p><div class="quality-grid">${adaptiveRuns.map(run=>`<article><span class="eyebrow">${escapeHTML(run.created_at||'Recorded experiment')}</span><h2>${escapeHTML(run.passed)}<span class="muted"> / ${escapeHTML(run.cases)}</span></h2><p>Cases passed their labeled checks</p><p class="small">${escapeHTML(run.model||'Foundry')} · ${escapeHTML(run.median_ms)} ms median</p>${run.prompt_version!==q.prompt_version?'<p class="small">This experiment predates the current release.</p>':''}</article>`).join('')}</div><p class="small">Question relevance, prior-answer memory, source coverage, merchant-data injection and signed read-only tool evidence are evaluated separately.</p></section>`:'';
   const monitorVersionNote=q.monitor&&q.prompt_version&&q.monitor.prompt_version!==q.prompt_version?'<p class="small">This saved live check predates the current prompt release. Future daily checks record the prompt version they used.</p>':'';
-  $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div>${pipeline}${adaptiveEvidence}<details class="trace"><summary>Historical Foundry evaluation and operational records</summary>${nativeEvaluation}${runtimeRecord}</details><section class="quality-section"><span class="eyebrow">HISTORICAL BENCHMARK SNAPSHOTS</span><p class="small">Retained reports from earlier development runs. They are reference points, not the current native evaluation.</p><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p>${monitorVersionNote}<p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs deterministic checks and nine browser journeys, with screenshots retained. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;
+  $('#workspace').innerHTML=`<div class="section-head"><span class="eyebrow">QUALITY OBSERVATORY / SYNTHETIC EVALUATIONS</span><h1>Measured, then monitored.</h1><p>Gold labels judge the interpretation. The model doesn’t grade itself.</p></div>${pipeline}${adaptiveEvidence}<details class="trace"><summary>Historical Foundry evaluation and operational records</summary>${nativeEvaluation}${runtimeRecord}</details><section class="quality-section"><span class="eyebrow">HISTORICAL BENCHMARK SNAPSHOTS</span><p class="small">Retained reports from earlier development runs. They are reference points, not the current native evaluation.</p><div class="quality-grid">${q.benchmarks.map(b=>`<article><span class="eyebrow">${escapeHTML(b.variant)} / ${escapeHTML(b.split)}</span><h2>${b.passed}<span class="muted"> / ${b.cases}</span></h2><p>Cases passed all labeled checks</p><p class="small">${b.median_ms} ms median · ${b.model_calls} recorded model stages</p></article>`).join('')}</div><h2>Daily live canary</h2><p>${q.monitor?`${escapeHTML(q.monitor.status)} · ${escapeHTML(q.monitor.date)} · ${escapeHTML(q.monitor.case_id||'No inference')}`:'Awaiting the first scheduled live check.'}</p>${monitorVersionNote}<p class="small">One rotating synthetic case per day. Authentication, replay protection and a shared lifetime spend cap bound all paid checks.</p><h2>What we test</h2><p>Missed requirements, invented fields, source quotations, unsupported conditions, price boundaries, negations, corrections and injection attempts.</p><p class="small">${escapeHTML(q.limitations)}</p><h2>Release checks</h2><p>Every push and pull request runs deterministic checks and ten browser journeys, with screenshots retained. Live canaries report failures; they never silently change models or switch to a mock.</p></section>`;
  }
  catch(e){notice(e.message);}
 }
@@ -607,7 +608,7 @@ $('#new-request').onclick=e=>{
  try{const session=await api('/api/session');invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true,{generation:sessionGeneration,force:true})]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){const loaded=await api('/api/intents/'+saved.id);
- if(loaded.latest_purchase){state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;state.receipt=loaded.latest_purchase;state.stage=5;}else if(loaded.profile_current===false){reopenLiveIntake(loaded);}else{state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;if(loaded.approved){state.offers=loaded.offer_views;for(const d of loaded.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;}
+ if(loaded.latest_purchase){state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;state.receipt=loaded.latest_purchase;state.stage=5;}else if(loaded.profile_current===false||loaded.clarification_current===false){reopenLiveIntake(loaded);}else{state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;if(loaded.approved){state.offers=loaded.offer_views;for(const d of loaded.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;}
  }else{const domain=new URLSearchParams(location.search).get('domain');if(state.profiles[domain]){state.domain=domain;state.stage=1;}}if(params.get('view')==='quality')state.stage=6;if(params.get('view')==='walkthrough')state.stage=7;if(matchMedia('(max-width:850px)').matches)$('#intent-panel details').open=false;render();}
  catch(e){$('#workspace').innerHTML='<p class="loading">The workspace could not open.</p>';notice(errorMessage(e));}
 })();

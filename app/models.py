@@ -67,12 +67,29 @@ class DisputeRequest(StrictModel):
     purchase_id: str
     reason: str = Field(min_length=3,max_length=1000)
 
+class AirportSelection(StrictModel):
+    """Customer-selected identities, bound to the current server question."""
+    question_id: str = Field(min_length=1, max_length=160)
+    field: Literal['origin_airports', 'destination_airports']
+    values: list[str] = Field(min_length=1, max_length=10)
+
+    @field_validator('values')
+    @classmethod
+    def exact_unique_codes(cls, values):
+        if any(len(code) != 3 or not code.isascii() or not code.isalpha() or code != code.upper() for code in values):
+            raise ValueError('select valid uppercase IATA codes')
+        if len(values) != len(set(values)):
+            raise ValueError('airport choices must be unique')
+        return values
+
+
 class ClarifyRequest(StrictModel):
     revision: int
     # A one-character answer is valid for typed follow-ups (for example,
     # ``1`` room or ``2`` adults).  Whitespace-only replies are rejected
     # separately so lowering this bound cannot create empty turns.
     message: str = Field(min_length=1,max_length=1500)
+    structured_answer: AirportSelection | None = None
 
     @field_validator('message')
     @classmethod

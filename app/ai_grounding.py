@@ -14,6 +14,8 @@ import re
 
 from app.airport_reference import (
     airport_record,
+    airport_field_scope,
+    airport_context_for_field,
     airport_records,
     codes_for_place,
     quote_supports_airport,
@@ -368,6 +370,22 @@ def _airport_phrase_negated(text: str, start: int, end: int) -> bool:
     ))
 
 
+def _airport_field_source_scope(key: str | None, quote: str) -> str:
+    """Narrow a route quotation to the airport field it actually names.
+
+    A provider often quotes the entire customer sentence for both airport
+    fields.  Validating each value against that complete sentence makes a
+    Toronto airport appear valid for the London origin (and vice versa).
+    Keep the original quote for evidence, but use the directional clause as
+    the identity proof.  If the sentence is not recognizably a route, retain
+    the old whole-quote behavior so explicit single-field answers continue to
+    work.
+    """
+    if key not in {"origin_airports", "destination_airports"} or not isinstance(quote, str):
+        return quote
+    return airport_field_scope(quote, key)
+
+
 def _positive_place_alternatives(
     place: str,
     candidates: list[str],
@@ -398,6 +416,50 @@ def _positive_place_alternatives(
     return mentioned
 
 
+def _airport_choice_candidates(key: str, scoped_quote: str) -> set[str]:
+    """Return the server's complete candidate set for a scoped place quote.
+
+    The model may echo one airport code after seeing only a city name.  That
+    is not a customer selection: a multi-airport city remains ambiguous until
+    the customer explicitly names a code/airport or the server's reviewed
+    choice set is carried through in full.  This helper reuses the same local
+    context catalogue that renders those choices, keeping grounding and UI
+    candidate identity aligned.
+    """
+    if not isinstance(scoped_quote, str) or not scoped_quote.strip():
+        return set()
+    return {
+        item["code"]
+        for item in airport_context_for_field(scoped_quote, key)
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+
+
+def _explicit_airport_code_in_quote(code: str, scoped_quote: str) -> bool:
+    """Whether the customer quote itself names this IATA code."""
+    if not isinstance(code, str) or not isinstance(scoped_quote, str):
+        return False
+    return bool(re.search(
+        rf"(?<![A-Za-z0-9]){re.escape(code.upper())}(?![A-Za-z0-9])",
+        scoped_quote,
+    ))
+
+
+def _unique_airport_name_in_quote(code: str, scoped_quote: str) -> bool:
+    """Whether a distinctive airport-name token identifies this code."""
+    if not isinstance(code, str) or not isinstance(scoped_quote, str):
+        return False
+    # ``Heathrow`` and ``Pearson`` are unique catalogue name tokens, while
+    # ``London`` and ``Toronto`` intentionally resolve to multiple airports.
+    for token in re.findall(r"[A-Za-zÀ-ÿ]+", scoped_quote):
+        if len(token) < 4:
+            continue
+        matches = codes_for_place(token)
+        if len(matches) == 1 and matches[0] == code.upper():
+            return True
+    return False
+
+
 def _normalise_airports(
     value,
     key: str,
@@ -414,6 +476,12 @@ def _normalise_airports(
         _field_source_scope(key, quote, message, source_messages)
         if message is not None else None
     )
+    scoped_quote = _airport_field_source_scope(key, quote)
+    # A few legacy profile aliases are reviewed product identities (for
+    # example ``Newark`` -> EWR and ``Tampa`` -> TPA).  Keep that compatibility
+    # path while treating all other multi-airport city quotes as ambiguous.
+    normalized_scoped_quote = scoped_quote.strip().casefold().rstrip(".,")
+    explicit_identity = normalized_scoped_quote in _AIRPORT_ALIASES
     for raw in value:
         token = raw.strip()
         lower = token.casefold()
@@ -426,14 +494,19 @@ def _normalise_airports(
             unresolved.append(token)
         elif _IATA.fullmatch(token.upper()):
             code = token.upper()
-            if not _airport_source_supports(code, quote, scoped_message):
+            if not _airport_source_supports(code, scoped_quote, scoped_message):
                 raise GroundingFailure(f"{key} value is not supported by its source quotation")
             airports.append(code)
         elif lower in _AIRPORT_ALIASES:
             legacy_codes = list(_AIRPORT_ALIASES[lower])
-            if not all(_airport_source_supports(code, quote, scoped_message) for code in legacy_codes):
+            if not all(_airport_source_supports(code, scoped_quote, scoped_message) for code in legacy_codes):
                 raise GroundingFailure(f"{key} value is not supported by its source quotation")
             airports.extend(legacy_codes)
+            # These reviewed legacy aliases are explicit product identities
+            # (for example ``Newark`` -> EWR), retained for compatibility with
+            # existing profile answers.  They are not model-selected codes
+            # inferred from an ambiguous metro quote.
+            explicit_identity = True
         else:
             matched_codes = codes_for_place(token)
             if not matched_codes:
@@ -444,7 +517,7 @@ def _normalise_airports(
                 continue
             if len(matched_codes) > 1:
                 alternatives = _positive_place_alternatives(
-                    token, matched_codes, quote, scoped_message
+                    token, matched_codes, scoped_quote, scoped_message
                 )
                 if alternatives:
                     airports.extend(alternatives)
@@ -453,9 +526,28 @@ def _normalise_airports(
                     unresolved.append(token)
                 continue
             code = matched_codes[0]
-            if not _airport_source_supports(code, quote, scoped_message):
+            if not _airport_source_supports(code, scoped_quote, scoped_message):
                 raise GroundingFailure(f"{key} value is not supported by its source quotation")
             airports.append(code)
+    # A city quote is evidence for a *set* of possible airports, not a silent
+    # selection of whichever code the model happened to emit.  Preserve the
+    # draft as an ambiguity so the existing clarification UI can ask the
+    # customer.  A complete server-provided choice set remains valid, as does
+    # an explicit IATA code or a uniquely named airport.
+    choice_candidates = _airport_choice_candidates(key, scoped_quote)
+    if not ambiguous and len(choice_candidates) > 1 and airports and not explicit_identity:
+        every_identity_explicit = all(
+            _explicit_airport_code_in_quote(code, scoped_quote)
+            or _unique_airport_name_in_quote(code, scoped_quote)
+            for code in airports
+        )
+        full_scope_instruction = bool(
+            set(airports) == choice_candidates
+            and re.search(r"\b(?:any|all|either|both)\b", scoped_quote, re.I)
+        )
+        if not every_identity_explicit and not full_scope_instruction:
+            ambiguous = True
+            unresolved.append(scoped_quote.strip() or "the requested area")
     # A broad geography is a clarification need, never a fake airport value.
     if ambiguous:
         return [], True, unresolved
@@ -1029,8 +1121,9 @@ def _airport_quote_supports(
         _field_source_scope(key, quote, message, source_messages)
         if key and message is not None and source_messages is not None else message
     )
+    scoped_quote = _airport_field_source_scope(key, quote)
     for airport in value:
-        if not _airport_source_supports(airport, quote, scoped_message):
+        if not _airport_source_supports(airport, scoped_quote, scoped_message):
             return False
     return True
 
@@ -2340,6 +2433,13 @@ def _explicit_airport_choices(quote):
     # airport must be chosen. Every value still needs this exact source quote.
     if not re.search(r'\b(?:or|both|either|any)\b', quote, re.I):
         return None
+    # Do not let one explicit code turn a mixed ``LCY or London`` answer into
+    # a silently narrowed choice.  A broad city token still needs the full
+    # adaptive airport question; explicit code alternatives such as
+    # ``EWR or JFK`` contain no competing multi-airport place token.
+    for token in re.findall(r"[A-Za-zÀ-ÿ]+", quote):
+        if len(token) >= 4 and len(codes_for_place(token)) > 1:
+            return None
     found = []
     for alias, codes in _AIRPORT_ALIASES.items():
         if re.search(r'\b' + re.escape(alias) + r'\b', quote, re.I):

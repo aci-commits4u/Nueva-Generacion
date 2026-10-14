@@ -1,5 +1,10 @@
 """Profile-driven clarification without AI consent or guessed preferences."""
 from app.profile_registry import get_profile,digest
+from app.airport_reference import (
+    airport_context_for_field,
+    airport_field_scope,
+    airport_record,
+)
 from copy import deepcopy
 import json
 import re
@@ -70,6 +75,154 @@ def is_trusted_adaptive_question(question, domain=None):
         return False
     expected_contract = digest(_adaptive_question_contract(domain, question))
     return question.get('contract_digest') == expected_contract
+
+
+def _question_contract_signature(question):
+    """Return the persisted parts that must agree across legacy views."""
+    if not isinstance(question, dict):
+        return None
+    options = []
+    for option in question.get('options') or []:
+        if isinstance(option, str):
+            options.append((option, option))
+        elif isinstance(option, dict):
+            value = option.get('value') or option.get('answer') or option.get('label')
+            label = option.get('label') or value
+            options.append((str(label), str(value)))
+    return (
+        question.get('question_id') or question.get('id'),
+        question.get('field'),
+        question.get('criterion_key'),
+        question.get('question') or question.get('text'),
+        question.get('answer_kind') or question.get('response_type'),
+        tuple(options),
+        question.get('contract_digest'),
+    )
+
+
+def _unambiguous_airport_catalog(records):
+    """Return codes when the scoped catalog has one clear role group."""
+    if not records:
+        return set()
+    groups = {}
+    for record in records:
+        country = str(record.get('country') or '').upper()
+        groups.setdefault(country, set()).add(record.get('code'))
+    groups = {country: codes for country, codes in groups.items() if country and codes}
+    if len(groups) == 1:
+        return next(iter(groups.values()))
+    ranked = sorted((len(codes), country) for country, codes in groups.items())
+    if not ranked or (len(ranked) > 1 and ranked[-1][0] <= ranked[-2][0]):
+        return set()
+    return groups[ranked[-1][1]]
+
+
+def _question_airport_options_are_current(question, draft):
+    """Reject stored route options that contain the other endpoint's codes.
+
+    This check only runs when the customer's route gives each endpoint a clear
+    catalog group.  Explicit customer airport codes in the matching field
+    clause remain valid even when they are outside the city suggestions; the
+    contract checker must not turn a legitimate manual search into a refresh
+    loop.
+    """
+    field = question.get('field') if isinstance(question, dict) else None
+    if field not in {'origin_airports', 'destination_airports'}:
+        return True
+    # A mixed route question has one server binding but asks for two route
+    # ends. Reject it even if the provider happened to return a clean-looking
+    # option list; otherwise a stale question can still serialize both choices
+    # into one field.
+    try:
+        from app.adaptive_intent import airport_question_validation_feedback
+        if airport_question_validation_feedback(question, 'flight'):
+            return False
+    except ImportError:
+        pass
+    messages = draft.get('messages') or []
+    source = user_text(messages)
+    own_records = airport_context_for_field(source, field, limit=16)
+    own_codes = _unambiguous_airport_catalog(own_records)
+    if not own_codes:
+        return True
+    opposite = 'destination_airports' if field == 'origin_airports' else 'origin_airports'
+    opposite_codes = _unambiguous_airport_catalog(
+        airport_context_for_field(source, opposite, limit=16),
+    )
+    if not opposite_codes:
+        return True
+    scope = airport_field_scope(source, field)
+    # Include server-bound answers for this field, but never the complete
+    # conversation: the other endpoint's original clause must remain evidence
+    # of the other role and must not whitelist a mixed option.
+    explicit_scope = scope or ''
+    for message in messages:
+        reply = message.get('reply_to') if isinstance(message, dict) else None
+        if isinstance(reply, dict) and reply.get('field') == field:
+            explicit_scope += '\n' + str(message.get('content') or '')
+    for option in question.get('options') or []:
+        value = option if isinstance(option, str) else (
+            option.get('value') or option.get('answer') if isinstance(option, dict) else None
+        )
+        if not isinstance(value, str):
+            continue
+        code = value.strip().upper()
+        if code not in opposite_codes or code in own_codes:
+            continue
+        record = airport_record(code)
+        if record is not None and re.search(rf'(?<![A-Z0-9]){re.escape(code)}(?![A-Z0-9])', explicit_scope):
+            continue
+        return False
+    return True
+
+
+def question_contract_current(draft):
+    """Return whether a stored adaptive question is safe to use as-is.
+
+    This is a pure read-only compatibility check.  It catches the historical
+    split where the API used ``questions[0]`` while the UI rendered a different
+    ``adaptive_plan.question``.  Offline and non-adaptive legacy drafts keep
+    their deterministic question contract and therefore remain current.
+    """
+    if not isinstance(draft, dict):
+        return True
+    pipeline = draft.get('pipeline')
+    # Older live deterministic drafts never stored a pipeline or adaptive
+    # plan. They use the legacy profile question contract and are current.
+    if draft.get('mode') != 'live' or (pipeline is None and not isinstance(draft.get('adaptive_plan'), dict)):
+        return True
+    if pipeline not in {None, 'adaptive'}:
+        return True
+    plan = draft.get('adaptive_plan')
+    if not isinstance(plan, dict):
+        return False
+    plan_question = plan.get('question')
+    if plan_question is not None:
+        if not isinstance(plan_question, dict):
+            return False
+        if not is_trusted_adaptive_question(plan_question, domain=draft.get('domain')):
+            return False
+        if not _question_airport_options_are_current(plan_question, draft):
+            return False
+    legacy_questions = draft.get('questions')
+    if legacy_questions is None:
+        legacy_question = None
+    elif isinstance(legacy_questions, list) and len(legacy_questions) <= 1:
+        legacy_question = legacy_questions[0] if legacy_questions else None
+    else:
+        return False
+    if plan_question is None:
+        # A non-empty legacy question beside an empty adaptive plan is exactly
+        # the stale split this helper is meant to flag. No question is correct
+        # only when the planner explicitly says it is not asking one.
+        return legacy_question is None and plan.get('action') != 'ask_user'
+    if isinstance(legacy_questions, list) and not legacy_questions:
+        # The adaptive plan contains a question, but the API's authoritative
+        # question list is empty. Rendering would diverge from POST binding.
+        return False
+    if legacy_question is not None and _question_contract_signature(plan_question) != _question_contract_signature(legacy_question):
+        return False
+    return True
 
 
 def user_text(messages):
@@ -355,8 +508,60 @@ def _adaptive_options(raw):
     return options
 
 
+def _airport_option_rows(source_text, field, current_values=None):
+    """Build airport choices from the server catalogue for one route end.
+
+    Planner supplied airport options are deliberately ignored.  They are
+    presentation metadata and can contain a destination mixed into an origin
+    question (the failure that originally caused the repeat-question loop).
+    The catalog helper scopes the request lexically and keeps ambiguity visible;
+    a current typed set is the only fallback when there is no scoped evidence.
+    """
+    if field not in {'origin_airports', 'destination_airports'}:
+        return []
+    records = airport_context_for_field(source_text or '', field, limit=16)
+    if not records and isinstance(current_values, list):
+        records = [airport_record(value) for value in current_values]
+        records = [record for record in records if record is not None]
+    rows = []
+    for record in records[:16]:
+        code = record.get('code')
+        if not isinstance(code, str) or not code:
+            continue
+        name = record.get('name') or record.get('city') or code
+        city = record.get('city') or ''
+        country = record.get('country') or ''
+        detail = ' · '.join(value for value in (city, country) if value)
+        row = {
+            'label': f'{name} · {code}',
+            'value': code,
+            'answer': code,
+        }
+        if detail:
+            row['detail'] = detail
+        rows.append(row)
+    return rows
+
+
+def _enrich_airport_question_options(question, *, source_text='', fields=None):
+    """Replace model airport options with a bound, route-scoped catalog list."""
+    if not isinstance(question, dict):
+        return question
+    field = question.get('field')
+    if field not in {'origin_airports', 'destination_airports'}:
+        return question
+    current_values = (fields or {}).get(field) if isinstance(fields, dict) else None
+    question['options'] = _airport_option_rows(source_text, field, current_values)
+    # Airport selections are always a set.  Keeping this explicit makes the
+    # client contract independent of how the model worded its question.
+    question['answer_kind'] = 'multi'
+    question['response_type'] = 'multi'
+    question['allow_multiple'] = True
+    return question
+
+
 def _adaptive_question(domain, raw, criteria, *, allow_offer_context=False,
-                       fields=None):
+                       fields=None, source_text=''):
     """Create a server-owned question contract from planner metadata.
 
     Boolean questions need an explicit requirement semantic.  A question like
@@ -431,7 +636,7 @@ def _adaptive_question(domain, raw, criteria, *, allow_offer_context=False,
         'options': options,
     }
     question_id = 'q_' + digest(contract)[:16]
-    return {
+    question = {
         'id': question_id,
         'question_id': question_id,
         'domain': domain,
@@ -450,6 +655,16 @@ def _adaptive_question(domain, raw, criteria, *, allow_offer_context=False,
         'binding': _ADAPTIVE_BINDING,
         'contract_digest': digest(contract),
     }
+    # Recompute the contract after replacing model-provided airport options.
+    # The signed question binding must cover the exact choices the server
+    # exposes to the browser.
+    if field in {'origin_airports', 'destination_airports'}:
+        _enrich_airport_question_options(question, source_text=source_text, fields=fields)
+        contract = _adaptive_question_contract(domain, question)
+        question['contract_digest'] = digest(contract)
+        question['id'] = adaptive_question_id(domain, question)
+        question['question_id'] = question['id']
+    return question
 
 
 def _adaptive_question_answered(question, draft, criteria=None):
@@ -457,6 +672,26 @@ def _adaptive_question_answered(question, draft, criteria=None):
     qid = question.get('question_id')
     key = question.get('criterion_key')
     messages = draft.get('messages', []) or []
+    field = question.get('field')
+    fields = draft.get('fields') if isinstance(draft.get('fields'), dict) else {}
+    clarifications = draft.get('clarifications') or []
+    pending_fields = {
+        item.get('field') for item in clarifications if isinstance(item, dict)
+    }
+    # Airport answers are choice sets.  Once the server has a non-empty,
+    # source-backed set for the exact airport field, a reviewer may still
+    # describe that criterion as ``needs_clarification`` or emit a narrower
+    # rewording.  That metadata cannot override the durable customer choice:
+    # accepting LCY or LHR does not mean the customer must choose one.  A real
+    # correction is represented by a pending typed clarification, which keeps
+    # the question open and lets the newer source-bound answer win.
+    if (
+        field in {'origin_airports', 'destination_airports'}
+        and isinstance(fields.get(field), list)
+        and bool(fields.get(field))
+        and field not in pending_fields
+    ):
+        return True
     answered_index = None
     answered_keys = []
     for index, message in enumerate(messages):
@@ -499,10 +734,6 @@ def _adaptive_question_answered(question, draft, criteria=None):
         )
         if not reopened:
             return True
-    field = question.get('field')
-    fields = draft.get('fields') if isinstance(draft.get('fields'), dict) else {}
-    clarifications = draft.get('clarifications') or []
-    pending_fields = {item.get('field') for item in clarifications if isinstance(item, dict)}
     if (field and field in fields and fields.get(field) is not None
             and field not in pending_fields):
         return True
@@ -771,6 +1002,7 @@ def apply_adaptive_plan(draft, extraction):
         result.get('domain'), raw_question, criteria,
         allow_offer_context=isinstance(observations, list) and bool(observations),
         fields=result.get('fields'),
+        source_text=user_text(result.get('messages', [])),
     ) if adaptive else None)
     action = raw_plan.get('action') if raw_plan.get('action') in _ADAPTIVE_ACTIONS else 'review_required'
     if adaptive:
@@ -779,6 +1011,11 @@ def apply_adaptive_plan(draft, extraction):
             if action != 'ask_user':
                 action = 'ask_user'
         else:
+            # Once the server has durable evidence for the question, clear it
+            # from the adaptive plan as well as the legacy question list. The
+            # UI and POST controller must never render/bind an answered model
+            # question from two different state paths.
+            question = None
             result['questions'] = []
             if action == 'ask_user':
                 action = 'review_required' if not _adaptive_ready(result.get('domain'), result, criteria) else 'ready_for_review'
@@ -894,6 +1131,88 @@ def _quote_in_latest_turn(quote,latest_turn):
     return quote.translate(_TEXT_EQUIVALENTS).casefold() in latest_turn.translate(_TEXT_EQUIVALENTS).casefold()
 
 
+def _latest_bound_airport_choice(domain, field, messages):
+    """Read the complete airport set from a server-issued widget answer.
+
+    The browser serializes a checked airport set as one exact sentence.  That
+    sentence is bound to the question stored by the server, so it is stronger
+    state than a model source substring such as ``Depart from LCY``.  Keeping
+    the parser narrow means ordinary free text still goes through the normal
+    source-grounding path and can express a later correction in its own words.
+    """
+    if domain != 'flight' or field not in {'origin_airports', 'destination_airports'}:
+        return None
+    prefix = 'Depart from' if field == 'origin_airports' else 'Arrive at'
+    pattern = re.compile(
+        r'(?i)^' + re.escape(prefix)
+        + r'\s+([A-Z]{3}(?:\s+or\s+[A-Z]{3}){0,19})[.!]?$',
+    )
+    for message in reversed(messages or []):
+        if not isinstance(message, dict) or message.get('role') not in {'user', 'customer'}:
+            continue
+        reply = message.get('reply_to')
+        if not isinstance(reply, dict) or reply.get('field') != field:
+            continue
+        content = message.get('content')
+        match = pattern.fullmatch(content.strip()) if isinstance(content, str) else None
+        if not match:
+            continue
+        codes = [code.upper() for code in re.split(r'\s+or\s+', match.group(1), flags=re.I)]
+        if not codes or len(set(codes)) != len(codes):
+            continue
+        if any(code in {'USA', 'NYC', 'CHI'} or airport_record(code) is None for code in codes):
+            continue
+        return {'values': codes, 'source': content}
+    return None
+
+
+def canonical_airport_answer(field, values):
+    """Return the exact message serialized by the airport multi-select."""
+    prefix = 'Depart from' if field == 'origin_airports' else 'Arrive at'
+    return f"{prefix} {' or '.join(values)}."
+
+
+def validate_structured_airport_answer(question, answer, message, *, domain='flight'):
+    """Validate a typed airport answer against the stored question contract.
+
+    The browser may submit a convenience ``structured_answer`` alongside its
+    canonical provenance message, but it cannot choose the question binding or
+    invent airport identities.  This function is intentionally pure so the
+    HTTP layer can run it before acquiring an AI reservation.
+    """
+    if domain != 'flight' or not isinstance(question, dict) or not isinstance(answer, dict):
+        raise ValueError('Structured airport answers are only available for flight questions.')
+    field = answer.get('field')
+    if field not in {'origin_airports', 'destination_airports'}:
+        raise ValueError('The structured airport field is invalid.')
+    question_id = answer.get('question_id')
+    stored_id = question.get('question_id') or question.get('id')
+    if not isinstance(question_id, str) or question_id != stored_id:
+        raise ValueError('That airport question is stale. Reload the latest clarification.')
+    if question.get('field') != field:
+        raise ValueError('The airport answer targets a different route field.')
+    values = answer.get('values')
+    if not isinstance(values, list) or not 1 <= len(values) <= 10:
+        raise ValueError('Choose between one and ten airports.')
+    normalized = []
+    for value in values:
+        if not isinstance(value, str) or not re.fullmatch(r'[A-Z]{3}', value):
+            raise ValueError('Airport choices must be IATA codes.')
+        code = value.upper()
+        if code in normalized or airport_record(code) is None:
+            raise ValueError('Each airport choice must be a unique catalog airport.')
+        normalized.append(code)
+    expected = canonical_airport_answer(field, normalized)
+    if message != expected:
+        raise ValueError('The airport answer message does not match its structured choices.')
+    return {
+        'question_id': question_id,
+        'field': field,
+        'values': normalized,
+        'source_quote': expected,
+    }
+
+
 _CLARIFICATION_FIELD_HINTS={
     'max_total_cents':('budget','price','cost','total','under','up to','maximum','$','usd','dollar','flexible'),
     'origin_airports':('airport','depart','departure','from','newark','jfk','laguardia','lga','ewr'),
@@ -946,7 +1265,7 @@ def _clarification_field_supported(domain,field,item,latest_turn,messages):
     return any(token in lowered for token in _CLARIFICATION_FIELD_HINTS.get(field,()))
 
 
-def merge_revision_state(domain,current,proposed,latest_turn,messages):
+def merge_revision_state(domain,current,proposed,latest_turn,messages,structured_answer=None):
     """Reconcile a model proposal into the previous unapproved draft.
 
     The provider may omit a previously captured field while re-reading the
@@ -967,15 +1286,53 @@ def merge_revision_state(domain,current,proposed,latest_turn,messages):
     fields=deepcopy(previous_fields)
     sources=deepcopy(previous_sources)
     changes=[]
+    bound_airport_choices = {}
+    if isinstance(structured_answer, dict):
+        field = structured_answer.get('field')
+        values = structured_answer.get('values')
+        source = structured_answer.get('source_quote') or latest_turn
+        if (domain == 'flight'
+                and field in {'origin_airports', 'destination_airports'}
+                and isinstance(values, list) and values
+                and all(isinstance(value, str) and airport_record(value) for value in values)):
+            bound_airport_choices[field] = {
+                'values': [value.upper() for value in values],
+                'source': source,
+                'question_id': structured_answer.get('question_id'),
+            }
+    for field in ('origin_airports', 'destination_airports'):
+        if field in bound_airport_choices:
+            continue
+        choice = _latest_bound_airport_choice(domain, field, messages)
+        if choice:
+            bound_airport_choices[field] = choice
+            old_value = fields.get(field)
+            if old_value != choice['values']:
+                changes.append({
+                    'field': field,
+                    'kind': 'corrected' if field in fields else 'captured',
+                    'old_value': deepcopy(old_value),
+                    'new_value': deepcopy(choice['values']),
+                    'old_source_quote': sources.get(field),
+                    'new_source_quote': choice['source'],
+                })
+            fields[field] = deepcopy(choice['values'])
+            sources[field] = choice['source']
     all_declines=declined_preferences(domain,messages)
     latest_declines=declined_preferences(domain,[messages[-1]] if messages else [])
     latest_reopens={}
     for item in proposed_clarifications or []:
         field=item.get('field') if isinstance(item,dict) else None
         if (field in fields and field not in latest_declines
+                and field not in bound_airport_choices
                 and _clarification_field_supported(domain,field,item,latest_turn,messages)):
             latest_reopens[field]=deepcopy(item)
     for key,value in proposed_fields.items():
+        # The exact server-bound widget answer is the complete customer choice
+        # set.  A model's narrower quote is only a substring of that answer and
+        # cannot replace it during the same revision.
+        if key in bound_airport_choices:
+            continue
         quote=proposed_sources.get(key)
         if key not in fields:
             # A full-history provider response can recover a criterion that
@@ -1028,6 +1385,12 @@ def merge_revision_state(domain,current,proposed,latest_turn,messages):
             clarifications[item.get('field')]=deepcopy(item)
     for key in latest_declines:
         clarifications.pop(key,None)
+    # A typed multi-choice answer is authoritative for this unapproved draft
+    # revision. Reapply it after model reconciliation so a reviewer that emits
+    # a narrower airport value or stale clarification cannot erase the set.
+    for field, choice in bound_airport_choices.items():
+        fields[field] = deepcopy(choice['values'])
+        sources[field] = choice['source']
     return {
         'fields':fields,
         'sources':sources,

@@ -1,5 +1,19 @@
 async page => {
  const origin=new URL(page.url()).origin;
+ const airportSearchQueries=[];
+ page.on('request',request=>{
+  if(new URL(request.url()).pathname==='/api/airports')airportSearchQueries.push(new URL(request.url()).searchParams.get('q')||'');
+ });
+ const chooseCatalogAirport=async(question,query,code)=>{
+  const search=question.locator('[data-airport-search]');
+  await search.fill(query);
+  const result=question.locator(`[data-airport-search-choice="${code}"]`);
+  await result.waitFor();
+  const label=await result.innerText();
+  if(!label.includes(code))throw new Error(`Airport catalog result for ${query} did not identify ${code}`);
+  await result.click();
+  if(await result.getAttribute('aria-pressed')!=='true')throw new Error(`Catalog airport ${code} was not selected`);
+ };
  await page.setViewportSize({width:1280,height:900});await page.goto(origin+'/?domain=flight');
  await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();await page.getByRole('button',{name:'New request'}).click();await page.getByRole('heading',{name:'What should your agent know?'}).waitFor();
  await page.getByText('Interpretation settings',{exact:true}).click();await page.getByLabel('AI availability').selectOption('offline');
@@ -12,13 +26,13 @@ async page => {
  await page.getByRole('heading',{name:'Let’s get your intent right.'}).waitFor();
  const originQuestion=page.locator('[data-question="origin_airports"]');
  await originQuestion.waitFor();
- await originQuestion.getByRole('button',{name:'Newark · EWR'}).click();
- await originQuestion.getByRole('button',{name:'New York · JFK'}).click();
+ await chooseCatalogAirport(originQuestion,'Newark','EWR');
+ await chooseCatalogAirport(originQuestion,'JFK','JFK');
  if(!(await originQuestion.getByRole('button',{name:/Use 2 airports/}).isEnabled()))throw new Error('Selected airport set did not enable explicit submit');
  await originQuestion.getByRole('button',{name:/Use 2 airports/}).click();
  const destinationQuestion=page.locator('[data-question="destination_airports"]');await destinationQuestion.waitFor();
- await destinationQuestion.getByRole('button',{name:'Orlando · MCO'}).click();
- await destinationQuestion.getByRole('button',{name:'Miami · MIA'}).click();
+ await chooseCatalogAirport(destinationQuestion,'Orlando','MCO');
+ await chooseCatalogAirport(destinationQuestion,'Miami','MIA');
  if(!(await destinationQuestion.getByRole('button',{name:/Use 2 airports/}).isEnabled()))throw new Error('Multiple destination choices were not retained');
  await destinationQuestion.getByRole('button',{name:/Use 2 airports/}).click();
  const dateQuestion=page.locator('[data-question="departure_date"]');await dateQuestion.waitFor();
@@ -30,6 +44,7 @@ async page => {
   const summary=document.querySelector('#intent-content')?.textContent||'';
   return ['EWR','JFK','MCO','MIA','Nov 12'].every(value=>summary.includes(value));
  });
+ if(!['Newark','JFK','Orlando','Miami'].every(query=>airportSearchQueries.includes(query)))throw new Error(`Airport choices did not use the real catalog search: ${JSON.stringify(airportSearchQueries)}`);
  const liveSummary=await page.locator('#intent-content').innerText();
  if(!liveSummary.includes('JFK')||!liveSummary.includes('MCO')||!liveSummary.includes('MIA')||!liveSummary.includes('Nov 12'))throw new Error('Live summary lost airport alternatives or date range');
 

@@ -194,6 +194,48 @@ def _last_question_sentence(assistant_message: Any) -> str:
     return matches[-1].strip() if matches else ""
 
 
+def _airport_question_scope_is_mixed(field: Any, text: str) -> bool:
+    """Reject a one-field question that also asks for the other route end.
+
+    Airport widget replies are serialized against the server-owned ``field``.
+    A model question that says “which London airport ... and which Toronto
+    airport” still has only one binding, so the UI would serialize every
+    selected code into (for example) ``origin_airports``.  Fail closed at the
+    planner boundary rather than allowing a geographically mixed choice set to
+    become a typed requirement.  The next review pass can emit a field-scoped
+    question; the customer can always edit the route in structured review.
+    """
+    if field not in {"origin_airports", "destination_airports"}:
+        return False
+    normalized = text.casefold()
+    origin_terms = r"\b(?:depart(?:ure)?|origin|leave)\w*\b"
+    destination_terms = r"\b(?:arriv(?:e|al)?|destination)\w*\b"
+    has_origin = bool(re.search(origin_terms, normalized))
+    has_destination = bool(re.search(destination_terms, normalized))
+    return has_origin and has_destination
+
+
+def airport_question_validation_feedback(raw_question: Any, domain: str) -> str | None:
+    """Describe a malformed route question for the bounded review pass.
+
+    This is feedback for the independent second model call.  It intentionally
+    does not synthesize a replacement question; the reviewer must repair the
+    candidate or leave the plan in ``review_required``.
+    """
+    if not isinstance(raw_question, dict) or domain != 'flight':
+        return None
+    field = raw_question.get('field') or raw_question.get('criterion_key')
+    text = _bounded_text(raw_question.get('text') or raw_question.get('question'), 500)
+    if _airport_question_scope_is_mixed(field, text):
+        return (
+            'The candidate airport question combines departure and arrival route ends. '
+            'Repair it to target exactly one field (origin_airports or '
+            'destination_airports), with catalog options only for that field; '
+            'preserve multi-airport answers instead of forcing one airport.'
+        )
+    return None
+
+
 def _normalize_question(raw: Any, *, domain: str, criteria: list[dict[str, Any]],
                         assistant_message: Any = None) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
@@ -269,6 +311,8 @@ def _normalize_question(raw: Any, *, domain: str, criteria: list[dict[str, Any]]
     if isinstance(question_field, str) and question_field not in profile_fields:
         return None
     if is_profile_gap and question_field != key:
+        return None
+    if domain == "flight" and _airport_question_scope_is_mixed(question_field, text):
         return None
     return {
         "id": question_id,
@@ -385,8 +429,21 @@ def normalize_plan(raw: Any, *, domain: str, source_text: str,
     plan_invalid = action not in PLAN_ACTIONS
     if plan_invalid:
         action = "review_required"
+    raw_question = raw.get("question") if isinstance(raw, dict) else None
+    raw_question_text = (
+        _bounded_text(raw_question.get("text") or raw_question.get("question"), 500)
+        if isinstance(raw_question, dict) else ""
+    )
+    question_scope_error = (
+        domain == "flight"
+        and isinstance(raw_question, dict)
+        and _airport_question_scope_is_mixed(
+            raw_question.get("field") or raw_question.get("criterion_key"),
+            raw_question_text,
+        )
+    )
     question = _normalize_question(
-        raw.get("question") if isinstance(raw, dict) else None,
+        raw_question,
         domain=domain,
         criteria=criteria,
         assistant_message=raw.get("assistant_message") if isinstance(raw, dict) else None,
@@ -414,7 +471,13 @@ def normalize_plan(raw: Any, *, domain: str, source_text: str,
         1000,
     )
     if plan_invalid:
-        message = "I could not safely determine the next step from the interpreted request. Review the captured requirements before continuing."
+        if question_scope_error:
+            message = (
+                "The generated route question combined departure and arrival airports. "
+                "I kept those fields separate; review the captured route before continuing."
+            )
+        else:
+            message = "I could not safely determine the next step from the interpreted request. Review the captured requirements before continuing."
     if not message:
         if action == "ask_user":
             message = question["question"] if question else "I need one more detail before I can review this request."

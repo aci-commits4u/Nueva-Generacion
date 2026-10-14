@@ -26,13 +26,15 @@ from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
 from app.conversation import (context,user_text,questions,provenance,merge_unsupported,
-                               declined_preferences,merge_revision_state,apply_adaptive_plan)
+                               declined_preferences,merge_revision_state,apply_adaptive_plan,
+                               validate_structured_airport_answer,question_contract_current)
 from demo.fixtures import offers_for
 from app.airport_reference import search_airports,airport_reference_metadata
 
 ROOT=Path(__file__).resolve().parent.parent
 app=FastAPI(title='Intent Judge',version='1.0.0')
-MAX_FOLLOWUPS=6
+# One initial interpretation plus eleven replies fits the 24-stage session cap.
+MAX_FOLLOWUPS=11
 
 
 @app.get('/api/airports')
@@ -51,8 +53,12 @@ def live_configuration_ready():
 
 
 def conversation_view(draft):
+    profile_current=draft.get('profile_digest')==get_profile(draft['domain'])['digest']
+    clarification_current=question_contract_current(draft)
     return {**draft,'max_followups':MAX_FOLLOWUPS,
-            'profile_current':draft.get('profile_digest')==get_profile(draft['domain'])['digest'],
+            'profile_current':profile_current,
+            'clarification_current':clarification_current,
+            'refresh_required':not profile_current or not clarification_current,
             'followups_remaining':max(0,MAX_FOLLOWUPS-(len(draft.get('messages',[]))-1))}
 
 
@@ -68,6 +74,8 @@ def require_current_profile(draft):
     """A changed task schema needs a new review, never silent consent migration."""
     if draft.get('profile_digest')!=get_profile(draft['domain'])['digest']:
         raise HTTPException(409,'This task profile was updated. Update this saved conversation, then review the current rules. Your saved evidence remains available.')
+    if not question_contract_current(draft):
+        raise HTTPException(409,'This saved conversation has an outdated clarification contract. Update this saved conversation before editing or approving it. Your saved evidence remains available.')
 
 
 @app.exception_handler(AIServiceError)
@@ -318,8 +326,10 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
     state=get_store().read(sid)
     draft=required(state,'drafts',id)
     current_profile=get_profile(draft['domain'])
-    if draft.get('profile_digest')==current_profile['digest']:
-        raise HTTPException(409,'This saved conversation already uses the current task profile.')
+    profile_current=draft.get('profile_digest')==current_profile['digest']
+    clarification_current=question_contract_current(draft)
+    if profile_current and clarification_current:
+        raise HTTPException(409,'This saved conversation already uses the current task and clarification contracts.')
     if body.revision!=draft['revision']:
         raise HTTPException(409,'This saved conversation changed. Reload it before updating the task profile.')
     receipt=completed_purchase_for_intent(state,id)
@@ -363,8 +373,9 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         current=required(state,'drafts',id)
         if current['revision']!=body.revision:
             raise HTTPException(409,'This saved conversation changed during interpretation. Reload it before updating the task profile.')
-        if current.get('profile_digest')==current_profile['digest']:
-            raise HTTPException(409,'This saved conversation already uses the current task profile.')
+        if (current.get('profile_digest')==current_profile['digest']
+                and question_contract_current(current)):
+            raise HTTPException(409,'This saved conversation already uses the current task and clarification contracts.')
         receipt=completed_purchase_for_intent(state,id)
         if receipt:
             raise HTTPException(409,'A completed purchase keeps its original profile and evidence immutable.')
@@ -389,6 +400,8 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
                 'authority':'unapproved draft; explicit customer review still required',
             })
         old_profile_digest=current['profile_digest']
+        old_clarification_current=question_contract_current(current)
+        had_approval=bool(current.get('approved'))
         revision=current['revision']+1
         current.update(
             fields=merged['fields'],
@@ -409,11 +422,20 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         current.pop('approved',None)
         current.pop('offer_views',None)
         refresh(current)
+        if had_approval:
+            event(state,'authorization_revoked_by_reinterpretation',{
+                'intent_id':id,
+                'revision':revision,
+                'reason':'profile_or_clarification_contract_refresh',
+                'unapproved':True,
+            })
         event(state,'profile_reinterpreted',{
             'intent_id':id,
             'revision':revision,
             'old_profile_digest':old_profile_digest,
             'new_profile_digest':current_profile['digest'],
+            'old_clarification_current':old_clarification_current,
+            'new_clarification_current':question_contract_current(current),
             'unapproved':True,
             'time_zone':body.time_zone,
             'clock_provenance':{
@@ -433,16 +455,35 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
     require_current_profile(d)
     if body.revision!=d['revision']: raise HTTPException(409,'Your request changed. Reload the latest conversation.')
     messages=d.get('messages',[{'role':'user','content':d['message'],'timestamp':d['created_at']}])
-    if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,'Review the captured requirements to continue; this demo allows six AI follow-ups, and every field remains editable in review.')
+    if len(messages)>=MAX_FOLLOWUPS+1: raise HTTPException(409,f'Review the captured requirements to continue; this demo allows {MAX_FOLLOWUPS} AI follow-ups, and every field remains editable in review.')
     pending_questions=d.get('questions',[])
+    if not pending_questions:
+        adaptive_question = (d.get('adaptive_plan') or {}).get('question')
+        if isinstance(adaptive_question, dict):
+            pending_questions = [adaptive_question]
     if not pending_questions and 'adaptive_plan' not in d:
         pending_questions=questions(d['domain'],d['fields'],d.get('clarifications'),messages)
     reply_to=(pending_questions or [None])[0]
+    structured_answer = None
+    submitted_structured = getattr(body, 'structured_answer', None)
+    if submitted_structured is not None:
+        if hasattr(submitted_structured, 'model_dump'):
+            submitted_structured = submitted_structured.model_dump()
+        try:
+            structured_answer = validate_structured_airport_answer(
+                reply_to, submitted_structured, body.message, domain=d['domain'],
+            )
+        except ValueError as exc:
+            # This is deliberately before ``extract``. Invalid widget data
+            # must not consume a paid model reservation or mutate the draft.
+            raise HTTPException(422, str(exc)) from exc
     turn_timestamp=now()
     time_zone=d.get('time_zone','UTC')
     messages=messages+[{'role':'user','content':body.message,'timestamp':turn_timestamp,
                         'reference_date':trusted_reference_date(turn_timestamp,time_zone),
                         'reply_to':reply_to}]
+    if structured_answer is not None:
+        messages[-1]['structured_answer'] = deepcopy(structured_answer)
     text=context(messages)
     if len(user_text(messages))>5000: raise HTTPException(422,'Conversation is too long for this demo.')
     if d['mode']=='offline': extraction=offline_extract(d['domain'],user_text(messages))
@@ -450,8 +491,8 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         from app.foundry_client import extract
         current_draft={
             'revision':d['revision'],
-            'fields':d.get('fields',{}),
-            'sources':d.get('sources',{}),
+            'fields':deepcopy(d.get('fields',{})),
+            'sources':deepcopy(d.get('sources',{})),
             'clarifications':d.get('clarifications',[]),
             'unsupported':d.get('unsupported',[]),
             'latest_customer_turn':{'content':body.message,'timestamp':turn_timestamp},
@@ -462,6 +503,13 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
             'adaptive_plan':d.get('adaptive_plan'),
             'criteria':d.get('criteria',[]),
         }
+        if structured_answer is not None:
+            # The model sees the typed choice as read-only state. It may ask a
+            # different useful question, but it cannot narrow or erase this
+            # customer-owned set during the same revision.
+            current_draft['fields'][structured_answer['field']] = list(structured_answer['values'])
+            current_draft['sources'][structured_answer['field']] = structured_answer['source_quote']
+            current_draft['structured_answer'] = deepcopy(structured_answer)
         try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages,current_draft=current_draft)
         except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
@@ -473,7 +521,10 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
                                       reconcile_supported_conditions)
         merged={**extraction,'unsupported':unsupported}
-        revision_state=merge_revision_state(d['domain'],current,merged,body.message,messages)
+        revision_state=merge_revision_state(
+            d['domain'], current, merged, body.message, messages,
+            structured_answer=structured_answer,
+        )
         merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
         # This helper is the narrow bridge for a known field marker (for
         # example a broad airport or temporal phrase) becoming grounded in the
@@ -488,6 +539,14 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         revision=current['revision']+1
         current.update(fields=merged['fields'],sources=merged['sources'],unsupported=merged['unsupported'],explanation=merged['explanation'],messages=messages,revision=revision,reviewed=False,questions=questions(d['domain'],merged['fields'],merged.get('clarifications'),messages))
         current['clarifications']=merged.get('clarifications',[])
+        if structured_answer is not None:
+            current.setdefault('structured_answers', []).append({
+                **deepcopy(structured_answer),
+                'message': body.message,
+                'question': deepcopy(reply_to),
+                'revision': revision,
+                'authority': 'unapproved draft evidence; customer review still required',
+            })
         for change in revision_state['changes']:
             event(state,'intent_requirement_reconciled',{'intent_id':id,'revision':revision,
                   **change,'authority':'unapproved draft; customer review still required'})

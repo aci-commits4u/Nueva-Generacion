@@ -102,3 +102,31 @@ at-least-$70 student-credit target is preserved; actual Azure billing balance
 is unknown. New stages remain bounded at $0.02 each, 2,600 tokens, and two
 stages per interpretation. No additional deployment or live success is
 implied by the allowance.
+
+## October 14 route-choice repair
+
+The London-to-Toronto user report exposed a release gap: a combined airport
+question used one field binding for both cities, and model review could narrow
+or reopen an already selected airport set. Live questions remain model generated,
+but reference choices are now catalog-derived separately for departure and
+arrival. An airport widget submits the exact question ID, role, complete code
+set, and matching customer sentence. The server validates that binding before
+paid interpretation and preserves it as unapproved evidence throughout review.
+The AI can choose the next useful question; it cannot reduce a customer-owned
+multi-airport set or supply customer consent.
+
+The conversation displays one active question and labels later messages as
+clarifications, selections, or updates. Airport search uses the global pinned
+catalog in both live and explicit offline mode. It is identity context, not real
+flight availability. Saved inconsistent question contracts require an explicit
+refresh; historical choices and completed receipts remain recorded.
+
+Production configuration now enables the previously authorized full $10
+emergency reservation above the original $20 ordinary allowance. The $30 total
+cap, unchanged 500-stage lifetime ceiling, $0.02 reservation per stage, and
+historical counters remain intact. The daily interactive ceiling is 200 stages
+and each session is bounded to 24 stages. This restores demonstration capacity
+without deleting testing history; these are application reservations, not Azure
+charges or a claim about remaining student credit. Failures still stay visible
+and never silently switch to offline interpretation. The incident, actual tests,
+and release evidence are recorded in `docs/21-route-choice-reliability.md`.

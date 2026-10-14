@@ -300,14 +300,14 @@ def test_public_quota_error_keeps_actionable_type_and_no_provider_details(client
     assert client.get('/api/session').json()['intents'] == []
 
 
-def test_clarification_allows_six_turns_with_explicit_remaining_count(client):
+def test_clarification_allows_eleven_turns_with_explicit_remaining_count(client):
     draft = client.post('/api/intents', json={'domain': 'flight', 'message': 'nonstop under $300', 'mode': 'offline'}).json()
-    assert draft['followups_remaining'] == 6
-    for i in range(6):
+    assert draft['followups_remaining'] == 11
+    for i in range(11):
         response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': f'EWR detail {i}'})
         assert response.status_code == 200
         draft = response.json()
-        assert draft['followups_remaining'] == 5 - i
+        assert draft['followups_remaining'] == 10 - i
     response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': 'another detail'})
     assert response.status_code == 409
 
