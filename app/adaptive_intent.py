@@ -30,6 +30,7 @@ PLAN_ACTIONS = {
 ANSWER_KINDS = {"single", "multi", "date_choice", "text", "number", "boolean"}
 CRITERION_KINDS = {"requirement", "preference", "ambiguity"}
 TOOL_ACTIONS = {"inspect_offers", "retrieve_policy"}
+_SAFE_DIAGNOSTIC_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
 
 
 class AdaptivePlanError(ValueError):
@@ -234,6 +235,230 @@ def airport_question_validation_feedback(raw_question: Any, domain: str) -> str 
             'preserve multi-airport answers instead of forcing one airport.'
         )
     return None
+
+
+def _safe_diagnostic_identifier(value: Any) -> str | None:
+    """Return an identifier safe to include in a persisted diagnostic.
+
+    Planner diagnostics are evidence about a rejected model shape, not a copy
+    of model prose.  Keep only short lower-case identifiers; arbitrary text,
+    HTML, punctuation, and long provider values are omitted entirely.
+    """
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if _SAFE_DIAGNOSTIC_IDENTIFIER.fullmatch(value) else None
+
+
+def planner_question_validation_feedback(
+    raw_question: Any,
+    *,
+    domain: str,
+    source_text: str = "",
+    source_messages: list[dict[str, Any]] | None = None,
+    criteria: list[dict[str, Any]] | None = None,
+    draft: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Return bounded, source-aware diagnostics for a rejected planner question.
+
+    The normalizer deliberately fails closed when a question cannot be bound
+    to a source-backed criterion or required profile field.  This companion
+    validator explains that rejection to the independent reviewer without
+    copying the rejected question, its ``why`` prose, or unsafe identifiers
+    into the reviewer payload or the durable trace.  It never creates a
+    replacement question.
+    """
+    from app.profile_registry import get_profile
+
+    profile_fields = get_profile(domain).get("fields", {})
+    source_criteria: list[str] = []
+    criterion_by_key: dict[str, dict[str, Any]] = {}
+    declined_keys: set[str] = set()
+    for item in (criteria or [])[:40]:
+        if not isinstance(item, dict):
+            continue
+        key = _safe_diagnostic_identifier(item.get("key") or item.get("field"))
+        quote = item.get("source_quote")
+        if not key:
+            continue
+        if item.get("status") == "declined":
+            declined_keys.add(key)
+            criterion_by_key.setdefault(key, item)
+            continue
+        if not _quote_is_customer_source(quote, source_text, source_messages):
+            continue
+        if key not in source_criteria:
+            source_criteria.append(key)
+        criterion_by_key.setdefault(key, item)
+
+    fields = draft.get("fields") if isinstance(draft, dict) else {}
+    fields = fields if isinstance(fields, dict) else {}
+    required_missing = [
+        field for field, spec in profile_fields.items()
+        if isinstance(spec, dict) and spec.get("required") and field not in fields
+    ]
+
+    if not isinstance(raw_question, dict):
+        return {
+            "codes": ["question_missing"],
+            "valid_criterion_keys": source_criteria[:20],
+            "required_missing_fields": required_missing[:20],
+        }
+
+    codes: list[str] = []
+    raw_key = raw_question.get("criterion_key") or raw_question.get("field") or raw_question.get("key")
+    key = _safe_diagnostic_identifier(raw_key)
+    if not key:
+        codes.append("question_criterion_key_unsafe" if raw_key else "question_missing_criterion_key")
+    text = _bounded_text(raw_question.get("text") or raw_question.get("question"), 500)
+    why = _bounded_text(raw_question.get("why"), 500)
+    if not text:
+        codes.append("question_missing_text")
+    if not why:
+        codes.append("question_missing_why")
+    answer_kind = raw_question.get("answer_kind") or raw_question.get("response_type") or "text"
+    if answer_kind not in ANSWER_KINDS:
+        codes.append("question_invalid_answer_kind")
+
+    criterion = criterion_by_key.get(key) if key else None
+    is_required_profile_gap = bool(
+        key in profile_fields
+        and key not in source_criteria
+        and profile_fields[key].get("required")
+    ) if key else False
+    if key and key not in source_criteria and key not in declined_keys and not is_required_profile_gap:
+        codes.append("question_criterion_key_unbound")
+    if key in declined_keys:
+        codes.append("question_declined_criterion")
+
+    raw_field = raw_question.get("field")
+    field = raw_field if isinstance(raw_field, str) and raw_field in profile_fields else None
+    if raw_field is not None and field is None:
+        codes.append("question_field_unbound")
+    criterion_field = criterion.get("field") if isinstance(criterion, dict) else None
+    if isinstance(criterion_field, str) and criterion_field in profile_fields and field is None:
+        field = criterion_field
+    if is_required_profile_gap and field is None:
+        field = key
+    if is_required_profile_gap and raw_field is not None and raw_field != key:
+        codes.append("question_profile_field_mismatch")
+
+    if (key in profile_fields and key not in source_criteria
+            and not profile_fields[key].get("required") and not any(
+        word in why.casefold()
+        for word in {"offer", "policy", "term", "availability", "risk", "mismatch", "difference", "material", "affect"}
+    )):
+        codes.append("question_optional_profile_gap_reason_missing")
+
+    criterion_texts = {
+        str(value).strip().casefold()
+        for value in (
+            criterion.get("text") if isinstance(criterion, dict) else None,
+            criterion.get("source_quote") if isinstance(criterion, dict) else None,
+        )
+        if isinstance(value, str) and value.strip()
+    }
+    if text and text.casefold() in criterion_texts:
+        codes.append("question_repeats_source_text")
+    if domain == "flight" and _airport_question_scope_is_mixed(raw_field or raw_key, text):
+        codes.append("question_mixed_route_scope")
+
+    # A diagnostic with no rejection code would add noise to the trace.  A
+    # caller should only persist this object when the normalizer rejected the
+    # question; the empty case is therefore intentionally omitted.
+    if not codes:
+        return None
+    result: dict[str, Any] = {
+        "codes": list(dict.fromkeys(codes))[:12],
+        "valid_criterion_keys": source_criteria[:20],
+        "required_missing_fields": required_missing[:20],
+    }
+    if key:
+        result["criterion_key"] = key
+    if field:
+        result["field"] = field
+    return result
+
+
+def planner_validation_feedback(
+    raw_plan: Any,
+    normalized_plan: dict[str, Any] | None,
+    *,
+    domain: str,
+    source_text: str = "",
+    source_messages: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Explain only planner failures that survived normalization.
+
+    A raw question may be repaired by ``_normalize_question`` (for example,
+    when its text repeats a source phrase but the assistant message contains
+    the actual customer-facing question).  Diagnostics are therefore gated on
+    the normalized result: a question is rejected only when an ``ask_user``
+    plan has no normalized question.  Invalid actions are reported separately,
+    including when no question was supplied.
+    """
+    raw = raw_plan if isinstance(raw_plan, dict) else {}
+    normalized = normalized_plan if isinstance(normalized_plan, dict) else {}
+    criteria = raw.get("criteria") if isinstance(raw.get("criteria"), list) else None
+    draft = _draft_from_model(raw)
+    raw_action = raw.get("action")
+    action_invalid = raw_action not in PLAN_ACTIONS
+    question_diagnostic = None
+    if raw_action == "ask_user" and normalized.get("question") is None:
+        question_diagnostic = planner_question_validation_feedback(
+            raw.get("question"),
+            domain=domain,
+            source_text=source_text,
+            source_messages=source_messages,
+            criteria=criteria,
+            draft=draft,
+        )
+    if not action_invalid and question_diagnostic is None:
+        return None
+    if action_invalid:
+        target_diagnostic = planner_question_validation_feedback(
+            None,
+            domain=domain,
+            source_text=source_text,
+            source_messages=source_messages,
+            criteria=criteria,
+            draft=draft,
+        ) or {}
+        diagnostic: dict[str, Any] = {
+            "codes": ["planner_action_invalid"],
+            "valid_criterion_keys": target_diagnostic.get("valid_criterion_keys", [])[:20],
+            "required_missing_fields": target_diagnostic.get("required_missing_fields", [])[:20],
+        }
+        return diagnostic
+    return question_diagnostic
+
+
+def format_planner_question_validation_feedback(diagnostic: dict[str, Any] | None) -> str | None:
+    """Format sanitized planner diagnostics for the independent reviewer."""
+    if not isinstance(diagnostic, dict) or not diagnostic.get("codes"):
+        return None
+    codes = [code for code in diagnostic.get("codes", []) if isinstance(code, str)][:12]
+    if not codes:
+        return None
+    prefix = (
+        "planner_validation_failed"
+        if "planner_action_invalid" in codes
+        else "planner_question_validation_failed"
+    )
+    parts = [prefix, f"codes={','.join(codes)}"]
+    for name in ("criterion_key", "field"):
+        value = _safe_diagnostic_identifier(diagnostic.get(name))
+        if value:
+            parts.append(f"{name}={value}")
+    for name in ("valid_criterion_keys", "required_missing_fields"):
+        values = [
+            value for value in diagnostic.get(name, [])
+            if _safe_diagnostic_identifier(value)
+        ][:20]
+        if values:
+            parts.append(f"{name}={','.join(values)}")
+    parts.append("repair_question_with_bounded_targets")
+    return ";".join(parts)[:1200]
 
 
 def _normalize_question(raw: Any, *, domain: str, criteria: list[dict[str, Any]],

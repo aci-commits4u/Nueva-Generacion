@@ -5,11 +5,11 @@ Intent Judge is implemented on `victor/perfected` at https://intent-judge-perfec
 
 ## Route-choice repair — October 14
 
-Runtime source `cab3888dd3e919eebee1500c42b282efc88212f9` is deployed READY as
-`dpl_8jgXnKtet1MvvRrcUvyHBNr6eQrm` at **https://intent-judge-perfected.vercel.app**.
-[Source CI run 38586292355](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38586292355)
-passed **478 pytest tests**, all **ten browser journeys**, JavaScript syntax,
-and the client deadline check. Local verification also passed 478 tests and
+Runtime source `483cec80b3fcb3d7e42a1c2d674a8fed80f52e81` is deployed READY as
+`dpl_MbrTKqjci751XHEJR1tZBXeBfAGj` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38589183389](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38589183389)
+passed **490 pytest tests**, all **ten browser journeys**, JavaScript syntax,
+and the client deadline check. Local verification also passed 490 tests and
 ten journeys. Those browser regressions use explicit offline interpretation
 or intercepted UI responses; they are separate from live Foundry acceptance.
 
@@ -25,12 +25,22 @@ and revoke previous approval; completed receipts stay immutable.
 
 Hosted script bytes match committed source. Health confirms live Foundry,
 simulated commerce, and Azure state. The public Quality endpoint reports
-`intent-envelope-v8-route-choices`; historical model evaluations are not
+`intent-envelope-v9-customer-corrections`; historical model evaluations are not
 current-release accuracy. The first independent native production walkthrough found a correction
 propagation failure after four live turns: the model criteria reflected
 `LHR/LGW`, but typed fields still contained `LCY`. The tester stopped before
-approval. This deployment is not accepted; the failure and forthcoming
-hotfix/retest are recorded in the route-choice incident document.
+approval. That failed v8 deployment is recorded unchanged. The v9 hotfix corrects
+historical-choice precedence and named-field assignment scoping. Known older
+live adaptive versions now require explicit refresh, including already
+persisted erroneous v8 drafts. The blind native retest then passed five live submissions: the exact
+London→Toronto multi-airport request plus correction reached a consistent
+first review, and SIN→HND reached a $295 simulated purchase, a held connecting
+offer, and receipt reload. The completed Downloads file independently passed
+canonical digest, configured issuer and merchant signatures, exact offer and
+approval hashes, native VI, nine passing checks, zero exceptions, and the
+dispute-analyst boundary. Further self-chosen messy flight/hotel circumstances
+are being tested in a hidden browser at the user's request, without disturbing
+their active desktop. CI and native observations remain separate evidence.
 
 The authorized configuration is now $20 ordinary plus the full $10 emergency
 reservation, bounded by the existing $30 cap and unchanged 500-stage lifetime

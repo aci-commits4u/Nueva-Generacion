@@ -63,7 +63,9 @@ allowance. The unchanged lifetime ceiling is 500 stages. These settings are
 not active on the public URL until a new deployment reports READY. The staged
 follow-up cap is 11, allowing one initial request plus eleven staged requests
 within the 24-stage session limit. These settings protect the remaining
-budget; they are not evidence of actual Azure credit balance.
+budget; they are not evidence of actual Azure credit balance. The v9 deployment
+recorded below is READY, so its public environment is the first current
+deployment after these upserts.
 
 ## Local live integration evidence
 
@@ -77,7 +79,8 @@ November 12, 2026, and `nonstop: true`; London was not asked again.
 This is local provider integration evidence, not an independent native
 production UAT. The new route browser suite uses intercepted UI responses and
 therefore is not live-AI evidence. The independent native production retest
-of the original route remains pending.
+of the original route is recorded below; its new receipt readback remains
+pending.
 
 ## Blind native retest on v8
 
@@ -137,10 +140,62 @@ automatic retry. All ten browser flows pass in 20,478 ms against a local
 offline server, including fixture coverage for correction and sidebar/review
 consistency. This remains regression evidence, not ten live-AI journeys.
 
-The source commit for the merge-precedence hotfix and its deployment are still
-pending. Existing tests, local integration, the initial v8 no-loop path, and
-the earlier EWR→LIS walkthrough must not be reported as proof that the public
-native route is fixed. No release or complete-accuracy claim is made until a
-fresh native retest preserves airport sets, applies a natural-language
-correction to the typed review state, and completes approval safely.
+The v8 checkpoint ended with the merge-precedence hotfix deployment pending;
+the v9 deployment and native observation are recorded below. Existing tests,
+local integration, the initial v8 no-loop path, and the earlier EWR→LIS
+walkthrough remain separate evidence from the native result.
+
+## Observed native hotfix acceptance on v9
+
+The hotfix source `483cec80b3fcb3d7e42a1c2d674a8fed80f52e81` is READY as
+`dpl_MbrTKqjci751XHEJR1tZBXeBfAGj`, with CI run `38589183389` passing 490
+pytest tests and ten browser flows. A fresh blind native session completed
+five live sends across two independent paths, with no retry, offline fallback,
+or Explain action.
+
+For the exact London→Toronto request, the model asked “Which London airport
+would you like to depart from?” and then “Which Toronto airport would you like
+to arrive at?” The tester selected `LHR`, `LGW`, and `LCY`, then `YTZ` and
+`YYZ`. After the same natural-language correction limiting departure to
+Heathrow and Gatwick, both the live summary and first review showed only
+`LHR`/`LGW`; London was not asked again and the other captured conditions were
+retained.
+
+The independent request was:
+
+> Book me a nonstop one-way economy flight from Singapore Changi Airport (SIN) to Tokyo Haneda Airport (HND) on 2026-12-05 under $300.
+
+One live send captured the correct fields. The `$295` matching offer passed to
+a simulated purchase, while the `$280` offer with three connections held.
+There were zero accepted differences, and a native receipt reload restored the
+receipt. The final intent URL was
+`https://intent-judge-perfected.vercel.app/?intent=k_or8c60l3WlT8Un8Fc8UA`.
+
+Chrome's native Save to Downloads completed with generated filename
+`intent-judge-evidence-mAzdjRLm1ssaJrZO4oHjeg.json`; Recent Download History
+reported 51.2 KB. Root verified the 52,417-byte file and recorded the result
+in `artifacts/route-native-evidence-verification.json`: canonical digest,
+configured trusted issuer and merchant signatures, exact offer hash and
+approval digest, `native_vi_passed: true`, nine passing checks, zero
+exceptions, and `final_decision: "dispute analyst"`. The approved fields were
+SIN→HND, December 5, 2026, maximum `29999` cents, nonstop, economy, and
+one-way; the simulated purchase amount was `29500` cents and metadata reports
+v9.
+
+An earlier manually named evidence-file save failed with an insufficient
+permissions error at the native save destination. The generated Downloads
+filename above succeeded and is the verified artifact. A ScreenCaptureKit
+observation tool returned an error while the receipt was being inspected;
+accessibility state still verified the receipt, and the tool error was not an
+application failure.
+
+This verifies the synthetic v9 one-way purchase path. The v8 failure, local
+integration artifact, intercepted browser flows, and v9 native route correction
+remain separate evidence classes; this receipt does not establish complete
+accuracy or production payment readiness.
+
+A separate blind agent is now running two self-chosen flight and hotel
+requests through the actual UI in headless mode, with at most six new live
+sends and no source access, API calls, mocks, or fallback. Those results are
+pending and are not counted as passed cases here.
 

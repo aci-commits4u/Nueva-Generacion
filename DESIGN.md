@@ -130,3 +130,12 @@ without deleting testing history; these are application reservations, not Azure
 charges or a claim about remaining student credit. Failures still stay visible
 and never silently switch to offline interpretation. The incident, actual tests,
 and release evidence are recorded in `docs/21-route-choice-reliability.md`.
+
+The first v8 native retest exposed a second fault: a later natural-language
+correction changed the model criteria while historical widget replay restored
+the older typed set. The v9 repair gives a current source-backed correction
+precedence over historical selection, bounds named airport-field assignments
+to their actual endpoint, and refuses wrong-field ambiguity updates. Known
+older live adaptive versions require a visible, explicit refresh so a saved
+incorrect draft cannot silently appear current. The four-turn failed session
+and the final native retest are retained separately in the incident record.

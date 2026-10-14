@@ -46,8 +46,10 @@ from app.adaptive_intent import (
     airport_question_validation_feedback,
     can_inspect_offers,
     execute_tool,
+    format_planner_question_validation_feedback,
     merchant_context as build_merchant_context,
     normalize_plan,
+    planner_validation_feedback,
     planner_public_view,
     prompt_context,
     source_quote_is_customer,
@@ -185,6 +187,14 @@ while mapping the first and second endpoints respectively. Compact examples:
 source_quote:"under $220 per night"}``, no max_total_cents source; and
 ``November 2–4, 2026`` -> fields ``{checkin_date:"2026-11-02",
 checkout_date:"2026-11-04"}``, both endpoint sources equal the full range.
+Customer-facing budget questions use ordinary USD dollars or ``US dollars``;
+never ask the traveler to express an amount in cents even though the internal
+``max_total_cents`` value remains integer cents. If the request uses another
+currency such as EUR, do not convert or guess an exchange rate; explain that
+the demo's bounded profile accepts USD and ask for a USD amount only when a
+budget clarification is needed. For date questions, ask for an exact date or
+range without invented calendar examples; do not invent example dates and keep
+date options empty unless the customer supplied actual choices.
 For a relative or implicit deadline/event with no concrete boundary (such as
 "arrive before my work trip" without a trip date), mark the source-backed
 criterion needs_clarification and ask the customer for the missing temporal
@@ -234,6 +244,16 @@ requires ask_user. Choose the next best action after seeing the read-only
 tool result. Return the complete shape again. If the candidate is unsafe or
 the source coverage cannot be established, choose review_required with no
 question; do not claim readiness.'''
+            common += '''
+The candidate_validation_issue is deterministic, bounded validator feedback.
+If it reports a rejected planner question, use its diagnostic codes and the
+listed source-backed criterion keys or required missing profile fields to
+generate a new customer-facing question with an exact valid key. Unresolved
+known required inputs normally need a useful model-generated question even
+when another preference is unsupported; leave review_required only when the
+requested representation is unsafe or no valid question can be generated. Do
+not repeat the diagnostic as customer prose and do not invent a key outside
+its targets.'''
     return common
 
 
@@ -702,16 +722,30 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         candidate_raw, domain=domain, source_text=source_text,
         source_messages=source_messages,
     )
-    candidate_plan_issue = airport_question_validation_feedback(
-        candidate_raw.get('question') if isinstance(candidate_raw, dict) else None,
-        domain,
-    )
     candidate_draft = strip_plan_metadata(candidate_raw)
     candidate_plan = _adaptive_plan_or_raise(
         candidate_raw, domain=domain, source_text=source_text,
         source_messages=source_messages, stage='adaptive_plan'
     )
+    candidate_question_diagnostic = planner_validation_feedback(
+        candidate_raw,
+        candidate_plan,
+        domain=domain,
+        source_text=source_text,
+        source_messages=source_messages,
+    )
+    candidate_route_issue = None
+    if (
+        isinstance(candidate_question_diagnostic, dict)
+        and 'question_mixed_route_scope' in candidate_question_diagnostic.get('codes', [])
+    ):
+        candidate_route_issue = airport_question_validation_feedback(
+            candidate_raw.get('question') if isinstance(candidate_raw, dict) else None,
+            domain,
+        )
     candidate_trace['planner'] = planner_public_view(candidate_plan)
+    if candidate_question_diagnostic is not None:
+        candidate_trace['planner_validation'] = candidate_question_diagnostic
     candidate_trace['grounding_recoveries'] = recovery_records(
         candidate_draft, domain, source_text, source_messages=source_messages
     )
@@ -751,7 +785,14 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     if candidate_recovery is not None:
         candidate_trace['partial_recovery'] = candidate_recovery
     candidate_fields = candidate_valid.get('fields', {}) if candidate_valid else {}
-    candidate_issue_parts = [candidate_plan_issue] if candidate_plan_issue else []
+    candidate_issue_parts = []
+    if candidate_route_issue:
+        candidate_issue_parts.append(candidate_route_issue)
+    candidate_question_issue = format_planner_question_validation_feedback(
+        candidate_question_diagnostic
+    )
+    if candidate_question_issue:
+        candidate_issue_parts.append(candidate_question_issue)
     if not candidate_valid:
         try:
             validate_extraction(domain, source_text, candidate_draft,
@@ -872,6 +913,15 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     )
     final_plan = _constrain_unexecuted_tool_action(final_plan, tool_result)
     final_plan = _preserve_pending_question(candidate_plan, final_plan)
+    final_question_diagnostic = planner_validation_feedback(
+        final_raw,
+        final_plan,
+        domain=domain,
+        source_text=source_text,
+        source_messages=source_messages,
+    )
+    if final_question_diagnostic is not None:
+        final_trace['planner_validation'] = final_question_diagnostic
     final_trace['planner'] = planner_public_view(final_plan)
     _record_outcome('adaptive_review', 'passed', final_trace.get('response_id'))
     agent_tools = []
