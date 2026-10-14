@@ -70,8 +70,10 @@ def test_provider_payload_promotes_only_verified_latest_customer_turn(monkeypatc
         choices=[SimpleNamespace(
             finish_reason="stop",
             message=SimpleNamespace(content=json.dumps({
-                "fields": {}, "sources": {}, "unsupported": [],
-                "clarifications": [], "explanation": "Review.",
+                "supported_claims": [], "unsupported": [], "clarifications": [],
+                "criteria": [], "action": "review_required",
+                "assistant_message": "Review.", "question": None,
+                "explanation": "Review.", "offer_observations": [],
             })),
         )],
         id="synthetic-response",

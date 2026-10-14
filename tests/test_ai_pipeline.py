@@ -453,7 +453,11 @@ def test_adaptive_payload_includes_default_merchant_context(monkeypatch):
   usage=None,
   choices=[SimpleNamespace(
    finish_reason='stop',
-   message=SimpleNamespace(content='{"fields":{},"sources":{},"unsupported":[],"clarifications":[],"explanation":"Review."}'),
+   message=SimpleNamespace(content=json.dumps({
+    'supported_claims': [], 'unsupported': [], 'clarifications': [], 'criteria': [],
+    'action': 'review_required', 'assistant_message': 'Review.', 'question': None,
+    'explanation': 'Review.', 'offer_observations': [],
+   })),
   )],
   id='synthetic-response',
  )

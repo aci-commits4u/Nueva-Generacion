@@ -111,21 +111,47 @@ def test_unknown_orphan_key_is_never_laundered_by_a_generic_clarification():
         validate_extraction("hotel", message, strip_plan_metadata(result))
 
 
-def test_adaptive_prompt_requires_stable_question_keys_and_preserves_price_basis():
-    from app.ai_pipeline import prompt
+def test_structured_question_rejects_unregistered_price_basis_alias():
+    from app.structured_intent import build_source_catalog, hydrate_response
 
-    text = prompt("hotel", "adaptive")
-    assert "must exactly equal a key in" in text
-    assert "all-in total" in text
-    assert "per-night" in text
-    assert "never multiply" in text
-    assert "nightly_budget" in text
+    catalog = build_source_catalog("A hotel under $220 per night.")
+    wire = {
+        "supported_claims": [], "unsupported": [], "clarifications": [],
+        "criteria": [], "action": "ask_user", "assistant_message": "What total?",
+        "explanation": "Review the budget.", "offer_observations": [],
+        "question": {
+            "criterion_key": "price_limit_basis",
+            "text": "What all-in total should I use?", "why": "The total is missing.",
+            "answer_kind": "number", "answer_semantics": None, "options": [],
+        },
+    }
+    with pytest.raises(ValueError, match="out of scope"):
+        hydrate_response(wire, domain="hotel", catalog=catalog, require_wire=True)
 
 
-def test_adaptive_prompt_carries_compact_hotel_range_source_example():
-    from app.ai_pipeline import prompt
+def test_structured_shared_range_source_grounds_both_hotel_endpoints():
+    from app.ai_grounding import validate_extraction
+    from app.adaptive_intent import strip_plan_metadata
+    from app.structured_intent import build_source_catalog, hydrate_response
 
-    text = prompt("hotel", "adaptive")
-    assert "November 2–4, 2026" in text
-    assert "checkin_date" in text and "checkout_date" in text
+    message = "A hotel in Boston for November 2–4, 2026."
+    catalog = build_source_catalog(message)
+    reference = next(item["id"] for item in catalog if item["text"] == message)
+    wire = {
+        "supported_claims": [
+            {"field": "city", "value": "Boston", "source_ref": reference},
+            {"field": "checkin_date", "value": "2026-11-02", "source_ref": reference},
+            {"field": "checkout_date", "value": "2026-11-04", "source_ref": reference},
+        ],
+        "unsupported": [], "clarifications": [], "criteria": [],
+        "action": "review_required", "assistant_message": "Review the dates.",
+        "question": None, "explanation": "Review the captured requirements.",
+        "offer_observations": [],
+    }
+    result = hydrate_response(wire, domain="hotel", catalog=catalog, require_wire=True)
+    checked = validate_extraction("hotel", message, strip_plan_metadata(result))
+    assert checked["fields"]["checkin_date"] == "2026-11-02"
+    assert checked["fields"]["checkout_date"] == "2026-11-04"
+    assert checked["sources"]["checkin_date"] == message
+    assert checked["sources"]["checkout_date"] == message
 

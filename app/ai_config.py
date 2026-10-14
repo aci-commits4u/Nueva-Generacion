@@ -1,7 +1,7 @@
 """One selected default for interactive inference and live evaluations."""
 import os
 DEFAULT_PIPELINE='adaptive'
-PROMPT_VERSION='intent-envelope-v12-literal-coverage'
+PROMPT_VERSION='intent-envelope-v13-source-references'
 REASONING_EFFORTS={'low','medium','high'}
 
 def selected_pipeline():
