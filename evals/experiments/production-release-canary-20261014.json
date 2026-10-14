@@ -1,0 +1,42 @@
+{
+  "deployment": "dpl_25dvtwsHNepWSaBY2hpN6v4H4pGV",
+  "source": "b308dc656ed5f76d1457b50b90118d777b0ba6a7",
+  "unauthenticated_status": 401,
+  "authenticated_report": {
+    "date": "2026-10-14",
+    "case_id": "round-trip",
+    "status": "passed",
+    "started_at": "2026-10-14T00:05:45.851619+00:00",
+    "score": {
+      "case_id": "round-trip",
+      "passed": true,
+      "field_accuracy": 1.0,
+      "correct_fields": [
+        "origin_airports",
+        "destination_airports",
+        "departure_date",
+        "max_total_cents"
+      ],
+      "wrong_or_missing_fields": [],
+      "invented_fields": [],
+      "ungrounded_fields": [],
+      "missed_unsupported_groups": [],
+      "missed_clarification_groups": [],
+      "unnecessary_hold": false,
+      "error": null
+    },
+    "stages": 2,
+    "completed_at": "2026-10-14T00:05:50.226459+00:00"
+  },
+  "replay_identical": true,
+  "before": {
+    "calls": 186,
+    "reserved_usd": 18.6,
+    "reserved_cents": null
+  },
+  "after": {
+    "calls": 188,
+    "reserved_usd": 18.64,
+    "reserved_cents": 1864
+  }
+}
