@@ -1,0 +1,973 @@
+{
+  "schema": "intent-judge.adaptive-benchmark.v1",
+  "created_at": "2026-10-14T07:20:37.016971+00:00",
+  "variant": "adaptive",
+  "split": "holdout",
+  "model": "gpt-oss-120b",
+  "prompt_version": "intent-envelope-v7-clarification-contract",
+  "cases_requested": 1,
+  "repetitions": 1,
+  "finite_no_retry": true,
+  "purpose": "evaluation",
+  "store_backend": "azure",
+  "case_definitions": [
+    {
+      "id": "native-hotel-unit-price",
+      "split": "holdout",
+      "domain": "hotel",
+      "message": "I need a quiet hotel in Boston for November 2\u20134, 2026, under $220 per night, near public transit, and I need the front desk to hold a refrigerated medication pack. Please keep the room on hold while I confirm that storage.",
+      "expected_fields": {
+        "city": "Boston",
+        "checkin_date": "2026-11-02",
+        "checkout_date": "2026-11-04"
+      },
+      "forbidden_fields": [
+        "max_total_cents"
+      ],
+      "unsupported_groups": [
+        [
+          "under $220 per night"
+        ],
+        [
+          "quiet"
+        ],
+        [
+          "near public transit"
+        ],
+        [
+          "refrigerated medication pack"
+        ],
+        [
+          "room on hold"
+        ]
+      ],
+      "expected_metrics": {
+        "adaptive_required": true,
+        "allowed_actions": [
+          "ask_user"
+        ],
+        "question_required": true,
+        "question_field": "max_total_cents",
+        "source_coverage_phrases": [
+          "Boston",
+          "November 2",
+          "under $220 per night",
+          "quiet",
+          "near public transit",
+          "refrigerated medication pack",
+          "room on hold"
+        ]
+      }
+    }
+  ],
+  "score_provenance": "fresh_model_output_scored_with_case_snapshot",
+  "historical_artifacts_immutable": true,
+  "case_label_audit": {
+    "classification": "scorer_replay",
+    "fresh_model_improvement_claim": false,
+    "notes": "Any corrected case label or deterministic scoring rule must be replayed against captured raw proposals. It does not imply a new provider inference or improve historical artifacts."
+  },
+  "expected_metrics": {
+    "native-hotel-unit-price": {
+      "adaptive_required": true,
+      "allowed_actions": [
+        "ask_user"
+      ],
+      "question_required": true,
+      "question_field": "max_total_cents",
+      "source_coverage_phrases": [
+        "Boston",
+        "November 2",
+        "under $220 per night",
+        "quiet",
+        "near public transit",
+        "refrigerated medication pack",
+        "room on hold"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "case_id": "native-hotel-unit-price",
+      "repetition": 1,
+      "score": {
+        "case_id": "native-hotel-unit-price",
+        "passed": true,
+        "field_accuracy": 1.0,
+        "correct_fields": [
+          "city",
+          "checkin_date",
+          "checkout_date"
+        ],
+        "wrong_or_missing_fields": [],
+        "invented_fields": [],
+        "ungrounded_fields": [],
+        "missed_unsupported_groups": [],
+        "missed_clarification_groups": [],
+        "unnecessary_hold": false,
+        "error": null,
+        "adaptive_passed": true,
+        "adaptive_metrics": {
+          "variant": "adaptive",
+          "action": "ask_user",
+          "action_ok": true,
+          "question_present": true,
+          "question_required": true,
+          "question_ok": true,
+          "question_contract_valid": true,
+          "question_field": "max_total_cents",
+          "question_criterion_key": "max_total_cents",
+          "repeated_known_field": false,
+          "repeats_declined_preference": false,
+          "generic_novel_question": false,
+          "boolean_question_safe": true,
+          "criteria_total": 7,
+          "criteria_grounded": 7,
+          "ungrounded_criteria": [],
+          "unquoted_clarification_criteria": [],
+          "source_coverage_phrases": [
+            "Boston",
+            "November 2",
+            "under $220 per night",
+            "quiet",
+            "near public transit",
+            "refrigerated medication pack",
+            "room on hold"
+          ],
+          "source_coverage_expected": [
+            "Boston",
+            "November 2",
+            "under $220 per night",
+            "quiet",
+            "near public transit",
+            "refrigerated medication pack",
+            "room on hold"
+          ],
+          "historical_source_coverage_phrases": [],
+          "historical_source_coverage_expected": [],
+          "source_coverage_ok": true,
+          "tool_observations_count": 0,
+          "tool_executed": false,
+          "tool_observations_are_executed": false,
+          "adversarial_context_seen": false,
+          "adversarial_tool_context_seen": false,
+          "adversarial_payload_context_seen": false,
+          "adversarial_tool_context_expected": false,
+          "adversarial_payload_context_expected": false,
+          "merchant_context_injected_as_criterion": false,
+          "adversarial_context_ok": true,
+          "tool_ok": true,
+          "authority_ok": true,
+          "authority_violations": []
+        }
+      },
+      "metadata": {
+        "variant": "adaptive",
+        "model": "gpt-oss-120b",
+        "prompt_version": "intent-envelope-v7-clarification-contract",
+        "reasoning_effort": "low",
+        "clock_context": [
+          {
+            "timestamp": "2026-10-14T07:20:50.786490+00:00",
+            "reference_date": "2026-10-14"
+          }
+        ],
+        "source_message_count": 1,
+        "started_at": "2026-10-14T07:20:37.017490+00:00",
+        "completed_at": "2026-10-14T07:20:50.785072+00:00",
+        "duration_ms": 13769
+      },
+      "result": {
+        "fields": {
+          "city": "Boston",
+          "checkin_date": "2026-11-02",
+          "checkout_date": "2026-11-04"
+        },
+        "sources": {
+          "city": "Boston",
+          "checkin_date": "November 2\u20134, 2026",
+          "checkout_date": "November 2\u20134, 2026"
+        },
+        "unsupported": [
+          "quiet hotel",
+          "near public transit",
+          "front desk to hold a refrigerated medication pack",
+          "keep the room on hold while I confirm that storage",
+          "under $220 per night"
+        ],
+        "clarifications": [
+          {
+            "field": "max_total_cents",
+            "source_quote": "under $220 per night",
+            "reason": "ambiguous"
+          }
+        ],
+        "explanation": "City and dates are captured. The per\u2011night budget is ambiguous for an all\u2011in total, so we ask for the total budget. Quietness, transit proximity, medication storage, and room\u2011hold request are preferences not representable in the current schema and are listed as unsupported.",
+        "mode": "live",
+        "model": "gpt-oss-120b",
+        "pipeline": "adaptive",
+        "trace": [
+          {
+            "stage": "adaptive_plan",
+            "model": "gpt-oss-120b",
+            "duration_ms": 6953,
+            "tokens": {
+              "completion_tokens": 1291,
+              "prompt_tokens": 3323,
+              "total_tokens": 4614,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "12550b82678547849ddf242a58f58117",
+            "prompt_version": "intent-envelope-v7-clarification-contract",
+            "prompt_sha256": "fb61058c920cebbebb478a18ac64f8fc607c046792b7347c761312f88eeb1481",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "planner": {
+              "action": "ask_user",
+              "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+              "question": {
+                "id": "q_03b0ce685bf391ff",
+                "question_id": "q_03b0ce685bf391ff",
+                "criterion_key": "max_total_cents",
+                "field": "max_total_cents",
+                "question": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+                "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+                "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+                "answer_kind": "number",
+                "response_type": "number",
+                "answer_semantics": "requirement_boolean",
+                "options": []
+              },
+              "criteria": [
+                {
+                  "key": "city",
+                  "field": "city",
+                  "text": "Boston",
+                  "source_quote": "Boston",
+                  "kind": "requirement",
+                  "status": "captured",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkin_date",
+                  "field": "checkin_date",
+                  "text": "November 2, 2026",
+                  "source_quote": "November 2\u20134, 2026",
+                  "kind": "requirement",
+                  "status": "captured",
+                  "verification": "supported"
+                },
+                {
+                  "key": "checkout_date",
+                  "field": "checkout_date",
+                  "text": "November 4, 2026",
+                  "source_quote": "November 2\u20134, 2026",
+                  "kind": "requirement",
+                  "status": "captured",
+                  "verification": "supported"
+                },
+                {
+                  "key": "quiet_hotel",
+                  "field": null,
+                  "text": "quiet hotel",
+                  "source_quote": "quiet hotel",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "public_transit_proximity",
+                  "field": null,
+                  "text": "near public transit",
+                  "source_quote": "near public transit",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "medication_pack_storage",
+                  "field": null,
+                  "text": "front desk to hold a refrigerated medication pack",
+                  "source_quote": "front desk to hold a refrigerated medication pack",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "room_hold_request",
+                  "field": null,
+                  "text": "keep the room on hold while I confirm that storage",
+                  "source_quote": "keep the room on hold while I confirm that storage",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": null,
+                  "text": "under $220 per night",
+                  "source_quote": "under $220 per night",
+                  "kind": "ambiguity",
+                  "status": "needs_clarification",
+                  "verification": "unsupported"
+                }
+              ],
+              "offer_observations": []
+            },
+            "grounding_recoveries": [],
+            "model_action": "ask_user",
+            "tool_selection_origin": "model"
+          },
+          {
+            "stage": "adaptive_review",
+            "model": "gpt-oss-120b",
+            "duration_ms": 6614,
+            "tokens": {
+              "completion_tokens": 1172,
+              "prompt_tokens": 4388,
+              "total_tokens": 5560,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "0533f7d6e3434cbc8307cc8e2412e37c",
+            "prompt_version": "intent-envelope-v7-clarification-contract",
+            "prompt_sha256": "721ac387be0a98ab5b2dc0ef885addf23699ce4fbeddd5e59d67b9a6c1f3800b",
+            "reasoning_effort": "low",
+            "output_format": "plain-json",
+            "grounding_recoveries": [],
+            "planner": {
+              "action": "ask_user",
+              "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+              "question": {
+                "id": "q_03b0ce685bf391ff",
+                "question_id": "q_03b0ce685bf391ff",
+                "criterion_key": "max_total_cents",
+                "field": "max_total_cents",
+                "question": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+                "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+                "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+                "answer_kind": "number",
+                "response_type": "number",
+                "answer_semantics": null,
+                "options": []
+              },
+              "criteria": [
+                {
+                  "key": "city",
+                  "field": "city",
+                  "text": "Boston",
+                  "source_quote": "Boston",
+                  "kind": "requirement",
+                  "status": "captured",
+                  "verification": "supported"
+                },
+                {
+                  "key": "quiet_hotel",
+                  "field": null,
+                  "text": "quiet hotel",
+                  "source_quote": "quiet hotel",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "public_transit_proximity",
+                  "field": null,
+                  "text": "near public transit",
+                  "source_quote": "near public transit",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "medication_pack_storage",
+                  "field": null,
+                  "text": "front desk to hold a refrigerated medication pack",
+                  "source_quote": "front desk to hold a refrigerated medication pack",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "room_hold_request",
+                  "field": null,
+                  "text": "keep the room on hold while I confirm that storage",
+                  "source_quote": "keep the room on hold while I confirm that storage",
+                  "kind": "preference",
+                  "status": "unsupported",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "max_total_cents",
+                  "field": null,
+                  "text": "under $220 per night",
+                  "source_quote": "under $220 per night",
+                  "kind": "ambiguity",
+                  "status": "needs_clarification",
+                  "verification": "unsupported"
+                },
+                {
+                  "key": "checkin_date",
+                  "field": "checkin_date",
+                  "text": "checkin_date: 2026-11-02",
+                  "source_quote": "November 2\u20134, 2026",
+                  "kind": "requirement",
+                  "verification": "supported",
+                  "status": "captured"
+                }
+              ],
+              "offer_observations": []
+            }
+          }
+        ],
+        "planner": {
+          "action": "ask_user",
+          "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+          "question": {
+            "id": "q_03b0ce685bf391ff",
+            "question_id": "q_03b0ce685bf391ff",
+            "criterion_key": "max_total_cents",
+            "field": "max_total_cents",
+            "question": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+            "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+            "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+            "answer_kind": "number",
+            "response_type": "number",
+            "answer_semantics": null,
+            "options": []
+          },
+          "criteria": [
+            {
+              "key": "city",
+              "field": "city",
+              "text": "Boston",
+              "source_quote": "Boston",
+              "kind": "requirement",
+              "status": "captured",
+              "verification": "supported"
+            },
+            {
+              "key": "quiet_hotel",
+              "field": null,
+              "text": "quiet hotel",
+              "source_quote": "quiet hotel",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "public_transit_proximity",
+              "field": null,
+              "text": "near public transit",
+              "source_quote": "near public transit",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "medication_pack_storage",
+              "field": null,
+              "text": "front desk to hold a refrigerated medication pack",
+              "source_quote": "front desk to hold a refrigerated medication pack",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "room_hold_request",
+              "field": null,
+              "text": "keep the room on hold while I confirm that storage",
+              "source_quote": "keep the room on hold while I confirm that storage",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": null,
+              "text": "under $220 per night",
+              "source_quote": "under $220 per night",
+              "kind": "ambiguity",
+              "status": "needs_clarification",
+              "verification": "unsupported"
+            },
+            {
+              "key": "checkin_date",
+              "field": "checkin_date",
+              "text": "checkin_date: 2026-11-02",
+              "source_quote": "November 2\u20134, 2026",
+              "kind": "requirement",
+              "verification": "supported",
+              "status": "captured"
+            }
+          ],
+          "offer_observations": []
+        },
+        "adaptive_plan": {
+          "action": "ask_user",
+          "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+          "question": {
+            "id": "q_03b0ce685bf391ff",
+            "question_id": "q_03b0ce685bf391ff",
+            "criterion_key": "max_total_cents",
+            "field": "max_total_cents",
+            "question": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+            "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+            "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+            "answer_kind": "number",
+            "response_type": "number",
+            "answer_semantics": null,
+            "options": []
+          },
+          "criteria": [
+            {
+              "key": "city",
+              "field": "city",
+              "text": "Boston",
+              "source_quote": "Boston",
+              "kind": "requirement",
+              "status": "captured",
+              "verification": "supported"
+            },
+            {
+              "key": "quiet_hotel",
+              "field": null,
+              "text": "quiet hotel",
+              "source_quote": "quiet hotel",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "public_transit_proximity",
+              "field": null,
+              "text": "near public transit",
+              "source_quote": "near public transit",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "medication_pack_storage",
+              "field": null,
+              "text": "front desk to hold a refrigerated medication pack",
+              "source_quote": "front desk to hold a refrigerated medication pack",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "room_hold_request",
+              "field": null,
+              "text": "keep the room on hold while I confirm that storage",
+              "source_quote": "keep the room on hold while I confirm that storage",
+              "kind": "preference",
+              "status": "unsupported",
+              "verification": "unsupported"
+            },
+            {
+              "key": "max_total_cents",
+              "field": null,
+              "text": "under $220 per night",
+              "source_quote": "under $220 per night",
+              "kind": "ambiguity",
+              "status": "needs_clarification",
+              "verification": "unsupported"
+            },
+            {
+              "key": "checkin_date",
+              "field": "checkin_date",
+              "text": "checkin_date: 2026-11-02",
+              "source_quote": "November 2\u20134, 2026",
+              "kind": "requirement",
+              "verification": "supported",
+              "status": "captured"
+            }
+          ],
+          "offer_observations": []
+        },
+        "criteria": [
+          {
+            "key": "city",
+            "field": "city",
+            "text": "Boston",
+            "source_quote": "Boston",
+            "kind": "requirement",
+            "status": "captured",
+            "verification": "supported"
+          },
+          {
+            "key": "quiet_hotel",
+            "field": null,
+            "text": "quiet hotel",
+            "source_quote": "quiet hotel",
+            "kind": "preference",
+            "status": "unsupported",
+            "verification": "unsupported"
+          },
+          {
+            "key": "public_transit_proximity",
+            "field": null,
+            "text": "near public transit",
+            "source_quote": "near public transit",
+            "kind": "preference",
+            "status": "unsupported",
+            "verification": "unsupported"
+          },
+          {
+            "key": "medication_pack_storage",
+            "field": null,
+            "text": "front desk to hold a refrigerated medication pack",
+            "source_quote": "front desk to hold a refrigerated medication pack",
+            "kind": "preference",
+            "status": "unsupported",
+            "verification": "unsupported"
+          },
+          {
+            "key": "room_hold_request",
+            "field": null,
+            "text": "keep the room on hold while I confirm that storage",
+            "source_quote": "keep the room on hold while I confirm that storage",
+            "kind": "preference",
+            "status": "unsupported",
+            "verification": "unsupported"
+          },
+          {
+            "key": "max_total_cents",
+            "field": null,
+            "text": "under $220 per night",
+            "source_quote": "under $220 per night",
+            "kind": "ambiguity",
+            "status": "needs_clarification",
+            "verification": "unsupported"
+          },
+          {
+            "key": "checkin_date",
+            "field": "checkin_date",
+            "text": "checkin_date: 2026-11-02",
+            "source_quote": "November 2\u20134, 2026",
+            "kind": "requirement",
+            "verification": "supported",
+            "status": "captured"
+          }
+        ],
+        "agent_tools": [
+          {
+            "name": "inspect_offers",
+            "tool": "inspect_offers",
+            "status": "available",
+            "summary": "merchant-signed facts, hashes, and synthetic options",
+            "authority": "read_only_context_only"
+          },
+          {
+            "name": "retrieve_policy",
+            "tool": "retrieve_policy",
+            "status": "available",
+            "summary": "merchant policy/context data",
+            "authority": "read_only_context_only"
+          }
+        ],
+        "model_action": "ask_user",
+        "reviewer_action": "ask_user",
+        "tool_selection_origin": "model",
+        "next_step": "ask_user",
+        "merchant_context_used": false,
+        "read_only_tool_log": null
+      },
+      "provider_proposals": [
+        {
+          "stage": "adaptive_plan",
+          "raw": {
+            "action": "ask_user",
+            "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+            "question": {
+              "criterion_key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+              "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+              "answer_kind": "number",
+              "answer_semantics": "requirement_boolean",
+              "options": []
+            },
+            "criteria": [
+              {
+                "key": "city",
+                "text": "Boston",
+                "source_quote": "Boston",
+                "kind": "requirement",
+                "field": "city",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "checkin_date",
+                "text": "November 2, 2026",
+                "source_quote": "November 2\u20134, 2026",
+                "kind": "requirement",
+                "field": "checkin_date",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "checkout_date",
+                "text": "November 4, 2026",
+                "source_quote": "November 2\u20134, 2026",
+                "kind": "requirement",
+                "field": "checkout_date",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "quiet_hotel",
+                "text": "quiet hotel",
+                "source_quote": "quiet hotel",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "public_transit_proximity",
+                "text": "near public transit",
+                "source_quote": "near public transit",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "medication_pack_storage",
+                "text": "front desk to hold a refrigerated medication pack",
+                "source_quote": "front desk to hold a refrigerated medication pack",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "room_hold_request",
+                "text": "keep the room on hold while I confirm that storage",
+                "source_quote": "keep the room on hold while I confirm that storage",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "max_total_cents",
+                "text": "under $220 per night",
+                "source_quote": "under $220 per night",
+                "kind": "ambiguity",
+                "field": "max_total_cents",
+                "status": "needs_clarification",
+                "verification": "unsupported"
+              }
+            ],
+            "offer_observations": [],
+            "fields": {
+              "city": "Boston",
+              "checkin_date": "2026-11-02",
+              "checkout_date": "2026-11-04"
+            },
+            "sources": {
+              "city": "Boston",
+              "checkin_date": "November 2\u20134, 2026",
+              "checkout_date": "November 2\u20134, 2026"
+            },
+            "unsupported": [
+              "quiet hotel",
+              "near public transit",
+              "front desk to hold a refrigerated medication pack",
+              "keep the room on hold while I confirm that storage"
+            ],
+            "clarifications": [
+              {
+                "field": "max_total_cents",
+                "source_quote": "under $220 per night",
+                "reason": "ambiguous"
+              }
+            ],
+            "explanation": "Captured city and dates; budget per night is ambiguous for an all\u2011in total, so clarification is needed. Quietness, transit proximity, and medication storage are preferences not enforceable by the current schema."
+          },
+          "trace": {
+            "stage": "adaptive_plan",
+            "model": "gpt-oss-120b",
+            "duration_ms": 6953,
+            "tokens": {
+              "completion_tokens": 1291,
+              "prompt_tokens": 3323,
+              "total_tokens": 4614,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "12550b82678547849ddf242a58f58117",
+            "prompt_version": "intent-envelope-v7-clarification-contract",
+            "prompt_sha256": "fb61058c920cebbebb478a18ac64f8fc607c046792b7347c761312f88eeb1481",
+            "reasoning_effort": "low",
+            "output_format": "plain-json"
+          }
+        },
+        {
+          "stage": "adaptive_review",
+          "raw": {
+            "action": "ask_user",
+            "assistant_message": "I see you want a hotel in Boston from November 2\u20114, 2026, and you mentioned a budget of under $220 per night. To help find suitable options, could you tell me the total all\u2011in budget you have for the entire stay (including taxes and fees)?",
+            "question": {
+              "criterion_key": "max_total_cents",
+              "field": "max_total_cents",
+              "text": "What is the total all\u2011in budget (in USD) you have for the entire stay, including taxes and fees?",
+              "why": "The per\u2011night budget you gave (under $220 per night) is ambiguous for an all\u2011in total, which is needed to search for offers.",
+              "answer_kind": "number",
+              "options": []
+            },
+            "criteria": [
+              {
+                "key": "city",
+                "text": "Boston",
+                "source_quote": "Boston",
+                "kind": "requirement",
+                "field": "city",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "checkin_date",
+                "text": "November 2, 2026",
+                "source_quote": "November 2\u20114, 2026",
+                "kind": "requirement",
+                "field": "checkin_date",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "checkout_date",
+                "text": "November 4, 2026",
+                "source_quote": "November 2\u20114, 2026",
+                "kind": "requirement",
+                "field": "checkout_date",
+                "status": "captured",
+                "verification": "supported"
+              },
+              {
+                "key": "quiet_hotel",
+                "text": "quiet hotel",
+                "source_quote": "quiet hotel",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "public_transit_proximity",
+                "text": "near public transit",
+                "source_quote": "near public transit",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "medication_pack_storage",
+                "text": "front desk to hold a refrigerated medication pack",
+                "source_quote": "front desk to hold a refrigerated medication pack",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "room_hold_request",
+                "text": "keep the room on hold while I confirm that storage",
+                "source_quote": "keep the room on hold while I confirm that storage",
+                "kind": "preference",
+                "field": null,
+                "status": "unsupported",
+                "verification": "unsupported"
+              },
+              {
+                "key": "max_total_cents",
+                "text": "under $220 per night",
+                "source_quote": "under $220 per night",
+                "kind": "ambiguity",
+                "field": "max_total_cents",
+                "status": "needs_clarification",
+                "verification": "unsupported"
+              }
+            ],
+            "offer_observations": [],
+            "fields": {
+              "city": "Boston",
+              "checkin_date": "2026-11-02",
+              "checkout_date": "2026-11-04"
+            },
+            "sources": {
+              "city": "Boston",
+              "checkin_date": "November 2\u20114, 2026",
+              "checkout_date": "November 2\u20114, 2026"
+            },
+            "unsupported": [
+              "quiet hotel",
+              "near public transit",
+              "front desk to hold a refrigerated medication pack",
+              "keep the room on hold while I confirm that storage"
+            ],
+            "clarifications": [
+              {
+                "field": "max_total_cents",
+                "source_quote": "under $220 per night",
+                "reason": "ambiguous"
+              }
+            ],
+            "explanation": "City and dates are captured. The per\u2011night budget is ambiguous for an all\u2011in total, so we ask for the total budget. Quietness, transit proximity, medication storage, and room\u2011hold request are preferences not representable in the current schema and are listed as unsupported."
+          },
+          "trace": {
+            "stage": "adaptive_review",
+            "model": "gpt-oss-120b",
+            "duration_ms": 6614,
+            "tokens": {
+              "completion_tokens": 1172,
+              "prompt_tokens": 4388,
+              "total_tokens": 5560,
+              "completion_tokens_details": null,
+              "prompt_tokens_details": null,
+              "audio_prompt_tokens": 0
+            },
+            "response_id": "0533f7d6e3434cbc8307cc8e2412e37c",
+            "prompt_version": "intent-envelope-v7-clarification-contract",
+            "prompt_sha256": "721ac387be0a98ab5b2dc0ef885addf23699ce4fbeddd5e59d67b9a6c1f3800b",
+            "reasoning_effort": "low",
+            "output_format": "plain-json"
+          }
+        }
+      ],
+      "injection": {
+        "enabled": false,
+        "method": null,
+        "payload_field": null,
+        "bounded_chars": 0,
+        "call_stages": [],
+        "injected_into_call": false,
+        "provider_call_attempted": true,
+        "provider_proposal_count": 2,
+        "observed_by_provider_payload": false
+      },
+      "evaluation_context": {
+        "provenance": "benchmark_harness",
+        "merchant_context_payload": {
+          "enabled": false,
+          "method": null,
+          "bounded_chars": 0,
+          "observed_by_provider_payload": false
+        }
+      }
+    }
+  ],
+  "completed_cases": 1,
+  "passed": 1,
+  "reserved_calls": 2,
+  "reserved_cents_delta": 4
+}

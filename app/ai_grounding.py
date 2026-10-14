@@ -919,13 +919,41 @@ def _shared_hotel_year_supports(value: str, quote: str, message: str,
         return False
     if _YEAR.search(quote):
         return False
-    natural = _NATURAL_DATE.search(quote.translate(_SOURCE_TYPOGRAPHY))
-    if not natural or natural.group(1).casefold() not in _MONTHS or natural.group(3):
-        return False
-    quote_month = _MONTHS[natural.group(1).casefold()]
-    quote_day = int(natural.group(2))
-    if (expected.month, expected.day) != (quote_month, quote_day):
-        return False
+    normalized_quote = quote.translate(_SOURCE_TYPOGRAPHY)
+    quote_range = _HOTEL_SHARED_YEAR_RANGE.search(normalized_quote)
+    natural = _NATURAL_DATE.search(normalized_quote)
+    if quote_range:
+        # A whole compressed range is a valid source for both endpoints, but
+        # the field still determines which endpoint it means.  Do not use the
+        # first date for checkout simply because the natural-date regex finds
+        # that date first.
+        quote_month1 = quote_range.group("month1").casefold()
+        quote_month2 = quote_range.group("month2")
+        if quote_month1 not in _MONTHS or quote_range.group("year") is None:
+            return False
+        quote_month1_number = _MONTHS[quote_month1]
+        quote_month2_number = (
+            quote_month1_number
+            if not quote_month2
+            else _MONTHS.get(quote_month2.casefold())
+        )
+        if quote_month2_number != quote_month1_number:
+            return False
+        if int(quote_range.group("year")) != expected.year:
+            return False
+        quote_day1 = int(quote_range.group("day1"))
+        quote_day2 = int(quote_range.group("day2"))
+        quoted_endpoint = quote_day1 if key == "checkin_date" else quote_day2
+        quote_endpoint = (quote_month1_number, quoted_endpoint)
+        if (expected.month, expected.day) != quote_endpoint:
+            return False
+    else:
+        if not natural or natural.group(1).casefold() not in _MONTHS or natural.group(3):
+            return False
+        quote_month = _MONTHS[natural.group(1).casefold()]
+        quote_day = int(natural.group(2))
+        if (expected.month, expected.day) != (quote_month, quote_day):
+            return False
     normalized_message = message.translate(_SOURCE_TYPOGRAPHY)
     for match in _HOTEL_SHARED_YEAR_RANGE.finditer(normalized_message):
         month1 = match.group("month1").casefold()
@@ -940,17 +968,35 @@ def _shared_hotel_year_supports(value: str, quote: str, message: str,
             continue
         day1 = int(match.group("day1"))
         day2 = int(match.group("day2"))
-        if (quote_month, quote_day) not in {
-            (month1_number, day1), (month2_number, day2)
-        }:
-            continue
         try:
             # Validate both endpoints too; malformed dates must never become
             # authority through a regex-only match.
-            date(expected.year, month1_number, day1)
-            date(expected.year, month2_number, day2)
+            start_date = date(expected.year, month1_number, day1)
+            end_date = date(expected.year, month2_number, day2)
         except ValueError:
             continue
+        if start_date >= end_date:
+            continue
+        if quote_range:
+            # Match the quoted whole range to the original customer range so
+            # a different nearby range cannot supply a synthetic endpoint.
+            if (
+                month1_number != quote_month1_number
+                or month2_number != quote_month2_number
+                or day1 != quote_day1
+                or day2 != quote_day2
+                or int(match.group("year")) != int(quote_range.group("year"))
+            ):
+                continue
+        else:
+            quoted_endpoint = (quote_month, quote_day)
+            expected_endpoint = (
+                (month1_number, day1)
+                if key == "checkin_date"
+                else (month2_number, day2)
+            )
+            if quoted_endpoint != expected_endpoint:
+                continue
         return True
     return False
 
@@ -2078,6 +2124,22 @@ def _temporal_value(key, quote, domain, source_messages=None):
     if domain == 'flight' and key == 'departure_date':
         return resolved
     if domain == 'hotel':
+        shared = _HOTEL_SHARED_YEAR_RANGE.search(quote.translate(_SOURCE_TYPOGRAPHY))
+        if shared:
+            month1_name = shared.group('month1').casefold()
+            month2_name = shared.group('month2')
+            month1 = _MONTHS.get(month1_name)
+            month2 = month1 if not month2_name else _MONTHS.get(month2_name.casefold())
+            try:
+                start_date = date(int(shared.group('year')), month1, int(shared.group('day1')))
+                end_date = date(int(shared.group('year')), month2, int(shared.group('day2')))
+            except (TypeError, ValueError):
+                return None
+            # Compressed hotel ranges are intentionally limited to a valid,
+            # ordered same-month stay. Cross-month and reversed ranges must
+            # reach source grounding and remain rejected there.
+            if month1 is None or month2 != month1 or start_date >= end_date:
+                return None
         if isinstance(resolved, str):
             return resolved
         if isinstance(resolved, dict) and set(resolved) == {'start', 'end'}:

@@ -178,9 +178,9 @@ function setComposerBusy(button,isBusy,label=''){
  }
 }
 async function busy(button,fn,label='Working…'){
- const old=button?.textContent,navigation=state.navigation,isComposerSend=button?.classList.contains('send');if(button){button.disabled=true;button.dataset.busy='true';if(isComposerSend)setComposerBusy(button,true,label);else button.textContent=label;}notice();
+ const old=button?.textContent,navigation=state.navigation,generation=sessionGeneration,isComposerSend=button?.classList.contains('send');if(button){button.disabled=true;button.dataset.busy='true';if(isComposerSend)setComposerBusy(button,true,label);else button.textContent=label;}notice();
  const stopProgress=beginInterpretationProgress(button,label,navigation);
- try{await fn();}catch(e){await reportError(e,navigation);}finally{stopProgress();if(button){button.disabled=false;if(isComposerSend)setComposerBusy(button,false,old);else button.textContent=old;}}
+ try{await fn();if(/^Interpreting/.test(label)&&(state.draft?.mode||state.mode)==='live'&&generation===sessionGeneration)await refreshAIStatus(true,{generation});}catch(e){await reportError(e,navigation);}finally{stopProgress();if(button){button.disabled=false;if(isComposerSend)setComposerBusy(button,false,old);else button.textContent=old;}}
  if(button){delete button.dataset.busy;renderAvailability();}
 }
 function beginInterpretationProgress(button,label,navigation){

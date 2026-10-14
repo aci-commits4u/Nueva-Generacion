@@ -159,6 +159,25 @@ when the answer can materially change the search, an acceptable purchase, or
 the customer's understanding. Treat operational clarity as a separate gate
 from profile coverage: a complete structured profile does not make a purchase
 request ready when a generic customer condition is still materially ambiguous.
+Question-key contract: ``question.criterion_key`` must exactly equal a key in
+``criteria`` or exactly equal an actually required profile field that is
+missing. Never invent a near-synonym (for example, ``price_limit_basis`` when
+the criterion key is ``price_limit``). A source-backed clarification belongs
+in ``clarifications`` with its exact quote; omit that unresolved field from
+both ``fields`` and ``sources``. For a hotel request such as ``under $220 per
+night``, preserve the nightly condition as a generic criterion with key
+``nightly_budget``, field null, status needs_clarification, and unsupported
+verification; never multiply it into a stay total. Ask one free-text question
+with criterion_key ``nightly_budget`` and field ``max_total_cents`` asking for
+the all-in total including fees for the complete stay. Do not ask the customer
+to restate a unit (the words ``per night`` already establish it). For a
+compressed same-month hotel range such as ``November 2–4, 2026``, use the
+literal range as the source for both ``checkin_date`` and ``checkout_date``
+while mapping the first and second endpoints respectively. Compact examples:
+``under $220 per night`` -> clarification ``{field:max_total_cents,
+source_quote:"under $220 per night"}``, no max_total_cents source; and
+``November 2–4, 2026`` -> fields ``{checkin_date:"2026-11-02",
+checkout_date:"2026-11-04"}``, both endpoint sources equal the full range.
 For a relative or implicit deadline/event with no concrete boundary (such as
 "arrive before my work trip" without a trip date), mark the source-backed
 criterion needs_clarification and ask the customer for the missing temporal
@@ -247,7 +266,7 @@ def _quarantine_adaptive_plan(candidate):
     return result
 
 
-def _compile_adaptive_response(raw, *, domain, source_text, source_messages=None):
+def _compile_adaptive_draft_contract(raw, *, domain, source_text, source_messages=None):
     """Bridge adaptive metadata into the strict legacy draft envelope.
 
     The adaptive planner can identify a source-backed generic condition whose
@@ -304,6 +323,29 @@ def _compile_adaptive_response(raw, *, domain, source_text, source_messages=None
         retained.append(item)
     draft['clarifications'] = retained
     draft['unsupported'] = unsupported
+
+    # Some adaptive providers copy a supported field's source quote into
+    # ``sources`` even when the field is omitted because the value is still
+    # ambiguous.  The strict envelope quite correctly rejects that orphaned
+    # source, but a source-backed clarification is the safe representation of
+    # the same customer clause.  Remove only this exact, typed pair.  An
+    # unknown key, mismatched quote, or non-customer clarification remains in
+    # place and therefore fails closed in the ordinary envelope validator.
+    fields = draft.get('fields') if isinstance(draft.get('fields'), dict) else {}
+    sources = draft.get('sources') if isinstance(draft.get('sources'), dict) else {}
+    valid_clarification_pairs = {
+        (item.get('field'), item.get('source_quote'))
+        for item in retained
+        if isinstance(item, dict)
+        and item.get('field') in profile_fields
+        and isinstance(item.get('source_quote'), str)
+        and source_quote_is_customer(item.get('source_quote'), source_text, source_messages)
+        and item.get('reason') in {'ambiguity', 'preference', 'missing', 'ambiguous'}
+    }
+    for field, quote in list(sources.items()):
+        if field not in fields and isinstance(quote, str) and (field, quote) in valid_clarification_pairs:
+            sources.pop(field, None)
+    draft['sources'] = sources
     for key in ('fields', 'sources', 'unsupported', 'clarifications', 'explanation'):
         if key in draft:
             compiled[key] = draft[key]
@@ -317,6 +359,16 @@ def _compile_adaptive_response(raw, *, domain, source_text, source_messages=None
     if generic:
         compiled['criteria'] = criteria
     return compiled
+
+
+def _compile_adaptive_response(raw, *, domain, source_text, source_messages=None):
+    """Backward-compatible name for the strict adaptive envelope compiler."""
+    return _compile_adaptive_draft_contract(
+        raw,
+        domain=domain,
+        source_text=source_text,
+        source_messages=source_messages,
+    )
 
 
 def call_json(stage, domain, message, variant, candidate=None, *, source_text=None,

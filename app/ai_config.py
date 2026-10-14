@@ -1,7 +1,7 @@
 """One selected default for interactive inference and live evaluations."""
 import os
 DEFAULT_PIPELINE='adaptive'
-PROMPT_VERSION='intent-envelope-v6-price-basis'
+PROMPT_VERSION='intent-envelope-v7-clarification-contract'
 REASONING_EFFORTS={'low','medium','high'}
 
 def selected_pipeline():
