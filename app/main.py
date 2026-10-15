@@ -16,7 +16,7 @@ from fastapi import FastAPI,HTTPException,Request,Response,Query
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.models import (IntentRequest,ProfileRefreshRequest,AnswerRequest,ApprovalRequest,
-                        CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest)
+                        CheckRequest,ExceptionRequest,PurchaseRequest,DisputeRequest,ClarifyRequest,ShoppingRequest)
 from app.profile_registry import get_profile,validate_fields,normalise_review_fields,digest
 from app.rules_engine import evaluate
 from app.store import get_store,ai_capacity
@@ -229,7 +229,11 @@ def quality_check(request:Request):
 
 @app.get('/api/health')
 def health():
-    return {'status':'ok','live_ai_configured':live_configuration_ready(),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
+    return {'status':'ok','environment':runtime_environment(),'live_ai_configured':live_configuration_ready(),'offline_only':os.getenv('MOCK_LLM')=='1','commerce':'simulated','shopping_provider':'kiwi','sdk':'verifiable-intent 0.1.0 / 356c296','storage':os.getenv('STORE_BACKEND','sqlite')}
+
+
+def runtime_environment():
+    return 'development' if os.getenv('APP_ENV', 'production' if os.getenv('VERCEL') else 'development')=='development' else 'production'
 
 
 @app.get('/api/ai/status')
@@ -266,7 +270,7 @@ def session(request:Request,response:Response):
         get_store().mutate(sid,lambda state:state.update({'created':time.time(),'drafts':{},'offers':{},'decisions':{},'purchases':{},'idempotency':{},'events':[]}))
     response.set_cookie('ij_session',sid,max_age=28800,httponly=True,secure=request.url.scheme=='https' or bool(os.getenv('VERCEL')),samesite='strict')
     s=get_store().read(sid)
-    return {'synthetic_actor':'Demo traveler','ai_calls':s.get('ai_calls',0),'intents':[{'id':d['id'],'domain':d['domain'],'message':d['message'],'approved':bool(d.get('approved'))} for d in s['drafts'].values()]}
+    return {'environment':runtime_environment(),'synthetic_actor':'Demo traveler','ai_calls':s.get('ai_calls',0),'intents':[{'id':d['id'],'domain':d['domain'],'message':d['message'],'approved':bool(d.get('approved'))} for d in s['drafts'].values()]}
 
 @app.post('/api/session/reset')
 def reset_session(request:Request,response:Response):
@@ -614,6 +618,54 @@ def approve(id:str,body:ApprovalRequest,request:Request):
         d['offer_views']=views;event(s,'requirements_approved',{'intent_id':id,'approved_digest':digest(approved),'signed_authorization':True})
         return {'approved':approved,'offers':views}
     return get_store().mutate(sid,action)
+
+@app.post('/api/intents/{id}/shopping')
+def shopping(id:str,body:ShoppingRequest,request:Request):
+    """Read-only provider discovery never enters the signed checkout store."""
+    from app.shopping_provider import search_flights,ShoppingProviderError
+    sid=session_id(request)
+    token=uid()
+    def claim(state):
+        draft=required(state,'drafts',id)
+        require_current_profile(draft)
+        if active_ai_request(state,'interpretation'):
+            raise HTTPException(409,'Wait for the current clarification before searching.')
+        approved=draft.get('approved')
+        if not approved or body.revision!=draft['revision']:
+            raise HTTPException(409,'Approve the current reviewed requirements before searching live options.')
+        if draft['domain']!='flight':
+            raise HTTPException(422,'Live shopping currently supports flights. Hotel and general checks remain signed synthetic demonstrations.')
+        pending=state.get('_shopping_pending',{})
+        if pending and time.time()-pending.get('started_at',0)<35:
+            raise HTTPException(409,'A live search is already running. Wait for its response.')
+        recent=[stamp for stamp in state.get('_shopping_requests',[]) if time.time()-stamp<300]
+        if len(recent)>=8:
+            raise HTTPException(429,'This session has made eight live searches in five minutes. Please wait before searching again.')
+        state['_shopping_requests']=recent+[time.time()]
+        state['_shopping_pending']={'token':token,'started_at':time.time()}
+        return deepcopy(approved)
+    approved=get_store().mutate(sid,claim)
+    try:
+        result=search_flights(approved,adults=body.adults,
+                              origin_airports=body.origin_airports,
+                              destination_airports=body.destination_airports)
+        current_state=get_store().read(sid)
+        current=required(current_state,'drafts',id)
+        if (current.get('approved')!=approved or current['revision']!=body.revision
+                or active_ai_request(current_state,'interpretation')):
+            raise HTTPException(409,'The requirements changed during this search. Review and approve the current draft before searching again.')
+        require_current_profile(current)
+        return {**result,'intent_id':id,'revision':body.revision,'approved_digest':digest(approved)}
+    except ShoppingProviderError as exc:
+        invalid={'invalid_requirements','missing_requirements','unsupported_domain','invalid_scope','invalid_passengers','scope_too_broad'}
+        status=422 if exc.code in invalid else 504 if exc.code=='provider_timeout' else 502
+        return JSONResponse({'detail':exc.message,'error':{'code':exc.code,'message':exc.message}},status_code=status)
+    finally:
+        def release(state):
+            if state.get('_shopping_pending',{}).get('token')==token:
+                state.pop('_shopping_pending',None)
+        get_store().mutate(sid,release)
+
 
 @app.post('/api/check')
 def check(body:CheckRequest,request:Request):

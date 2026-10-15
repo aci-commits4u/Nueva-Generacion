@@ -224,3 +224,31 @@ absent. Negated optional/skip wording remains binding, later requirements can
 replace an earlier decline, and another field's wording cannot clear a
 requirement. The model receives the same meaning in its prompt. This avoids
 repeating an answered question while keeping approval with the customer.
+
+## October 15, 2026 development direction: Signal / Proof
+
+The current `develop` direction keeps the existing Intent Judge information
+architecture, copy, forms, conversation flow, and Geist type system intact. The
+visual layer now uses a warm editorial and Swiss grid treatment: warm cream
+(`--pale: #F3F0EE`), ink (`#141413`), restrained signal orange
+(`--signal: #CF4500`, with `#F37338` for softer accents), proof blue
+(`--proof: #3860BE`), and quiet paper surfaces. Orange marks the interpretation
+and action path; green, amber, and red remain reserved for semantic match, hold,
+and block states. The shopping surface follows the same tokens and remains a
+read-only discovery layer beside the signed offer check.
+
+The direction was informed by the local Awesome Design Mastercard reference
+(`references/design-md/mastercard/DESIGN.md`): warm cream, strong ink, a
+signal-colored trajectory, and evidence-led hierarchy. It is an abstract visual
+reference only. This project does not reproduce the Mastercard mark, claim
+certification, or imply Mastercard endorsement.
+
+Stitch was considered for a single landing and intent-summary reference screen,
+but the configured Stitch connector returned `Authentication required`. No
+generated Stitch project, screen, or asset is represented as project output.
+OriginKit was considered for motion, but it is not authenticated or installed;
+the restrained CSS treatment is sufficient for this product and keeps the
+prototype dependency-free. Headless desktop and mobile captures were used to
+review the rendered result, including the warm landing foundation markers and
+the live shopping controls. No commit or deployment is part of this direction
+pass.

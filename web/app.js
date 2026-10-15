@@ -2,11 +2,12 @@ import {api,ApiError,errorFromUnknown} from './api.js';
 import {conversationMarkup} from './views/conversation.js';
 import {overviewMarkup} from './views/overview.js';
 import {walkthroughMarkup} from './views/walkthrough.js';
+import {shoppingMarkup} from './views/shopping.js';
 'use strict';
 const $ = s => document.querySelector(s);
 const escapeHTML = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtMoney = cents => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
-const state = {domain:'flight',stage:0,navigation:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live',aiStatus:null,aiStatusLoading:false};
+const state = {domain:'flight',stage:0,navigation:0,walkthroughStep:0,profiles:{},draft:null,offers:[],decisions:{},receipt:null,exception:null,mode:'live',aiStatus:null,aiStatusLoading:false,environment:'development',shopping:{intentId:null,revision:null,status:'idle',data:null,error:null,adults:1,selectedOrigins:null,selectedDestinations:null}};
 const samples = {
  flight:'Book me a nonstop flight from EWR to MCO on 2026-11-12 under $300.',
  hotel:'Find a hotel in Orlando from 2026-11-12 to 2026-11-14 under $300 with breakfast and free cancellation.',
@@ -19,6 +20,35 @@ const clarificationRequests=new Set();
 const airportSelection={intentId:null,revision:null,field:null,values:new Set()};
 const adaptiveSelection={intentId:null,revision:null,questionId:null,values:new Set()};
 function browserTimeZone(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';}catch{return 'UTC';}}
+function resetShopping(intentId=null,revision=null){
+ state.shopping={intentId,revision,navigation:state.navigation,status:'idle',data:null,error:null,scopeError:null,adults:1,selectedOrigins:null,selectedDestinations:null};
+}
+function syncShopping(d){
+ if(state.shopping.intentId!==d?.id||state.shopping.revision!==d?.revision||state.shopping.navigation!==state.navigation)resetShopping(d?.id||null,d?.revision??null);
+ return state.shopping;
+}
+function syncSessionEnvironment(session){
+ const value=session?.environment==='production'?'production':'development';
+ state.environment=value;
+ const nav=document.querySelector('.site-header nav');
+ if(!nav)return;
+ let badge=document.querySelector('#environment-badge');
+ if(value==='development'){
+  if(!badge){
+   badge=document.createElement('a');
+   badge.id='environment-badge';
+   badge.className='environment-badge';
+   badge.target='_blank';
+   badge.rel='noopener noreferrer';
+   nav.prepend(badge);
+  }
+  badge.href='https://intent-judge-perfected.vercel.app/';
+  badge.textContent='DEV';
+  badge.title='Development instance · open production';
+ }else if(badge){
+  badge.remove();
+ }
+}
 function syncAirportSelection(d,question){
  const isAirport=question?.field==='origin_airports'||question?.field==='destination_airports';
  if(!isAirport||airportSelection.intentId!==d?.id||airportSelection.revision!==d?.revision||airportSelection.field!==question?.field){
@@ -242,7 +272,7 @@ function reopenLiveIntake(staleDraft){
  window.scrollTo({top:0,behavior:'instant'});$('#workspace').focus({preventScroll:true});
 }
 
-function startDemo(domain=state.domain){state.reviewEdits=null;state.clarifyEdit=null;state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';transition(1);}
+function startDemo(domain=state.domain){state.reviewEdits=null;state.clarifyEdit=null;state.domain=domain;state.draft=null;state.message=null;state.offers=[];state.decisions={};state.receipt=null;state.returnStage=null;state.mode='live';resetShopping();transition(1);}
 function showWalkthrough(){if(state.stage>=1&&state.stage<=5)state.returnStage=state.stage;state.walkthroughStep=0;transition(7);}
 const stepHelp={
  1:['Start with your words','Choose a profile, describe what matters, and send your request. Foundry proposes a draft and checks for missed requirements. Try an example if you want a starting point. Nothing is approved yet.'],
@@ -531,15 +561,66 @@ function formatDateChoice(value){
  return String(value??'');
 }
 function checkMarkup(c){return `<div class="check-row"><div>${escapeHTML(c.check_id==='max_total_cents'?'All-in price':c.label)}${c.status!=='pass'?`<small>Required: ${escapeHTML(displayValue(c,c.requirement))}<br>Offer: ${escapeHTML(displayValue(c,c.offer_value))}</small>`:''}</div><span class="result ${c.status}">${c.status==='pass'?'✓ Matches':c.status==='fail'?'! Differs':'? Missing'}</span></div>`;}
+function shoppingScopeFromForm(fields){
+ const approvedOrigins=Array.isArray(fields?.origin_airports)?fields.origin_airports:[];
+ const approvedDestinations=Array.isArray(fields?.destination_airports)?fields.destination_airports:[];
+ const read=(key,approved)=>{
+  const inputs=[...document.querySelectorAll(`[data-live-scope="${key}"]`)];
+  if(!inputs.length)return approved.slice();
+  return inputs.filter(input=>input.checked).map(input=>input.value).filter(value=>approved.includes(value));
+ };
+ return {origin_airports:read('origin_airports',approvedOrigins),destination_airports:read('destination_airports',approvedDestinations)};
+}
+function liveShoppingSearch(button){
+ const draft=state.draft,approved=draft?.approved;
+ if(!draft?.id||!approved||draft.domain!=='flight'||state.shopping.status==='loading')return;
+ const navigation=state.navigation,intentId=draft.id,revision=draft.revision,fields=approved.fields||{};
+ return busy(button,async()=>{
+  const adults=Math.min(9,Math.max(1,Number($('#live-adults')?.value||state.shopping.adults||1)));
+  const scope=shoppingScopeFromForm(fields);
+  const originEmpty=Array.isArray(fields.origin_airports)&&fields.origin_airports.length>1&&!scope.origin_airports.length;
+  const destinationEmpty=Array.isArray(fields.destination_airports)&&fields.destination_airports.length>1&&!scope.destination_airports.length;
+  if(originEmpty||destinationEmpty){
+   const emptyField=originEmpty&&destinationEmpty?'departure and arrival airports':originEmpty?'departure airports':'arrival airports';
+   state.shopping={...state.shopping,intentId,revision,navigation,status:'idle',error:null,scopeError:`Choose at least one approved ${emptyField} to search. Your approved intent has not changed.`,adults,selectedOrigins:scope.origin_airports,selectedDestinations:scope.destination_airports};
+   renderOffers();
+   return;
+  }
+  state.shopping={...state.shopping,intentId,revision,navigation,status:'loading',error:null,scopeError:null,adults,selectedOrigins:scope.origin_airports,selectedDestinations:scope.destination_airports};
+  renderOffers();
+  try{
+   const body={revision,adults};
+   if(scope.origin_airports.length<fields.origin_airports.length)body.origin_airports=scope.origin_airports;
+   if(scope.destination_airports.length<fields.destination_airports.length)body.destination_airports=scope.destination_airports;
+   const result=await trackedApi(intentId,`/api/intents/${intentId}/shopping`,body);
+   if(!currentRequest(navigation,intentId)||state.draft.revision!==revision)return;
+   state.shopping={...state.shopping,status:'success',data:result,error:null};
+   render();
+  }catch(error){
+   if(!currentRequest(navigation,intentId)||state.draft.revision!==revision)return;
+   const parsed=errorFromUnknown(error,`/api/intents/${intentId}/shopping`);
+   state.shopping={...state.shopping,status:'error',data:null,error:parsed.message||'The provider did not return a usable response.'};
+   render();
+  }
+ },'Searching live options…');
+}
 function renderOffers(){
- const domain=state.draft.domain;
- $('#workspace').innerHTML=`<section><div class="section-head comparison-head"><span class="eyebrow">03 / VERIFIED FACTS. DETERMINISTIC CHECKS.</span><h1 class="page-title">Two offers. One approved intent.</h1><p>Compare each signed offer with the rules you approved. An authorized price can still come with a detail you didn't want.</p></div><div class="offer-grid">${state.offers.map((o,i)=>{
+ const draft=state.draft,domain=draft.domain,approved=draft.approved||null,shopping=syncShopping(draft);
+ const liveSection=domain==='flight'&&approved?shoppingMarkup({approved,shopping,environment:state.environment}):'';
+ const livePageTitle=liveSection?'<h1 class="sr-only">Options for your approved intent</h1>':'';
+ const comparisonHeading=liveSection?'<h2 class="page-title">Two offers. One approved intent.</h2>':'<h1 class="page-title">Two offers. One approved intent.</h1>';
+ $('#workspace').innerHTML=`<section>${livePageTitle}${liveSection}<div class="section-head comparison-head"><span class="eyebrow">03 / VERIFIED FACTS. DETERMINISTIC CHECKS.</span>${comparisonHeading}<p>Compare each signed offer with the rules you approved. An authorized price can still come with a detail you didn't want.</p></div><div class="offer-grid">${state.offers.map((o,i)=>{
  const d=state.decisions[o.id],f=o.facts,accepted=d.accepted;
  const route=domain==='flight'?`${f.origin} → ${f.destination}`:domain==='hotel'?f.city:f.title;
  const human=domain==='flight'?`${f.trip_type==='one_way'?'One-way · ':''}${f.connection_count===0?'Nonstop':f.connection_count+' connections'} · ${f.cabin} · ${f.departure_date}`:domain==='hotel'?`${f.checkin_date} → ${f.checkout_date} · ${f.breakfast?'Breakfast included':'Room only'}${Number.isInteger(f.max_adults)?' · Up to '+f.max_adults+' adults':''}`:'General profile · unsupported conditions hold checkout';
  const business=d.checks.filter(c=>!c.integrity&&!c.check_id.startsWith('native_'));
  return `<article class="offer"><span class="eyebrow">${i===0?'THE FIRST OFFER':'THE LOWER-PRICE OPTION'}</span><div class="status ${d.status==='PASS'?'':d.status==='BLOCK'?'block':'hold'}">${d.status==='PASS'?'✓ Intent-checked':accepted?'! Differences accepted':d.status==='BLOCK'?'× Blocked':'! On hold'}</div><div class="route">${escapeHTML(route)}</div><p class="facts-summary">${domain==='flight'?`${escapeHTML(f.departure_local)} departure · ${f.duration_minutes} minutes total`:escapeHTML(f.title)}</p><div class="price">${fmtMoney(f.total_cents)}</div><p class="facts-summary">${escapeHTML(human)}</p><div class="check-list">${business.map(checkMarkup).join('')}</div><div class="offer-controls">${d.status==='PASS'||accepted?`<button class="primary" data-purchase="${o.id}">Simulate purchase →</button>`:`<button class="secondary" data-review="${o.id}" ${d.status==='BLOCK'?'disabled':''}>Review ${business.filter(c=>c.status!=='pass').length===1?'this difference':'the differences'} →</button><button class="text-button" data-test-gate="${o.id}">Demonstrate the purchase gate ↗</button>`}</div><p class="vi-note"><b>${d.native_vi_passed?'VI chain + native rules pass':'VI native policy needs attention'}.</b> ${d.status==='PASS'?'Approved domain requirements also match.':'Our domain checks explain why checkout is held.'}</p><button class="text-button" data-explain="${o.id}">${state.draft.mode==='live'?'Ask Foundry to explain':'Explain the checks'} ↗</button><div class="ai-explanation" id="explanation-${o.id}" hidden></div><details><summary>View signature & verification record</summary><p class="hash">Offer hash: ${escapeHTML(o.offer_hash)}</p><p class="small">${d.ledger.map(l=>escapeHTML(l.type)+' — '+escapeHTML(l.status)).join('<br>')}</p><p class="small">${f.segments?f.segments.map(s=>escapeHTML(s.origin)+' → '+escapeHTML(s.destination)).join('<br>'):''}</p><p class="small">Every purchase rechecks the signature, expiry, approval, native rules, and specific exceptions.</p></details></article>`;
  }).join('')}</div><p class="comparison-foot">Merchant-signed offers <span class="dot">·</span> Exact offer-bound consent <span class="dot">·</span> Evidence you can download. This is a configurable synthetic demonstration, not live inventory.</p></section>`;
+ const liveForm=$('#live-shopping-form');
+ if(liveForm){
+  liveForm.onsubmit=e=>{e.preventDefault();liveShoppingSearch(e.submitter||liveForm.querySelector('button[type="submit"]'));};
+  document.querySelector('[data-live-shopping] [data-live-retry]')?.addEventListener('click',e=>liveShoppingSearch(e.currentTarget));
+ }
  document.querySelectorAll('[data-purchase]').forEach(b=>b.onclick=()=>busy(b,()=>purchase(b.dataset.purchase),'Confirming demo booking…'));
  document.querySelectorAll('[data-explain]').forEach(b=>b.onclick=()=>busy(b,async()=>{const navigation=state.navigation,d=state.decisions[b.dataset.explain],n=await api(`/api/decisions/${d.id}/explain`,{});if(!currentRequest(navigation))return;const target=$('#explanation-'+b.dataset.explain);target.hidden=false;target.innerHTML=`<span class="eyebrow">${n.mode==='live'?'FOUNDRY EXPLANATION':'DETERMINISTIC EXPLANATION'}</span><p>${escapeHTML(n.text)}</p><p class="small">Explanation only. The rules engine decides; you authorize exceptions.</p>`;},'Explaining the checks…'));
  document.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>openExceptions(b.dataset.review));
@@ -596,6 +677,7 @@ $('#new-request').onclick=e=>{
   try{
    await api('/api/session/reset',{});
    const session=await api('/api/session');
+   syncSessionEnvironment(session);
    invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;
    await refreshAIStatus(true,{generation:sessionGeneration,force:true});
    if(currentRequest(navigation))render();
@@ -605,7 +687,7 @@ $('#new-request').onclick=e=>{
  },'Opening a fresh request…');
 };
 (async()=>{
- try{const session=await api('/api/session');invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true,{generation:sessionGeneration,force:true})]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
+ try{const session=await api('/api/session');syncSessionEnvironment(session);invalidateSessionStatus();state.latestIntent=session.intents.at(-1)?.id;const [profiles]=await Promise.all([api('/api/profiles'),api('/api/health'),refreshAIStatus(true,{generation:sessionGeneration,force:true})]);state.profiles=Object.fromEntries(profiles.map(p=>[p.id,p]));
  const requested=new URLSearchParams(location.search).get('intent');const params=new URLSearchParams(location.search);const saved=requested?session.intents.find(x=>x.id===requested):null;
  if(saved){const loaded=await api('/api/intents/'+saved.id);
  if(loaded.latest_purchase){state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;state.receipt=loaded.latest_purchase;state.stage=5;}else if(loaded.profile_current===false||loaded.clarification_current===false){reopenLiveIntake(loaded);}else{state.draft=loaded;state.domain=loaded.domain;state.mode=loaded.mode;if(loaded.approved){state.offers=loaded.offer_views;for(const d of loaded.saved_decisions)state.decisions[d.offer_id]=d;await Promise.all(state.offers.filter(o=>!state.decisions[o.id]).map(async o=>state.decisions[o.id]=await api('/api/check',{intent_id:saved.id,offer_id:o.id})));state.stage=4;}else state.stage=2;}

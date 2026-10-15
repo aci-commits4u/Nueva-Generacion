@@ -70,9 +70,11 @@ class SQLiteStore:
             return json.loads(row[0]) if row else {}
 
 class AzureTableStore:
-    def __init__(self):
+    def __init__(self, *, table_name=None, connection_string=None):
         from azure.data.tables import TableServiceClient
-        self.table=TableServiceClient.from_connection_string(os.environ['AZURE_TABLE_CONNECTION_STRING']).create_table_if_not_exists(os.getenv('AZURE_TABLE_NAME','IntentJudge'))
+        connection_string = connection_string or os.environ['AZURE_TABLE_CONNECTION_STRING']
+        table_name = table_name or os.getenv('AZURE_TABLE_NAME','IntentJudge')
+        self.table=TableServiceClient.from_connection_string(connection_string).create_table_if_not_exists(table_name)
     def _read(self,key):
         from azure.core.exceptions import ResourceNotFoundError
         try:
@@ -96,11 +98,84 @@ class AzureTableStore:
             except (ResourceExistsError,ResourceModifiedError): continue
         raise RuntimeError('Concurrent update; please retry.')
 
+
+def _validate_hosted_development_configuration():
+    """Refuse hosted development when it could share production state.
+
+    Production predates ``APP_ENV`` and remains backward compatible.  Local
+    development may use SQLite.  The guard applies only to a Vercel
+    deployment explicitly marked as development, where an omitted override
+    would otherwise make ``get_store`` fall back to the production table.
+    """
+    if not os.getenv('VERCEL') or os.getenv('APP_ENV', '').strip().lower() != 'development':
+        return
+    if os.getenv('STORE_BACKEND', '').strip().lower() != 'azure':
+        raise RuntimeError('Hosted development requires STORE_BACKEND=azure.')
+    session_table = os.getenv('AZURE_TABLE_NAME', '').strip()
+    budget_table = os.getenv('AI_BUDGET_TABLE_NAME', '').strip()
+    if not session_table:
+        raise RuntimeError('Hosted development requires AZURE_TABLE_NAME.')
+    if not budget_table:
+        raise RuntimeError('Hosted development requires AI_BUDGET_TABLE_NAME.')
+    if session_table == budget_table:
+        raise RuntimeError('Hosted development requires distinct session and budget tables.')
+
+
 @lru_cache
 def get_store():
+    _validate_hosted_development_configuration()
     if os.getenv('STORE_BACKEND')=='azure': return AzureTableStore()
     if os.getenv('VERCEL'): raise RuntimeError('Vercel requires durable Azure state')
     return SQLiteStore(os.getenv('SQLITE_PATH','.intent-judge.sqlite3'))
+
+
+@lru_cache
+def _budget_store(backend, session_path, session_table_name, budget_table_name,
+                  budget_connection_string, budget_sqlite_path):
+    """Build the optional shared budget store from an environment snapshot.
+
+    Including the session configuration in this cache key keeps existing test
+    fixtures and local processes isolated when they clear ``get_store`` and
+    change ``SQLITE_PATH`` between runs.  The connection string is only used as
+    an in-process cache discriminator; it is never logged or returned.
+    """
+    if not budget_table_name and not budget_connection_string and not budget_sqlite_path:
+        return get_store()
+    if backend == 'azure':
+        return AzureTableStore(
+            table_name=budget_table_name or session_table_name or 'IntentJudge',
+            connection_string=budget_connection_string or os.environ['AZURE_TABLE_CONNECTION_STRING'],
+        )
+    if budget_sqlite_path:
+        return SQLiteStore(budget_sqlite_path)
+    # A table-specific override only has meaning for the Azure backend.  Keep
+    # local/test behavior compatible with the existing single SQLite store.
+    return get_store()
+
+
+def get_budget_store():
+    """Return the authoritative store for the cross-environment AI ledger.
+
+    Production leaves the overrides unset and therefore keeps the historical
+    ledger in its current store.  A dev/preview deployment can point its
+    session table at a dev namespace while setting ``AI_BUDGET_TABLE_NAME`` to
+    the existing production table.  Only budget rows use that shared store;
+    session and application rows remain in the deployment's own store.
+    """
+    _validate_hosted_development_configuration()
+    return _budget_store(
+        os.getenv('STORE_BACKEND',''),
+        os.getenv('SQLITE_PATH',''),
+        os.getenv('AZURE_TABLE_NAME',''),
+        os.getenv('AI_BUDGET_TABLE_NAME','').strip(),
+        os.getenv('AI_BUDGET_TABLE_CONNECTION_STRING',''),
+        os.getenv('AI_BUDGET_SQLITE_PATH',''),
+    )
+
+
+# Match the cache-reset affordance of get_store for focused tests and local
+# process reconfiguration without making callers know about the private cache.
+get_budget_store.cache_clear = _budget_store.cache_clear
 
 
 def _session_budget_key(session):
@@ -236,13 +311,14 @@ def reserve_ai_calls(session, count, purpose='interactive'):
     if type(count) is not int or not 1 <= count <= 3:
         raise ValueError('Invalid model call count')
     reservation_cents = _reservation_rate_cents()
-    store = get_store()
+    session_store = get_store()
+    budget_store = get_budget_store()
     timestamp = time.time()
     day = time.strftime('%Y-%m-%d', time.gmtime(timestamp))
     reset = 86400 - int(timestamp) % 86400
     limits = _limits()
     session_key = _session_budget_key(session)
-    legacy_session_count = store.read(session).get('ai_calls', 0) if purpose == 'interactive' else 0
+    legacy_session_count = session_store.read(session).get('ai_calls', 0) if purpose == 'interactive' else 0
 
     def reserve(state):
         current_reserved = _reserved_cents(state)
@@ -277,10 +353,10 @@ def reserve_ai_calls(session, count, purpose='interactive'):
         state.setdefault('usage', {'prompt_tokens': 0, 'completion_tokens': 0})
         return state['calls'], session_count + count
 
-    reservation, session_count = store.mutate('global-ai-budget', reserve)
+    reservation, session_count = budget_store.mutate('global-ai-budget', reserve)
     if purpose == 'interactive':
         try:
-            store.mutate(session, lambda state: state.update(ai_calls=max(state.get('ai_calls', 0), session_count)))
+            session_store.mutate(session, lambda state: state.update(ai_calls=max(state.get('ai_calls', 0), session_count)))
         except Exception:
             logging.getLogger(__name__).warning('AI session usage projection unavailable; authoritative reservation retained')
     return reservation
@@ -292,7 +368,9 @@ def reserve_ai_call(session, purpose='interactive'):
 
 def ai_capacity(session):
     """Read availability without inference, reservations, or exposing other sessions."""
-    state = get_store().read('global-ai-budget')
+    budget_store = get_budget_store()
+    session_store = get_store()
+    state = budget_store.read('global-ai-budget')
     limits = _limits()
     reservation_cents = _reservation_rate_cents()
     timestamp = time.time()
@@ -311,7 +389,7 @@ def ai_capacity(session):
     # Keep the legacy lifetime key as the effective limit so callers that
     # gate on it cannot advertise capacity that the money ledger rejects.
     lifetime_remaining = min(call_lifetime_remaining, money_lifetime_remaining)
-    session_count = state.get('session_reservations', {}).get(_session_budget_key(session), get_store().read(session).get('ai_calls', 0))
+    session_count = state.get('session_reservations', {}).get(_session_budget_key(session), session_store.read(session).get('ai_calls', 0))
     session_remaining = max(0, limits['session'] - session_count)
     return {'remaining_calls': min(daily_remaining, lifetime_remaining),
             'session_remaining_calls': session_remaining,
@@ -336,7 +414,7 @@ def record_usage(usage):
     def add(s):
         u=s.setdefault('usage',{'prompt_tokens':0,'completion_tokens':0})
         for k in u: u[k]+=int(usage.get(k,0) or 0)
-    get_store().mutate('global-ai-budget',add)
+    get_budget_store().mutate('global-ai-budget',add)
 
 
 def record_ai_outcome(stage, outcome, request_id=None):

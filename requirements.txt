@@ -7,3 +7,4 @@ python-dotenv>=1,<2
 verifiable-intent @ git+https://github.com/agent-intent/verifiable-intent.git@356c29635f1c44df7de02edb58699ca9f29bece6
 airportsdata==20260905
 pycountry==26.2.16
+mcp==2.3.0

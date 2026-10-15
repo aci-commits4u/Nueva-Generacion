@@ -50,6 +50,12 @@ class ApprovalRequest(StrictModel):
     digest: str
     confirmation: bool
 
+class ShoppingRequest(StrictModel):
+    revision: int = Field(ge=1)
+    adults: int = Field(default=1,ge=1,le=9)
+    origin_airports: list[str] | None = Field(default=None,min_length=1,max_length=12)
+    destination_airports: list[str] | None = Field(default=None,min_length=1,max_length=12)
+
 class CheckRequest(StrictModel):
     intent_id: str
     offer_id: str
