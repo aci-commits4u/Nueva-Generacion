@@ -1,5 +1,35 @@
 # Implementation and verification record
 
+## Isolated development shopping release — October 15
+
+Development is deployed at **https://intent-judge-perfected-dev.vercel.app** on
+`develop`, in the separate `/Users/victor/Nueva-Generacion-dev` worktree.
+Runtime source `af6d617` is READY as `dpl_BJh8nCZZRd4TH495Mk2mYAvY2mw2`;
+[its exact-source CI](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38663400173)
+passed **574 pytest tests and eleven browser suites**. The public production
+deployment below remains unchanged.
+
+Development adds real, read-only Kiwi MCP flight discovery and outbound booking
+links after approval, plus the warm neutral/black/orange visual direction.
+Live unsigned quotes stay separate from the signed synthetic purchase gate.
+Hotels and General have no live shopping provider. Sessions and signing keys
+are isolated, while both environments share the historical global AI budget.
+The deployment guard requires a clean pushed release branch and exact-commit
+green CI; it removes cron from development. This is manual CI-gated deployment,
+not automatic production deployment or GitHub branch protection.
+
+A deployed browser walkthrough used one real Foundry initial send, retained all
+seven explicit Warsaw–Berlin requirements, found actual `$121`/`$127` Kiwi
+quotes, refused the connecting demo purchase with HTTP 409, completed the
+matching simulated purchase, downloaded evidence, and reloaded its receipt.
+All **18 UI checks** and **14 root signature/binding checks** passed. The ledger
+now reads 454 stages and $23.96 conservatively reserved by the application,
+not Azure-billed spending. See [the release workflow](24-environments-and-release.md)
+and [shopping acceptance record](25-live-shopping-and-uat.md) for scope,
+artifacts, actual input, and limits.
+
+## Public production baseline
+
 Intent Judge is implemented on `victor/perfected` at https://intent-judge-perfected.vercel.app. Live Foundry now generates the next useful question and can choose bounded read-only merchant context, followed by a fresh source review. Customer approval and deterministic validation over signed merchant facts remain separate. The overview and five-step tutorial explain the product; the commerce inventory and purchase are explicitly simulated. See [the adaptive engine](19-adaptive-intent-engine.md) and [native UAT](20-adaptive-native-uat.md).
 
 

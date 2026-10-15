@@ -9,16 +9,26 @@ boundary.
 
 | Surface | Location | State | Purpose |
 |---|---|---|---|
-| Development | `/Users/victor/Nueva-Generacion-dev` · `intent-judge-perfected-dev` · [intent-judge-perfected-dev.vercel.app](https://intent-judge-perfected-dev.vercel.app) | Stable alias, not deployed yet | Shopping development and exploratory UAT |
+| Development | `/Users/victor/Nueva-Generacion-dev` · `intent-judge-perfected-dev` · [intent-judge-perfected-dev.vercel.app](https://intent-judge-perfected-dev.vercel.app) | READY, source `af6d617` | Shopping development and exploratory UAT |
 | Production | Existing release checkout and `intent-judge-perfected` | v15 deployment `dpl_GnMbCwaXUYxyyToc5w8oZQqLf4En` unchanged | Public demo |
 
 The development project is `prj_BQgv2BqYWbrJjqW0LkPw13cVC8jc`. Development
 sessions use `IntentJudgeDev` and distinct signing keys; production keeps
 `IntentJudge` and its existing keys. The global AI budget ledger remains the
 shared `IntentJudge` table, with a `$30` cap across 500 stages and the current
-readback of 452 stages and a conservative 2,392-cent ($23.92) application
-reservation. Development has no quality cron. No deployment claim is made for
-the development alias until its upload and deployed UAT are complete.
+readback after deployed UAT of 454 stages and a conservative 2,396-cent
+($23.96) application reservation. This is not an Azure invoice. The live UAT
+used two stages and added four cents to the existing reservation; no usage was
+reset. Development has no quality cron.
+
+Runtime source `af6d61744cdecd0e783b1b85fc0b184ffc6825ea` is READY as
+`dpl_BJh8nCZZRd4TH495Mk2mYAvY2mw2`.
+[Exact-source CI 38663400173](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38663400173)
+passed both deterministic and browser jobs before the manifest guard allowed
+upload. The development `vercel.json` override has no cron. Production was
+read back after deployment and still points at `dpl_GnMbCwaXUYxyyToc5w8oZQqLf4En`;
+its public health endpoint returned HTTP 200. Production secret bindings were
+removed from future previews; its active runtime was not replaced.
 
 ## Kiwi discovery boundary
 
@@ -61,14 +71,46 @@ flowchart LR
 | New shopping browser suite | Eleven-suite headless run passed; final shopping suite passed after UI corrections | Deterministic offline/intercepted browser regression | Pass |
 | Kiwi SDK search | WAW→BER on Feb 10 returned `$121` and `$127` quotes | Real provider observation | Observed; unsigned and non-purchasing |
 | Explicit offline interpretation + live UI search | EWR→MCO on Nov 12 returned ten quotes from `$120` | Offline intent parser followed by the actual Kiwi provider | Observed; live unsigned quotes, no live model interpretation |
-| Microsoft Foundry shopping calls | No paid Foundry calls in this phase | Live model verification | Pending |
-| Development Vercel project | Stable alias exists, upload not completed | Hosted deployment | Pending |
-| Purchase | No actual purchase was made | Commerce boundary | Not performed |
+| Deployed Foundry → Kiwi walkthrough | One live initial send, all seven requested fields retained, two actual Kiwi quotes | Live model + live provider through DOM typing/clicks; no interception | 18/18 checks passed |
+| Development Vercel project | READY deployment, public health HTTP 200, environment development, live AI configured, Azure storage | Hosted deployment | Pass |
+| Signed demo purchase | Held offer HTTP 409; matching simulated purchase, download and reload | Signed synthetic checkout through UI | Pass; no real booking |
+| Evidence and environment signatures | Configured issuer/merchant signatures, VI chain/native rules, digest/offer/approval binding, distinct dev keys | Root cryptographic verification | 14/14 checks passed |
 
 The real Kiwi SDK observation and the live UI search both reached Kiwi. The UI
-used explicitly offline intent interpretation. Neither demonstrates live Foundry interpretation, a signed
-checkout, or a successful purchase. Root-owned deployment, CI, and Foundry
-results can be appended after those checks are actually completed.
+used explicitly offline intent interpretation. Those local checks do not
+demonstrate live Foundry interpretation. The separate deployed walkthrough below
+does exercise the real model, real discovery, and signed synthetic checkout.
+
+## Deployed live acceptance
+
+At 2026-10-15 01:05 UTC, root typed this into the deployed chatbot once:
+
+> Book me a one-way nonstop economy flight from Warsaw (WAW) to Berlin (BER) on 2027-02-10 under $300.
+
+The real Foundry response completed in 20.9 seconds. It retained WAW, BER,
+February 10, nonstop, economy, one-way, and the strict-under-$300 cap
+(`29999` cents). Review chose no preference only for unanswered optional fields;
+all seven explicit values survived customer approval.
+
+Clicking live search reached Kiwi and returned two USD quotes, `$121` and
+`$127`, bound to that intent and approved revision. The browser showed valid
+Kiwi links and external/unverified labels; no external quote gained checkout
+authority. Mobile width 390 had no horizontal overflow. Missing technical-stop
+data remained UNKNOWN despite zero reported connections.
+
+The separate `$280` signed demo itinerary with three connections had no purchase
+control, and its gate demonstration returned HTTP 409. The `$295` matching
+signed demo itinerary completed a simulated purchase with zero exceptions.
+Evidence downloaded and the receipt survived reload. There were no browser
+errors, no automatic model retries, and no fallback. This is one successful
+live acceptance case, not evidence of universal model reliability.
+
+Artifacts are in `artifacts/dev-hosted-uat/`: `report.json` records 18 UI checks,
+`signature-verification.json` records 14 cryptographic checks,
+`signed-evidence.json` is 52,933 bytes, and desktop/mobile captures show the
+rendered flow. The evidence verifies the configured development keys and proves
+they differ from the prior production receipt's keys. No real flight was booked
+and no payment was made.
 
 ## UI direction
 
@@ -90,8 +132,6 @@ signed intent comparison reachable. Evidence is under `artifacts/uat-shopping*`.
 
 ## Remaining boundaries
 
-- The development Vercel project is not deployed yet.
-- No paid Foundry calls have been made for this phase.
 - Kiwi data remains unsigned, read-only, and advisory; it cannot replace the
   merchant-signed checkout facts.
 - Hotels and General have no live provider.
