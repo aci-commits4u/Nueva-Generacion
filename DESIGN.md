@@ -164,3 +164,63 @@ They must not bring up visible windows, change application focus, or switch
 desktops. Harness failures stay separate from application failures and consume
 their original recorded budget. Tests and outcomes are preserved in
 `docs/22-messy-user-testing.md`.
+
+## Latest-turn coverage decision
+
+The hotel repeat showed that an answer can resolve the asked dates while
+introducing a new nightly cap and optional extension. Both model roles missed
+those additions. A prompt-only experiment improved price retention but still
+missed the extension. The verified newest customer message now has its own
+provider payload field, with a fresh clause audit in each role. Only content
+matching the actual latest customer source message is promoted; durable hints
+and interface or merchant text cannot establish customer provenance.
+
+A bounded, shared literal guard preserves unrepresented explicit money/date
+clauses as exact unsupported conditions for review. Currency, units, optional
+extensions, corrections and ranges stay distinct; nearby clauses cannot lend
+their units or optionality to each other. Raw rejected model proposals do not
+count as retained evidence. The guard does not interpret the clause into a
+booking, generate a question, or authorize anything. It protects a limited
+source-coverage boundary rather than guaranteeing complete semantic extraction.
+The AI continues to choose and generate the next useful question.
+
+The first v12 provider experiment retained both additions without invoking the
+guard. Tests cover simultaneous model omission, exact source operators,
+untrusted merchant wording, corrections, normal answers and bounded overflow.
+Final deployed UI acceptance is recorded separately in `docs/22-messy-user-testing.md`.
+
+## Exact-source interpretation contract
+
+The v12 hidden tests failed where the model copied and reordered customer
+words. The adaptive contract now gives both Foundry roles a bounded catalog of
+exact customer spans and requires strict JSON source references. The server
+resolves those references before semantic grounding; profile keys determine
+typed fields, while source keys preserve generic conditions. Merchant or
+interface text cannot supply customer provenance. This improves the model's
+working contract without turning a citation into proof of understanding.
+
+Medium reasoning and a 6,000-token adaptive completion bound were selected after
+a smaller completion truncated the second role. Each adaptive stage has a
+35-second timeout and the hosted function allows 90 seconds. There remain two
+roles, one bounded read-only context action, no automatic retries, no silent
+offline fallback, and no AI approval. Existing reservation and stage limits
+remain unchanged. Actual public UI results are recorded separately from these
+provider experiments.
+
+The exact v13 UI replay exposed an inconsistent generic criterion: its source
+ID was valid but its redundant reference was null. V14 uses the generic key
+itself as the source reference; profile criteria keep a separate reference.
+This removes an unnecessary model obligation while retaining strict validation.
+Signed offer previews now include advisory comparison checks from the same
+rules engine used at checkout. A price match cannot hide a nonstop conflict;
+the preview remains unapproved and has no purchase authority.
+
+## Optional answers remain answers
+
+Live testing exposed a repeated question after the customer had already said
+breakfast was optional. Explicit field-local optional/skip wording now compiles
+to sourced, reviewable “No preference”; it does not mean breakfast must be
+absent. Negated optional/skip wording remains binding, later requirements can
+replace an earlier decline, and another field's wording cannot clear a
+requirement. The model receives the same meaning in its prompt. This avoids
+repeating an answered question while keeping approval with the customer.

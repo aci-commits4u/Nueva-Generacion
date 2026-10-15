@@ -3,7 +3,162 @@
 Intent Judge is implemented on `victor/perfected` at https://intent-judge-perfected.vercel.app. Live Foundry now generates the next useful question and can choose bounded read-only merchant context, followed by a fresh source review. Customer approval and deterministic validation over signed merchant facts remain separate. The overview and five-step tutorial explain the product; the commerce inventory and purchase are explicitly simulated. See [the adaptive engine](19-adaptive-intent-engine.md) and [native UAT](20-adaptive-native-uat.md).
 
 
-## Current planner repair — October 14
+## Current explicit-optionals release — October 14
+
+Runtime source `f505c4c48203d3f8b4f881c639cc8c43db37aade` is deployed READY as
+`dpl_GnMbCwaXUYxyyToc5w8oZQqLf4En` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38610946939](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38610946939)
+passed **542 pytest tests**, **ten browser suites**, JavaScript syntax, and the
+client deadline regression. The browser suites use offline/intercepted cases;
+the live walkthroughs below type into the deployed chatbot and use real Foundry.
+Prompt version is `intent-envelope-v15-explicit-optionals`.
+
+Explicit optional wording now becomes a sourced, reviewable no-preference
+choice instead of another question. This never means the amenity must be
+absent. Binding language such as “not optional” or “cannot skip” stays binding,
+later positive requirements supersede older optional choices, and one field's
+optional wording cannot clear another field's requirement. Customer review
+and exact approval remain mandatory.
+
+The final two-send Valparaíso walkthrough retained the selected and alternate
+dates, foreign nightly preference, separate $900 total, balcony, 1pm checkout,
+and original qualitative conditions in both the live summary and first review.
+Breakfast showed sourced “No preference” and was not asked again. Unsupported
+hotel conditions remained held; no hotel purchase was attempted.
+
+A separate one-send root UI check of the original ambiguous money request
+completed in 15.1 seconds with no invented flight or budget fields. The goal
+remained held. The model declined that request in the selected flight mode
+rather than asking the useful goal question observed in v14. This is a
+recorded conversational limitation, not a clarification success.
+
+The final independent one-send Warsaw–Berlin walkthrough preserved nonstop,
+economy, one-way, date, route, and strict-under-$300 requirements. The model
+accurately explained that the cheaper three-connection offer violated nonstop.
+The $295 offer passed; the $280 connecting offer was held with no purchase
+control. The matching simulated purchase completed with zero exceptions, its
+evidence downloaded, and its receipt survived reload. Root verification passed
+fourteen checks over the configured issuer/merchant signatures, canonical
+digest, exact offer and approval binding, VI chain and native constraints,
+approved values, and analyst boundary. The evidence file is 55,951 bytes;
+artifacts are under `artifacts/v15-flight-uat-20261014/`.
+
+The final readback records 452 model stages and **$23.92 conservatively
+reserved by the application**, not an Azure invoice. The unchanged $30 cap
+and 500-stage ceiling leave 48 stages, or 24 two-stage interpretations, under
+the lifetime limit. UTC October 15 has four interactive stages recorded;
+daily rollover occurred naturally while work was interrupted. No historical
+usage or reservation was reset. The model remains probabilistic, commerce is
+synthetic, and unsupported conditions remain held.
+
+See [the actual user-testing record](22-messy-user-testing.md) for literal
+inputs, failures, independent versus root evidence, and remaining limits.
+
+## Bound-source release — October 14 (v14 checkpoint)
+
+Runtime source `fb0dc672a3682a919d6a77ba6fdf0a1009ec2454` is deployed READY as
+`dpl_2vawrdy7ENV83RDqvyz2MAuxvu1a` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38609247763](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38609247763)
+passed **539 pytest tests**, all **ten browser suites**, JavaScript syntax,
+and the client deadline check. The browser suites use explicit offline or
+intercepted cases; fresh live UI acceptance remains separate.
+
+Prompt version `intent-envelope-v14-bound-source-keys` removes a redundant
+generic source reference: the validated criterion key already identifies the
+exact source span. Profile criteria retain their separately validated source
+reference. A precise replay of the v13 hotel failure proved that a valid source
+key paired with a null duplicate reference caused hydration to reject the
+review. This repair removes that inconsistent state without guessing meaning
+or granting approval.
+
+Read-only offer inspection also gives the model advisory comparisons over the
+grounded draft and verified merchant facts. These reuse the existing rules
+engine, with `MATCH`, `CONFLICT`, and `UNKNOWN` under an `UNAPPROVED` label.
+The model must describe conflicts instead of claiming that a cheaper connecting
+flight satisfies a nonstop request. Approved checkout remains a separate
+deterministic decision. Operational counters now include adaptive failures.
+
+Independent hidden-browser hotel testing retained the new conditions through
+review but redundantly asked about optional breakfast. The flight walkthrough
+completed the matching purchase, held the connecting offer, downloaded signed
+evidence, and reloaded the receipt while preserving nonstop, economy, and
+one-way requirements. Root verification checked the configured issuer and
+merchant signatures, VI chain, native constraints, exact offer hash, and
+approved digest. The root ambiguous-goal check asked for clarification without
+inventing fields. Historical failures and the limitations of each test are
+preserved below and in
+[the messy user test record](22-messy-user-testing.md).
+
+## Source-reference release — October 14 (v13 checkpoint)
+
+Runtime source `40d65516c5676326372bcc56b7fae8cb474bbb67` is deployed READY as
+`dpl_5fShL2wRVkcUXjJJmiHiwxock91Z` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38607867597](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38607867597)
+passed the deterministic and browser jobs. Local verification passed **529
+pytest tests**, Python compilation, and the client deadline regression.
+Prompt version is `intent-envelope-v13-source-references`.
+
+The adaptive provider now returns strict structured claims and references to
+exact customer-source spans. This removes a demonstrated failure in which the
+model rewrote a quotation and grounding rejected the resulting draft. Fields
+derive from validated profile keys; generic conditions derive from source IDs.
+References establish provenance, not correct interpretation. Existing semantic
+checks, coverage guards, customer approval, and signed-offer enforcement remain
+necessary. Medium reasoning and a 6,000-token adaptive completion bound follow
+measured provider experiments; incomplete results remain visible errors with no
+automatic retry or fallback. The two-role workflow fits a 90-second function
+limit. Spending and stage counters were not reset or raised.
+
+Independent headless UI testing failed both hotel initial requests in the
+adaptive review. A flight request captured all seven supplied fields, but the
+tester accidentally selected no preference for explicit rules before approval;
+that completed purchase does not prove the intended nonstop hold. The ambiguous
+money harness stopped after ten seconds and is inconclusive. These results are
+separate from provider experiments and CI. See
+[the source-reference contract](23-source-reference-contract.md)
+and [the messy user test record](22-messy-user-testing.md).
+
+## Latest-turn repair — October 14 (v12 checkpoint)
+
+Runtime source `cbf2885075451b54c3851e78471a0c399aced399` is deployed READY as
+`dpl_5BEptpVzzSRHLyifhcLoqwB3BfBi` at **https://intent-judge-perfected.vercel.app**.
+[Source CI run 38599896732](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38599896732)
+passed **516 pytest tests**, all **ten browser journeys**, JavaScript syntax,
+and the client deadline check. The browser suites remain explicit offline or
+intercepted regressions, separate from live acceptance. Prompt version is
+`intent-envelope-v12-literal-coverage`.
+
+The v10 hotel follow-up exposed a real omission: both model roles captured
+the selected dates but dropped the new $175 nightly cap and optional extra
+night. The v11 prompt/payload experiment retained the cap but still missed
+the extension; that failed result is preserved. The shared provider payload
+now exposes the verified newest customer turn separately and requires both
+roles to audit all its material clauses, including additions beyond the
+pending question. A narrow coverage guard additionally preserves exact
+unrepresented money/date clauses as unsupported review conditions. It does
+not infer a booking date, convert a nightly budget, generate a fallback
+question, add a model call, or approve anything. Unsupported meanings outside
+this literal check still depend on model extraction and customer review.
+
+The v12 targeted live provider experiment retained the cap and April 8 option,
+kept April 3–7 as the selected stay, did not turn $175 into a total, and added
+no duplicate warning for the captured dates. In that run the model emitted
+the new conditions and the guard added zero flags. Separate deterministic
+regressions prove that omitted literals remain held even when both mocked
+roles omit them. This provider experiment is not a browser walkthrough.
+
+Independent hidden-browser v12 testing failed the Tbilisi clarification and
+the novel Valparaíso initial request at the coverage-audit stage. The prior
+draft was preserved after the Tbilisi failure; the new cap and extension were
+not saved. London corrections passed the first review, but a harness context
+failure prevented a completed purchase. The provider success above does not
+establish UI acceptance. See
+[the messy user test record](22-messy-user-testing.md) for literal requests,
+failures and bounded outcomes. Live health confirms Foundry configured,
+offline-only false, Azure state and simulated commerce. Further testing stays
+headless while Victor uses the Mac.
+
+## Planner repair — October 14 (v10 checkpoint)
 
 Runtime source `e289d14d4461bf006296d3cd534bb72c5168a461` is deployed READY as
 `dpl_Gt7ZpCUmVx3UgfTEBhNo8akBJ9tA` at **https://intent-judge-perfected.vercel.app**.

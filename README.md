@@ -41,6 +41,7 @@ Open http://127.0.0.1:8000. Configure Azure variables for live AI. For a disconn
 - `app/vi_adapter.py`: pinned VI SDK L1/L2/split L3 issuance and verification; independent ES256 merchant verification; explicit dispatch of every constraint.
 - `app/main.py`: server-owned review, approval, exact exceptions, reauthorization, idempotent purchase, evidence, and session recovery.
 - `app/ai_pipeline.py`: two-stage adaptive planning on Foundry gpt-oss-120b, with strict grounded output validation and one bounded read-only tool action.
+- `app/structured_intent.py`: strict provider schema and exact customer-source references, hydrated before semantic validation.
 - `app/adaptive_intent.py`: shared action, criterion, question, and merchant-context contract across domains.
 - `app/conversation.py`: revision-bound state, exact question binding, customer corrections, and approval preparation.
 - `app/quality.py`: authenticated, replay-safe daily live canary and public synthetic quality reports.
@@ -72,5 +73,10 @@ separate regression and native acceptance evidence.
 
 [Messy live user testing](docs/22-messy-user-testing.md) records unfamiliar
 flight and hotel requests typed into the deployed chatbot, the observed
-failures, planner repairs, and the v10 London correction acceptance. It keeps
+failures, model repairs, hotel clarification retention, and the final live
+flight purchase with signed evidence. It keeps
 real model behavior separate from offline regressions and harness failures.
+
+The [source-reference contract](docs/23-source-reference-contract.md) explains
+the measured model changes, strict structured output, and the distinction
+between proving where a requirement came from and understanding it correctly.
