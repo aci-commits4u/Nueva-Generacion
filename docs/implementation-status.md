@@ -22,7 +22,10 @@ A deployed browser walkthrough used one real Foundry initial send, retained all
 seven explicit Warsaw–Berlin requirements, found actual `$121`/`$127` Kiwi
 quotes, refused the connecting demo purchase with HTTP 409, completed the
 matching simulated purchase, downloaded evidence, and reloaded its receipt.
-All **18 UI checks** and **14 root signature/binding checks** passed. The ledger
+All **18 app UI checks** and **14 root signature/binding checks** passed. A
+separate actual outbound-link click reached Kiwi's access boundary and received
+HTTP 403 in the automated browser; external booking-page arrival and real
+purchase are not verified. The ledger
 now reads 454 stages and $23.96 conservatively reserved by the application,
 not Azure-billed spending. See [the release workflow](24-environments-and-release.md)
 and [shopping acceptance record](25-live-shopping-and-uat.md) for scope,

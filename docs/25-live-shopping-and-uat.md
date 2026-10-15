@@ -75,6 +75,7 @@ flowchart LR
 | Development Vercel project | READY deployment, public health HTTP 200, environment development, live AI configured, Azure storage | Hosted deployment | Pass |
 | Signed demo purchase | Held offer HTTP 409; matching simulated purchase, download and reload | Signed synthetic checkout through UI | Pass; no real booking |
 | Evidence and environment signatures | Configured issuer/merchant signatures, VI chain/native rules, digest/offer/approval binding, distinct dev keys | Root cryptographic verification | 14/14 checks passed |
+| Outbound Kiwi landing | Actual View on Kiwi click opened a popup; Kiwi returned HTTP 403 to the automated browser | Real external website, headless browser | Provider access restriction; successful booking-page arrival remains unverified |
 
 The real Kiwi SDK observation and the live UI search both reached Kiwi. The UI
 used explicitly offline intent interpretation. Those local checks do not
@@ -112,6 +113,14 @@ rendered flow. The evidence verifies the configured development keys and proves
 they differ from the prior production receipt's keys. No real flight was booked
 and no payment was made.
 
+A separate fresh explicit-offline UI walkthrough searched Kiwi, then clicked
+the actual first outbound link. It used `target="_blank"` and
+`rel="noopener noreferrer"`; Kiwi's destination denied the automated browser
+with HTTP 403. The tester did not bypass the restriction or attempt a login,
+booking, or payment. `artifacts/uat-shopping/browser-shopping-kiwi-outbound.png`
+records the denial. This is not a successful external checkout test, and a
+normal customer's booking-page arrival has not been verified here.
+
 ## UI direction
 
 The shopping surface keeps the existing software and separation of duties. Its
@@ -136,5 +145,7 @@ signed intent comparison reachable. Evidence is under `artifacts/uat-shopping*`.
   merchant-signed checkout facts.
 - Hotels and General have no live provider.
 - No actual booking, payment, or purchase has been performed.
+- Kiwi denied the automated booking-page visit with HTTP 403. The app's real
+  quote search works; external booking completion remains unverified.
 - Missing Kiwi technical-stop data stays `UNKNOWN`, so a nonstop claim cannot
   be inferred from an incomplete quote.
