@@ -115,14 +115,15 @@ def request_model(domain,message,return_trace=False,source_text=None,source_mess
     return data
 
 
-def extract(domain,message,session,source_text=None,source_messages=None,current_draft=None):
+def extract(domain,message,session,source_text=None,source_messages=None,current_draft=None,
+            pipeline=None):
     if os.getenv('MOCK_LLM')=='1':
         raise _failure('ai_disabled',
                        'Live AI is disabled in this environment. Select the explicitly labeled offline mode to continue.',
                        stage='preflight', status_code=503)
     from app.ai_pipeline import run_pipeline
     return run_pipeline(domain,message,session,source_text=source_text,source_messages=source_messages,
-                        current_draft=current_draft)
+                        current_draft=current_draft,variant=pipeline)
 
 
 def explain(result,session,mode='live'):

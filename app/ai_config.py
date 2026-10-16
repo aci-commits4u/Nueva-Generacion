@@ -2,8 +2,14 @@
 import os
 DEFAULT_PIPELINE='adaptive_fast'
 PROMPT_VERSION='intent-envelope-v19-selective-review'
+LEDGER_PROMPT_VERSION='intent-ledger-v6-readiness-question-contract'
 REASONING_EFFORTS={'low','medium','high'}
-ADAPTIVE_PIPELINES={'adaptive','adaptive_fast'}
+ADAPTIVE_PIPELINES={'adaptive','adaptive_fast','ledger'}
+
+
+def prompt_version_for(pipeline=None):
+    """Keep the incumbent version stable when the experimental arm changes."""
+    return LEDGER_PROMPT_VERSION if (pipeline or selected_pipeline()) == 'ledger' else PROMPT_VERSION
 
 def selected_pipeline():
     return os.getenv('AI_PIPELINE_VERSION',DEFAULT_PIPELINE)
@@ -23,7 +29,7 @@ def interpretation_call_count(pipeline=None, *, tool_loop=False):
     The legacy adaptive pipeline remains a two-role comparison path.
     """
     pipeline = pipeline or selected_pipeline()
-    if pipeline == 'adaptive_fast':
+    if pipeline in {'adaptive_fast', 'ledger'}:
         return 2 if tool_loop else 1
     if pipeline in {'adaptive', 'audited'}:
         return 2

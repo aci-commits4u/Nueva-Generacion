@@ -2,6 +2,8 @@
 
 Status: **Proposed, awaiting user approval and paired evaluation** · 2026-10-16.
 
+Implementation update, 2026-10-16: Victor approved a dev implementation and finite trial with “go for it. do what u think is best.” This authorizes the experiment; it does not establish a winning architecture or production acceptance. See [implementation and measured failures](../../28-intent-ledger.md) for the current status; the proposal below is retained as the original decision record.
+
 Context: current app/main.py:L526 merges reconstructed model fields with existing state and several semantic repair helpers. Revision CAS/provenance already exist; the unresolved issue is meaning-preserving state evolution, not missing storage.
 
 Decision proposed: AI emits sourced typed add/replace/retract/resolve operations over stable semantic intent records. A deterministic revision reducer preserves unrelated meaning and prevents unauthorized state changes. Compile only supported predicates to the existing profile/VI enforcement gate. Generate questions dynamically against unresolved records and task context.

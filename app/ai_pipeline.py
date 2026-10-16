@@ -1500,6 +1500,14 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
                  source_messages=None, current_draft=None):
     variant = variant or selected_pipeline()
     source_text = message if source_text is None else source_text
+    if variant == 'ledger':
+        # The ledger arm owns reservations and operation validation. Keeping
+        # this before the incumbent path also avoids double charging a stage.
+        from app.ledger_pipeline import run_ledger_pipeline
+        return run_ledger_pipeline(
+            domain, message, session, purpose=purpose, source_text=source_text,
+            source_messages=source_messages, current_draft=current_draft,
+        )
     if variant not in {'baseline', 'guided', 'audited', 'adaptive', 'adaptive_fast'}:
         raise _failure('ai_configuration', 'The selected AI pipeline is unavailable.', stage='preflight', status_code=500)
     if os.getenv('MOCK_LLM') == '1':

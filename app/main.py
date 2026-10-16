@@ -51,13 +51,14 @@ def live_configuration_ready():
     except ValueError: return False
     return bool(endpoint.scheme=='https' and endpoint.netloc and
                 os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT') and
-                selected_pipeline() in {'baseline','guided','audited','adaptive','adaptive_fast'})
+                selected_pipeline() in {'baseline','guided','audited','adaptive','adaptive_fast','ledger'})
 
 
 def conversation_view(draft):
     profile_current=draft.get('profile_digest')==get_profile(draft['domain'])['digest']
     clarification_current=question_contract_current(draft)
     return {**draft,'max_followups':MAX_FOLLOWUPS,
+            'pipeline':pinned_pipeline(draft) or ('offline' if draft.get('mode')=='offline' else None),
             'profile_current':profile_current,
             'clarification_current':clarification_current,
             'refresh_required':not profile_current or not clarification_current,
@@ -69,7 +70,33 @@ def attach_plan(draft, extraction):
     try:
         return apply_adaptive_plan(draft,extraction)
     except ValueError as exc:
+        if extraction.get('pipeline') == 'ledger':
+            raise HTTPException(422,'The proposed intent changes could not be saved safely. Your previous draft is preserved.') from exc
         raise HTTPException(422,'This request contains too many conditions to review safely. Your previous draft is preserved; split the request or review the saved draft.') from exc
+
+
+def pinned_pipeline(draft):
+    """A deployment default never silently migrates an existing conversation."""
+    if draft.get('pipeline'):
+        return draft['pipeline']
+    runs = draft.get('ai_runs') or []
+    return runs[-1].get('pipeline') if runs else None
+
+
+def compiled_ledger_revision(current, extraction):
+    """Accept a complete reducer projection, never merge it as a snapshot."""
+    from app.intent_ledger import compile_ledger
+    ledger = extraction.get('intent_ledger')
+    if not isinstance(ledger, dict) or ledger.get('revision') != current['revision'] + 1:
+        raise HTTPException(409, 'The proposed intent changes use a different revision.')
+    try:
+        projection = compile_ledger(current['domain'], ledger)
+    except ValueError as exc:
+        raise HTTPException(422, 'The proposed intent changes could not be compiled safely.') from exc
+    for key in ('fields', 'sources', 'unsupported', 'clarifications'):
+        if projection[key] != extraction[key]:
+            raise HTTPException(422, 'The proposed intent summary differs from its recorded changes.')
+    return deepcopy(extraction)
 
 
 def require_current_profile(draft):
@@ -258,7 +285,7 @@ def ai_status(request:Request):
     reset_at=datetime.fromtimestamp(time.time()+capacity['reset_after_seconds'],timezone.utc).isoformat()
     return {'configured':configured,'available':reason is None,'reason':reason.public() if reason else None,
             'pipeline':pipeline,'model':os.getenv('AZURE_OPENAI_DEPLOYMENT'),'interpretation_calls':calls,
-            'interpretation_calls_max':2 if pipeline=='adaptive_fast' else calls,
+            'interpretation_calls_max':2 if pipeline in {'adaptive_fast','ledger'} else calls,
             'remaining_calls':capacity['remaining_calls'],'session_remaining_calls':capacity['session_remaining_calls'],
             'remaining_interpretations':min(capacity['remaining_calls'],capacity['session_remaining_calls'])//calls,
             'budget':{key:capacity[key] for key in ('reserved_cents','ordinary_allowance_cents','emergency_allowance_cents','emergency_used_cents','total_allowance_cents','emergency_enabled')},
@@ -363,6 +390,8 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         'trusted_clock_context':trusted_clock_context(replay_messages),
         'adaptive_plan':draft.get('adaptive_plan'),
         'criteria':draft.get('criteria',[]),
+        'intent_ledger':deepcopy(draft.get('intent_ledger')),
+        'explicit_refresh':True,
     }
     if draft.get('mode')=='offline':
         extraction=offline_extract(draft['domain'],source_text)
@@ -370,7 +399,8 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         from app.foundry_client import extract
         try:
             extraction=extract(draft['domain'],conversation,sid,source_text=source_text,
-                               source_messages=replay_messages,current_draft=current_draft)
+                               source_messages=replay_messages,current_draft=current_draft,
+                               pipeline='ledger' if pinned_pipeline(draft)=='ledger' else None)
         except AIServiceError:
             raise
         except ValueError as exc:
@@ -386,21 +416,25 @@ def refresh_profile(id:str,body:ProfileRefreshRequest,request:Request):
         receipt=completed_purchase_for_intent(state,id)
         if receipt:
             raise HTTPException(409,'A completed purchase keeps its original profile and evidence immutable.')
-        try:
-            unsupported=merge_unsupported(current.get('unsupported',[]),extraction.get('unsupported',[]))
-        except ValueError as exc:
-            raise HTTPException(422,str(exc))
-        from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
-                                      reconcile_supported_conditions)
-        merged={**extraction,'unsupported':unsupported}
-        revision_state=merge_revision_state(
-            current['domain'],current,merged,latest.get('content',''),replay_messages
-        )
-        merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
-        merged=reconcile_supported_conditions(merged,current['domain'],source_text,replay_messages)
-        merged=reconcile_one_way_unsupported(merged)
-        merged=reconcile_cabin_unsupported(merged,current['domain'],source_text)
-        removed=[item for item in unsupported if item not in merged['unsupported']]
+        if extraction.get('pipeline') == 'ledger':
+            merged=compiled_ledger_revision(current, extraction)
+            removed=[]
+        else:
+            try:
+                unsupported=merge_unsupported(current.get('unsupported',[]),extraction.get('unsupported',[]))
+            except ValueError as exc:
+                raise HTTPException(422,str(exc))
+            from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
+                                          reconcile_supported_conditions)
+            merged={**extraction,'unsupported':unsupported}
+            revision_state=merge_revision_state(
+                current['domain'],current,merged,latest.get('content',''),replay_messages
+            )
+            merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
+            merged=reconcile_supported_conditions(merged,current['domain'],source_text,replay_messages)
+            merged=reconcile_one_way_unsupported(merged)
+            merged=reconcile_cabin_unsupported(merged,current['domain'],source_text)
+            removed=[item for item in unsupported if item not in merged['unsupported']]
         if removed:
             event(state,'condition_represented_by_grounded_field',{
                 'intent_id':id,'conditions':removed,
@@ -509,6 +543,7 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
             'trusted_clock_context':trusted_clock_context(messages),
             'adaptive_plan':d.get('adaptive_plan'),
             'criteria':d.get('criteria',[]),
+            'intent_ledger':deepcopy(d.get('intent_ledger')),
         }
         if structured_answer is not None:
             # The model sees the typed choice as read-only state. It may ask a
@@ -517,29 +552,31 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
             current_draft['fields'][structured_answer['field']] = list(structured_answer['values'])
             current_draft['sources'][structured_answer['field']] = structured_answer['source_quote']
             current_draft['structured_answer'] = deepcopy(structured_answer)
-        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages,current_draft=current_draft)
+        try: extraction=extract(d['domain'],text,sid,source_text=user_text(messages),source_messages=messages,current_draft=current_draft,pipeline=pinned_pipeline(d))
         except AIServiceError: raise
         except ValueError as exc: raise HTTPException(503,str(exc))
     def save(state):
         current=required(state,'drafts',id)
         if current['revision']!=body.revision: raise HTTPException(409,'Another edit arrived during interpretation. Reload your latest draft.')
-        try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
-        except ValueError as exc: raise HTTPException(422,str(exc))
-        from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
-                                      reconcile_supported_conditions)
-        merged={**extraction,'unsupported':unsupported}
-        revision_state=merge_revision_state(
-            d['domain'], current, merged, body.message, messages,
-            structured_answer=structured_answer,
-        )
-        merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
-        # This helper is the narrow bridge for a known field marker (for
-        # example a broad airport or temporal phrase) becoming grounded in the
-        # latest customer words. Unknown conditions remain unsupported.
-        merged=reconcile_supported_conditions(merged,d['domain'],user_text(messages),messages)
-        merged=reconcile_one_way_unsupported(merged)
-        merged=reconcile_cabin_unsupported(merged,d['domain'],user_text(messages))
-        removed=[item for item in unsupported if item not in merged['unsupported']]
+        if extraction.get('pipeline') == 'ledger':
+            merged=compiled_ledger_revision(current, extraction)
+            revision_state={'changes':[{'kind':'ledger_operations','transition':deepcopy(extraction.get('ledger_transition'))}]}
+            removed=[]
+        else:
+            try: unsupported=merge_unsupported(current['unsupported'],extraction['unsupported'])
+            except ValueError as exc: raise HTTPException(422,str(exc))
+            from app.ai_grounding import (reconcile_one_way_unsupported,reconcile_cabin_unsupported,
+                                          reconcile_supported_conditions)
+            merged={**extraction,'unsupported':unsupported}
+            revision_state=merge_revision_state(
+                d['domain'], current, merged, body.message, messages,
+                structured_answer=structured_answer,
+            )
+            merged.update({key:revision_state[key] for key in ('fields','sources','clarifications')})
+            merged=reconcile_supported_conditions(merged,d['domain'],user_text(messages),messages)
+            merged=reconcile_one_way_unsupported(merged)
+            merged=reconcile_cabin_unsupported(merged,d['domain'],user_text(messages))
+            removed=[item for item in unsupported if item not in merged['unsupported']]
         if removed:
             event(state,'condition_represented_by_grounded_field',{'intent_id':id,'conditions':removed,'authority':'unapproved draft; explicit customer review still required'})
         unsupported=merged['unsupported']
@@ -557,7 +594,7 @@ def clarify(id:str,body:ClarifyRequest,request:Request):
         for change in revision_state['changes']:
             event(state,'intent_requirement_reconciled',{'intent_id':id,'revision':revision,
                   **change,'authority':'unapproved draft; customer review still required'})
-        declined=declined_preferences(d['domain'],messages)
+        declined={} if extraction.get('pipeline') == 'ledger' else declined_preferences(d['domain'],messages)
         for field,quote in declined.items():
             event(state,'preference_declined_in_conversation',{'intent_id':id,'revision':revision,'field':field,'source_quote':quote,'authority':'unapproved; explicit structured review still required'})
         current['questions']=questions(d['domain'],current['fields'],current['clarifications'],messages)
@@ -589,9 +626,29 @@ def answers(id:str,body:AnswerRequest,request:Request):
         if d.get('clarifications'):
             event(s,'clarifications_resolved_by_traveler',{'intent_id':id,'revision':d['revision'],'draft_digest':d['digest'],
                   'choices':[{'field':item['field'],'source_quote':item['source_quote'],'reason':item['reason'],
-                              'reviewed_value':body.fields[item['field']],'meaning':'explicit no preference' if body.fields[item['field']] is None else 'customer-reviewed value'}
+                              'reviewed_value':body.fields.get(item['field']),
+                              'meaning':('flagged condition remains separately reviewable' if item['field'] not in body.fields
+                                         else 'explicit no preference' if body.fields[item['field']] is None else 'customer-reviewed value')}
                              for item in d['clarifications']]})
             d['clarifications']=[]
+        if d.get('pipeline') == 'ledger':
+            from app.intent_ledger import review_ledger, compile_ledger
+            try:
+                ledger=review_ledger(d['domain'],d['intent_ledger'],body.fields,body.unsupported,
+                                     revision=d['revision'])
+                projected=compile_ledger(d['domain'],ledger)
+            except ValueError as exc:
+                raise HTTPException(422,'The reviewed requirements could not be recorded safely.') from exc
+            if projected['fields'] != body.fields or projected['unsupported'] != body.unsupported:
+                raise HTTPException(422,'The reviewed rules and the recorded intent must agree.')
+            d.update(intent_ledger=ledger, sources=projected['sources'],
+                     clarifications=projected['clarifications'],
+                     criteria=projected['criteria'],generic_criteria=deepcopy(projected['criteria']),
+                     questions=[],adaptive_plan={'action':'review_required' if body.unsupported else 'ready_for_review',
+                                                 'question':None,'assistant_message':'','offer_observations':[]},
+                     ledger_transition={'from_revision':d['revision'],'to_revision':ledger['revision'],
+                                        'operations':[entry for entry in ledger['history'] if entry['revision']==ledger['revision']]})
+            d.pop('offer_views',None)
         d.update(fields=body.fields,unsupported=body.unsupported,revision=d['revision']+1,reviewed=True)
         d.pop('approved',None)
         refresh(d);event(s,'requirements_reviewed',{'intent_id':id,'revision':d['revision'],'digest':d['digest']})
@@ -608,9 +665,19 @@ def approve(id:str,body:ApprovalRequest,request:Request):
         require_current_profile(d)
         if not body.confirmation or body.revision!=d['revision'] or body.digest!=d['digest'] or not d['reviewed']:
             raise HTTPException(409,'Approve the exact reviewed draft and digest.')
+        if d.get('pipeline') == 'ledger':
+            from app.intent_ledger import compile_ledger
+            if d['intent_ledger']['revision'] != d['revision']:
+                raise HTTPException(409,'Review the latest recorded intent revision before approving.')
+            projection=compile_ledger(d['domain'],d['intent_ledger'])
+            if projection['fields'] != d['fields'] or projection['unsupported'] != d['unsupported']:
+                raise HTTPException(409,'Review the complete recorded requirements before approving.')
         if d.get('approved'):
             return {'approved':d['approved'],'offers':d['offer_views']}
         approved={'id':id,'revision':d['revision'],'domain':d['domain'],'profile_digest':d['profile_digest'],'fields':d['fields'],'unsupported':d['unsupported'],'actor':'traveler-'+digest({'session':sid})[:20],'approved_at':now(),'draft_digest':d['digest']}
+        if d.get('intent_ledger') is not None:
+            approved['intent_ledger_digest']=digest(d['intent_ledger'])
+            approved['intent_ledger_revision']=d['intent_ledger']['revision']
         d['approved']=approved
         views=[]
         for o in offers_for(approved):

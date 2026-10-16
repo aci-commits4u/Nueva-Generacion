@@ -24,6 +24,7 @@ jobs:
             node --input-type=module --check < "$file"
           done
       - run: node scripts/test_api_timeout.mjs
+      - run: node scripts/test_ledger_view.mjs
 
   browser-regression:
     name: Browser UI regression

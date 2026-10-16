@@ -1,0 +1,476 @@
+{
+  "schema": "intent-judge.trajectory-development.v1",
+  "status": "exposed_development",
+  "description": "Twelve executable development families for paired A/B trajectory work. This file is exposed and is not a sealed holdout.",
+  "label_audit": {
+    "classification": "fixture_label_audit",
+    "model_improvement_claim": false,
+    "notes": "Offer labels and transition expectations are deterministic development annotations; fixture passes do not establish live model quality."
+  },
+  "oracle_policy": {
+    "customer_fields_are_authoritative": true,
+    "merchant_facts_are_separate": true,
+    "manual_review_is_not_ai_credit": true,
+    "unsupported_required_meaning_stays_hold": true,
+    "semantic_usefulness": "pending_blinded_adjudication"
+  },
+  "ledger_expectations": {
+    "arm": "B",
+    "history_required": true,
+    "revision_increments_per_customer_turn": true,
+    "preserve_unrelated_active_records": true,
+    "retractions_are_explicit": true,
+    "omission_is_no_operation": true,
+    "turn_oracles": {
+      "flight_direct_retention": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "nonstop"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "nonstop"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "retracted_fields": ["nonstop"], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "flight_or_budget_correction": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "nonstop"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "nonstop"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "flight_retract_connection_limit": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "max_connections", "trip_type"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "trip_type"], "retracted_fields": ["max_connections"], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "trip_type"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "flight_generic_noise_hold": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "hotel_breakfast_retention": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast", "refundable"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "hotel_city_correction": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": ["breakfast"], "no_preference_fields": ["breakfast"], "preserve_unrelated_active_records": true}
+      ],
+      "hotel_accessibility_retraction": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast", "accessible"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "retracted_fields": ["accessible"], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "hotel_generic_quiet_hold": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "general_budget_correction": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "general_budget_reduction": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "general_unit_scope_hold": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ],
+      "general_generic_quiet_hold": [
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true},
+        {"revision_delta": 1, "expected_record_fields": ["max_total_cents"], "retracted_fields": [], "no_preference_fields": [], "preserve_unrelated_active_records": true}
+      ]
+    }
+  },
+  "arm_expectations": {
+    "A": {"pipeline": "adaptive_fast", "mode": "live", "role": "control"},
+    "B": {"pipeline": "ledger", "mode": "live", "role": "ledger_challenger"}
+  },
+  "families": [
+    {
+      "id": "flight_direct_retention",
+      "domain": "flight",
+      "kind": "ordinary_retention",
+      "source": "exposed-development-flight-01",
+      "turns": [
+        {
+          "message": "Nonstop flight from EWR to MCO on 2026-11-12 under $300.",
+          "expected_fields": {"max_total_cents": 29999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "nonstop": true},
+          "preserved_fields": {},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Keep everything else, but JFK is also acceptable for departure.",
+          "expected_fields": {"max_total_cents": 29999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "nonstop": true},
+          "preserved_fields": {"max_total_cents": 29999, "destination_airports": ["MCO"], "departure_date": "2026-11-12", "nonstop": true},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "destination_airports", "departure_date", "nonstop"], "forbidden_terms": ["maximum all-in price", "arrival airports"], "required_generic_meaning": null}
+        },
+        {
+          "message": "I no longer require nonstop; keep the airports, date, and budget.",
+          "expected_fields": {"max_total_cents": 29999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-11-12"},
+          "preserved_fields": {"max_total_cents": 29999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-11-12"},
+          "retracted_fields": ["nonstop"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "flight_or_budget_correction",
+      "domain": "flight",
+      "kind": "set_and_correction",
+      "source": "exposed-development-flight-02",
+      "turns": [
+        {
+          "message": "I can leave EWR or JFK and arrive at MCO on 2026-12-01 under $450.",
+          "expected_fields": {"max_total_cents": 44999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-12-01"},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Make the budget under $400 and require nonstop.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-12-01", "nonstop": true},
+          "preserved_fields": {"origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": "2026-12-01"},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["origin_airports", "destination_airports", "departure_date"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Actually, either 2026-12-03 or 2026-12-05 works; keep the route, nonstop rule, and new budget.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "departure_date": {"dates": ["2026-12-03", "2026-12-05"]}, "nonstop": true},
+          "preserved_fields": {"max_total_cents": 39999, "origin_airports": ["EWR", "JFK"], "destination_airports": ["MCO"], "nonstop": true},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "origin_airports", "destination_airports", "nonstop"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "flight_retract_connection_limit",
+      "domain": "flight",
+      "kind": "retraction",
+      "source": "exposed-development-flight-03",
+      "turns": [
+        {
+          "message": "One-way flight from EWR to MCO on 2026-11-12 under $400 with at most one connection.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "max_connections": 1, "trip_type": "one_way"},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Remove the one-connection limit; the rest of the request is unchanged.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "trip_type": "one_way"},
+          "preserved_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "trip_type": "one_way"},
+          "retracted_fields": ["max_connections"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "trip_type"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Keep it one-way and under $400, with no other preference.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "trip_type": "one_way"},
+          "preserved_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12", "trip_type": "one_way"},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "origin_airports", "destination_airports", "departure_date", "trip_type"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "flight_generic_noise_hold",
+      "domain": "flight",
+      "kind": "generic_unsupported",
+      "source": "exposed-development-flight-04",
+      "turns": [
+        {
+          "message": "Find a flight from EWR to MCO on 2026-11-12 under $400 with a cabin that feels quiet.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12"},
+          "preserved_fields": {}, "retracted_fields": [], "expected_unsupported_contains": ["quiet"],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": "quiet cabin means a measurable noise or seating condition"}
+        },
+        {
+          "message": "By quiet I mean below 60 dB in the cabin; please keep it unresolved until that meaning is reviewed.",
+          "expected_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12"},
+          "preserved_fields": {"max_total_cents": 39999, "origin_airports": ["EWR"], "destination_airports": ["MCO"], "departure_date": "2026-11-12"},
+          "retracted_fields": [], "expected_unsupported_contains": ["quiet"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "forbidden_terms": [], "required_generic_meaning": "the numeric cabin noise condition needs a supported validator"}
+        }
+      ],
+      "completion": {"outcome": "hold", "required_fields": ["max_total_cents", "origin_airports", "destination_airports", "departure_date"], "unsupported_must_remain": true, "trusted_conflict_facts": true, "requires_refusal": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": true}
+    },
+    {
+      "id": "hotel_breakfast_retention",
+      "domain": "hotel",
+      "kind": "ordinary_retention",
+      "source": "exposed-development-hotel-01",
+      "turns": [
+        {
+          "message": "Hotel in Orlando from 2026-11-12 to 2026-11-14 under $300.",
+          "expected_fields": {"max_total_cents": 29999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Breakfast must be included; keep the city, dates, and budget.",
+          "expected_fields": {"max_total_cents": 29999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "preserved_fields": {"max_total_cents": 29999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Also require free cancellation.",
+          "expected_fields": {"max_total_cents": 29999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true, "refundable": true},
+          "preserved_fields": {"max_total_cents": 29999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "correction_required": false, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "hotel_city_correction",
+      "domain": "hotel",
+      "kind": "correction_and_retraction",
+      "source": "exposed-development-hotel-02",
+      "turns": [
+        {
+          "message": "Book a hotel in Miami from 2026-11-12 to 2026-11-14 under $350.",
+          "expected_fields": {"max_total_cents": 34999, "city": "Miami", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Correction: use Orlando instead of Miami; keep the dates and budget.",
+          "expected_fields": {"max_total_cents": 34999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {"max_total_cents": 34999, "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "checkin_date", "checkout_date"], "forbidden_terms": ["which city"], "required_generic_meaning": null}
+        },
+        {
+          "message": "I have no breakfast preference; make that explicit and leave the rest unchanged.",
+          "expected_fields": {"max_total_cents": 34999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {"max_total_cents": 34999, "city": "Orlando", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "retracted_fields": ["breakfast"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "hotel_accessibility_retraction",
+      "domain": "hotel",
+      "kind": "set_and_retraction",
+      "source": "exposed-development-hotel-03",
+      "turns": [
+        {
+          "message": "Find an accessible hotel in Chicago from 2026-11-12 to 2026-11-14 under $400 with breakfast.",
+          "expected_fields": {"max_total_cents": 39999, "city": "Chicago", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true, "accessible": true},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Accessibility is no longer required; preserve breakfast, dates, city, and budget.",
+          "expected_fields": {"max_total_cents": 39999, "city": "Chicago", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "preserved_fields": {"max_total_cents": 39999, "city": "Chicago", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "retracted_fields": ["accessible"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "No other hotel preference; keep breakfast required.",
+          "expected_fields": {"max_total_cents": 39999, "city": "Chicago", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "preserved_fields": {"max_total_cents": 39999, "city": "Chicago", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14", "breakfast": true},
+          "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date", "breakfast"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "hotel_generic_quiet_hold",
+      "domain": "hotel",
+      "kind": "generic_unsupported",
+      "source": "exposed-development-hotel-04",
+      "turns": [
+        {
+          "message": "Hotel in Boston from 2026-11-12 to 2026-11-14 under $300 near a quiet street.",
+          "expected_fields": {"max_total_cents": 29999, "city": "Boston", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {}, "retracted_fields": [], "expected_unsupported_contains": ["quiet"],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": "quiet location needs a measurable or verified hotel predicate"}
+        },
+        {
+          "message": "Quiet means traffic below 40 dB; keep that condition unresolved unless the capability is supported.",
+          "expected_fields": {"max_total_cents": 29999, "city": "Boston", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "preserved_fields": {"max_total_cents": 29999, "city": "Boston", "checkin_date": "2026-11-12", "checkout_date": "2026-11-14"},
+          "retracted_fields": [], "expected_unsupported_contains": ["quiet"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents", "city", "checkin_date", "checkout_date"], "forbidden_terms": [], "required_generic_meaning": "the traffic noise condition has no trusted validator in this fixture"}
+        }
+      ],
+      "completion": {"outcome": "hold", "required_fields": ["max_total_cents", "city", "checkin_date", "checkout_date"], "unsupported_must_remain": true, "trusted_conflict_facts": true, "requires_refusal": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": true}
+    },
+    {
+      "id": "general_budget_correction",
+      "domain": "general",
+      "kind": "ordinary_correction",
+      "source": "exposed-development-general-01",
+      "turns": [
+        {
+          "message": "Find a general item under $400.",
+          "expected_fields": {"max_total_cents": 39999},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Actually cap the all-in total at $350.",
+          "expected_fields": {"max_total_cents": 35000},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "No additional preference; retain the $350 maximum.",
+          "expected_fields": {"max_total_cents": 35000},
+          "preserved_fields": {"max_total_cents": 35000}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true, "role": "synthetic_alternative", "note": "A second fixed synthetic offer for path coverage; it is not a negative case or a price guarantee."}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "general_budget_reduction",
+      "domain": "general",
+      "kind": "retention_and_reduction",
+      "source": "exposed-development-general-02",
+      "turns": [
+        {
+          "message": "I need an item with an all-in budget of $500.",
+          "expected_fields": {"max_total_cents": 50000},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Reduce the maximum to $300 and remember that this is the total amount.",
+          "expected_fields": {"max_total_cents": 30000},
+          "preserved_fields": {}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": null}
+        },
+        {
+          "message": "Keep the reduced total and do not invent another required field.",
+          "expected_fields": {"max_total_cents": 30000},
+          "preserved_fields": {"max_total_cents": 30000}, "retracted_fields": [],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": null}
+        }
+      ],
+      "completion": {"outcome": "complete", "required_fields": ["max_total_cents"], "correction_required": true, "trusted_positive_facts": true, "complete_user_details": true, "exact_approval_required": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true},
+        {"name": "alternative", "offer_index": 1, "expected_check_status": "PASS", "expected_purchase_status": 200, "evidence_required": true, "role": "synthetic_alternative", "note": "A second fixed synthetic offer for path coverage; it is not a negative case or a price guarantee."}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": false}
+    },
+    {
+      "id": "general_unit_scope_hold",
+      "domain": "general",
+      "kind": "unsupported_scope",
+      "source": "exposed-development-general-03",
+      "turns": [
+        {
+          "message": "Keep the total under $400, but I also care about staying below $200 per night.",
+          "expected_fields": {"max_total_cents": 39999},
+          "preserved_fields": {}, "retracted_fields": [], "expected_unsupported_contains": ["per night"],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": "per-night pricing needs an explicit supported unit and scope"}
+        },
+        {
+          "message": "The per-night limit still matters; do not silently turn it into the total cap.",
+          "expected_fields": {"max_total_cents": 39999},
+          "preserved_fields": {"max_total_cents": 39999}, "retracted_fields": [], "expected_unsupported_contains": ["per night"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": "the unit mismatch must stay visibly unresolved"}
+        }
+      ],
+      "completion": {"outcome": "hold", "required_fields": ["max_total_cents"], "unsupported_must_remain": true, "trusted_conflict_facts": true, "requires_refusal": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": true}
+    },
+    {
+      "id": "general_generic_quiet_hold",
+      "domain": "general",
+      "kind": "generic_unsupported",
+      "source": "exposed-development-general-04",
+      "turns": [
+        {
+          "message": "Find an item under $400 with low noise.",
+          "expected_fields": {"max_total_cents": 39999},
+          "preserved_fields": {}, "retracted_fields": [], "expected_unsupported_contains": ["noise"],
+          "known_question_checks": {"forbidden_targets": [], "forbidden_terms": [], "required_generic_meaning": "low noise must be made measurable before it can be enforced"}
+        },
+        {
+          "message": "By low noise I mean below 50 dB; keep it as an unresolved generic condition.",
+          "expected_fields": {"max_total_cents": 39999},
+          "preserved_fields": {"max_total_cents": 39999}, "retracted_fields": [], "expected_unsupported_contains": ["noise"],
+          "known_question_checks": {"forbidden_targets": ["max_total_cents"], "forbidden_terms": [], "required_generic_meaning": "a decibel condition still needs a trusted capability and source"}
+        }
+      ],
+      "completion": {"outcome": "hold", "required_fields": ["max_total_cents"], "unsupported_must_remain": true, "trusted_conflict_facts": true, "requires_refusal": true},
+      "offer_paths": [
+        {"name": "positive", "offer_index": 0, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false},
+        {"name": "conflicting", "offer_index": 1, "expected_check_status": "HOLD", "expected_purchase_status": 409, "evidence_required": false}
+      ],
+      "source_expectations": {"customer_turns_only": true, "merchant_facts_not_customer_sources": true, "preserve_unrelated_values": true},
+      "semantic_adjudication": {"status": "pending_blinded_adjudication", "required": true}
+    }
+  ]
+}
