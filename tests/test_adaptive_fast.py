@@ -237,3 +237,42 @@ def test_adaptive_fast_compacts_duplicate_context_but_keeps_customer_bindings():
     assert compact_draft["fields"] == {"max_connections": 0}
     assert "adaptive_plan" not in compact_draft
     assert "offer_context" not in compact_draft
+
+
+def test_fast_reviews_an_exact_date_before_reasking_it(monkeypatch):
+    from app.ai_pipeline import run_pipeline
+
+    text = 'Fly from EWR to MCO on November 12, 2026 under $300.'
+    source = 'on November 12, 2026'
+    fields = {'origin_airports': ['EWR'], 'destination_airports': ['MCO'], 'max_total_cents': 29999}
+    sources = {'origin_airports': 'EWR', 'destination_airports': 'MCO', 'max_total_cents': 'under $300'}
+    candidate = _plan(action='ask_user', fields=fields, sources=sources)
+    candidate['criteria'] = [{'key': 'departure_date', 'field': 'departure_date', 'source_quote': source,
+                              'text': source, 'kind': 'ambiguity', 'status': 'needs_clarification',
+                              'verification': 'supported'}]
+    candidate['question'] = {'criterion_key': 'departure_date', 'field': 'departure_date',
+                             'text': 'What date would you like to travel?', 'why': 'A specific travel date is required.',
+                             'answer_kind': 'date_choice', 'answer_semantics': None, 'options': []}
+    candidate['assistant_message'] = 'What date would you like to travel?'
+    reviewed = _plan(action='ready_for_review', fields={**fields, 'departure_date': '2026-11-12'},
+                     sources={**sources, 'departure_date': source})
+    calls, reservations = [], []
+
+    def call(stage, *args, **kwargs):
+        calls.append(stage)
+        if stage == 'adaptive_review':
+            assert 'question_answer_already_resolvable' in kwargs['candidate_issue']
+            assert kwargs['tool_result'] is None
+        return deepcopy(candidate if stage == 'adaptive_plan' else reviewed), {'stage': stage, 'tokens': {}}
+
+    monkeypatch.setenv('MOCK_LLM', '0')
+    monkeypatch.setattr('app.ai_pipeline.call_json', call)
+    monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls', lambda session, count, purpose='interactive': reservations.append(count))
+    result = run_pipeline('flight', text, 'resolvable-date', variant='adaptive_fast',
+                          source_messages=[{'role': 'user', 'content': text, 'reference_date': '2026-10-16'}])
+    assert calls == ['adaptive_plan', 'adaptive_review']
+    assert reservations == [1, 1]
+    assert result['fields']['departure_date'] == '2026-11-12'
+    assert result['adaptive_plan']['question'] is None
+    assert result['adaptive_plan']['assistant_message'] == reviewed['assistant_message']
+    assert result['trace'][0]['clarification_review']['field'] == 'departure_date'

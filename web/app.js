@@ -461,7 +461,7 @@ async function renderQuality(){
   const nativeEvaluation=native?`<div class="quality-native"><div><span class="eyebrow">NATIVE FOUNDRY EVALUATION</span><h2>${escapeHTML(native.passed)}<span class="muted"> / ${escapeHTML(native.cases)}</span></h2><p>Typed development cases passed</p></div><div class="quality-native-detail"><p><b>Scope</b> Development coverage from stored synthetic outputs, not customer accuracy.</p><p><b>Source</b> No new inference; this readback records ${escapeHTML(native.model_calls)} model calls from the stored evaluation.</p><p><b>Retained result</b> ${escapeHTML(native.failed)} failure${Number(native.failed)===1?'':'s'} remain visible for review.</p>${native.report_url?`<a href="${escapeHTML(native.report_url)}" target="_blank" rel="noopener noreferrer">Open in Foundry (project access required) ↗</a>`:''}</div></div>`:'';
   const runtimeCounts=Object.entries(q.runtime?.counts||{}).filter(([,value])=>Number.isFinite(Number(value)));
   const runtimeRecord=runtimeCounts.length?`<div class="quality-runtime"><span class="eyebrow">RECORDED PIPELINE STAGES</span><p class="small quality-runtime-label">Instrumentation counts model stages, not transactions${q.runtime.updated_at?` · updated ${escapeHTML(q.runtime.updated_at)}`:''}.</p><div class="quality-runtime-counts">${runtimeCounts.map(([key,value])=>`<span><b>${escapeHTML(value)}</b> ${escapeHTML(key.replace(/:/g,' · ').replace(/_/g,' '))}</span>`).join('')}</div>${q.runtime.last_failure?`<p class="small quality-last-failure"><b>Last retained failure:</b> ${escapeHTML(q.runtime.last_failure.stage||'unknown stage')} · ${escapeHTML(q.runtime.last_failure.code||'unknown code')}${q.runtime.last_failure.timestamp?` · ${escapeHTML(q.runtime.last_failure.timestamp)}`:''}</p>`:''}</div>`:'';
-  const reviewStep=q.pipeline==='adaptive_fast'?'Grounded source checks preserve your details. A second model pass is used only after the assistant retrieves merchant context.':'A fresh review pass compares the original conversation, draft, and returned merchant facts.';
+  const reviewStep=q.pipeline==='adaptive_fast'?'Grounded source checks preserve your details. A second model pass checks returned merchant context or a question that appears to repeat an answered detail.':'A fresh review pass compares the original conversation, draft, and returned merchant facts.';
   const pipeline=`<div class="pipeline-explainer"><span class="eyebrow">HOW THE PIPELINE IS BOUNDED</span><ol><li><b>01</b><span>Foundry proposes criteria and chooses the next useful action.</span></li><li><b>02</b><span>${reviewStep}</span></li><li><b>03</b><span>You review before Verifiable Intent and deterministic offer checks.</span></li></ol></div>`;
   const adaptiveRuns=Array.isArray(q.adaptive_experiments)?q.adaptive_experiments:[];
   const adaptiveEvidence=adaptiveRuns.length?`<section class="quality-section"><span class="eyebrow">ACTUAL ADAPTIVE FOUNDRY EXPERIMENTS</span><p class="small">Each snapshot preserves successes and failures from a finite live run. These small synthetic samples measure specific behaviors, not overall customer accuracy.</p><div class="quality-grid">${adaptiveRuns.map(run=>`<article><span class="eyebrow">${escapeHTML(run.created_at||'Recorded experiment')}</span><h2>${escapeHTML(run.passed)}<span class="muted"> / ${escapeHTML(run.cases)}</span></h2><p>Cases passed their labeled checks</p><p class="small">${escapeHTML(run.model||'Foundry')} · ${escapeHTML(run.median_ms)} ms median</p>${run.prompt_version!==q.prompt_version?'<p class="small">This experiment predates the current release.</p>':''}</article>`).join('')}</div><p class="small">Question relevance, prior-answer memory, source coverage, merchant-data injection and signed read-only tool evidence are evaluated separately.</p></section>`:'';
@@ -508,20 +508,21 @@ function renderReview(){
  $('#no-preference').onclick=()=>{document.querySelectorAll('[data-no-preference]').forEach(box=>{const input=$('#field-'+box.dataset.noPreference);if(!input.value){box.checked=true;box.onchange();}});};
  $('#review-form').onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
    const navigation=state.navigation;
+   const reviewError=message=>new ApiError('/review',422,{detail:message});
    const fields={};
    for(const [k,f] of Object.entries(p.fields)){
     const input=$('#field-'+k),pref=$(`[data-no-preference="${k}"]`);
     if(pref?.checked){fields[k]=null;continue;}
     if(f.type==='date_choice'){
      const choice=readDateChoice(k);
-     if(choice===null){$('#field-'+k+'-single').focus();throw new Error(`Please choose ${f.label.toLowerCase()}.`);}
+     if(choice===null){$('#field-'+k+'-single').focus();throw reviewError(`Please choose ${f.label.toLowerCase()}.`);}
      fields[k]=choice;continue;
     }
-    if(!input.value.trim()){input.focus();throw new Error(`Please answer ${f.label.toLowerCase()} or explicitly choose no preference.`);}
-    if(f.type==='integer'){if(k==='max_total_cents'){if(!/^\d+(\.\d{1,2})?$/.test(input.value))throw new Error('Use a USD amount with at most two decimal places.');fields[k]=Math.round(Number(input.value)*100);}else fields[k]=Number(input.value);}
+    if(!input.value.trim()){input.focus();throw reviewError(`Please answer ${f.label.toLowerCase()} or explicitly choose no preference.`);}
+    if(f.type==='integer'){if(k==='max_total_cents'){if(!/^\d+(\.\d{1,2})?$/.test(input.value))throw reviewError('Use a USD amount with at most two decimal places.');fields[k]=Math.round(Number(input.value)*100);}else fields[k]=Number(input.value);}
     else if(f.type==='boolean')fields[k]=input.value==='true';
     else if(f.type==='strings')fields[k]=input.value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
-    else if(f.type==='window'){const end=$('#field-'+k+'-end').value;if(!end)throw new Error('Choose both ends of the local departure window.');fields[k]=[input.value,end];}
+    else if(f.type==='window'){const end=$('#field-'+k+'-end').value;if(!end)throw reviewError('Choose both ends of the local departure window.');fields[k]=[input.value,end];}
     else fields[k]=input.value.trim();
    }
    const reviewed=await trackedApi(d.id,`/api/intents/${d.id}/answers`,{revision:d.revision,fields,removed_unsupported:d.unsupported.filter((x,i)=>$(`[data-remove-condition="${i}"]`)?.checked),unsupported:[...new Set([...d.unsupported.filter((x,i)=>!$(`[data-remove-condition="${i}"]`)?.checked),...$('#missed-requirements').value.split('\n').map(x=>x.trim()).filter(Boolean)])],confirmation:true});

@@ -811,6 +811,123 @@ def normalize_plan(raw: Any, *, domain: str, source_text: str,
     return result
 
 
+def resolvable_question_feedback(
+    raw_plan: Any,
+    normalized_plan: Any,
+    domain: str,
+    source_text: str = "",
+    source_messages: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Detect a date question whose source already contains one safe date.
+
+    This is a bounded diagnostic for the independent review pass. It does
+    not mutate the draft or answer the question. The provider may still
+    reject the date for a reason outside this detector; the diagnostic only
+    exists when the source-backed criterion resolves to one scalar date and
+    the ordinary typed grounding validator accepts that value.
+    """
+    if not isinstance(normalized_plan, dict) or normalized_plan.get("action") != "ask_user":
+        return None
+    question = normalized_plan.get("question")
+    if not isinstance(question, dict):
+        return None
+
+    from app.profile_registry import get_profile
+
+    profile_fields = get_profile(domain).get("fields", {})
+    key = question.get("criterion_key")
+    if not isinstance(key, str):
+        return None
+    criteria = normalized_plan.get("criteria")
+    if not isinstance(criteria, list):
+        criteria = raw_plan.get("criteria") if isinstance(raw_plan, dict) else []
+    criterion = next(
+        (
+            item for item in criteria
+            if isinstance(item, dict)
+            and (item.get("key") == key or item.get("field") == key)
+        ),
+        None,
+    )
+    if not isinstance(criterion, dict):
+        return None
+
+    field = question.get("field")
+    if not isinstance(field, str) or field not in profile_fields:
+        criterion_field = criterion.get("field")
+        field = criterion_field if isinstance(criterion_field, str) else None
+    if field not in profile_fields:
+        return None
+    # date_choice covers flight-style alternatives/ranges. Hotel date fields
+    # are reviewed string slots whose profile role ends in ``_date``. Keeping
+    # this profile-derived check avoids naming a specific commerce domain.
+    spec = profile_fields[field]
+    if not (
+        isinstance(spec, dict)
+        and (
+            spec.get("type") == "date_choice"
+            or (spec.get("type") == "string" and field.casefold().endswith("_date"))
+        )
+    ):
+        return None
+    if criterion.get("status") != "needs_clarification":
+        return None
+
+    draft = _draft_from_model(raw_plan)
+    draft_fields = draft.get("fields") if isinstance(draft.get("fields"), dict) else {}
+    if field in draft_fields and draft_fields.get(field) is not None:
+        return None
+    quote = criterion.get("source_quote")
+    if not _quote_is_customer_source(quote, source_text, source_messages):
+        return None
+
+    from datetime import date
+    from app.ai_grounding import validate_extraction
+    from app.temporal import reference_for_quote, resolve_date_choice
+
+    anchor = reference_for_quote(quote, source_messages)
+    resolved = resolve_date_choice(quote, anchor)
+    # Multiple dates/ranges, soft preferences, negations, and unresolved
+    # yearless dates all return a non-scalar or None and therefore stay with
+    # the model's question. This also avoids assigning hotel check-in/out
+    # roles from one multi-date phrase.
+    if not isinstance(resolved, str):
+        return None
+    if anchor:
+        try:
+            if date.fromisoformat(resolved) < date.fromisoformat(anchor):
+                # A past booking date needs an upcoming-date clarification;
+                # never tell the reviewer that it is already resolvable.
+                return None
+        except ValueError:
+            return None
+
+    probe = {
+        "fields": {field: resolved},
+        "sources": {field: quote},
+        "unsupported": [],
+        "clarifications": [],
+        "explanation": "Review the captured requirement.",
+    }
+    try:
+        grounded = validate_extraction(
+            domain,
+            source_text,
+            probe,
+            source_messages=source_messages,
+        )
+    except (TypeError, ValueError):
+        return None
+    if grounded.get("fields", {}).get(field) != resolved:
+        return None
+    return {
+        "codes": ["question_answer_already_resolvable"],
+        "field": field,
+        "source_quote": quote[:500],
+        "value": resolved,
+    }
+
+
 def _approved_context(domain: str, fields: dict[str, Any]) -> dict[str, Any]:
     """Build a synthetic adapter request without making an authorization."""
     from app.profile_registry import digest, get_profile

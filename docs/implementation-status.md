@@ -2,19 +2,24 @@
 
 ## Faster development conversation — October 16
 
-The development branch adds a one-call `adaptive_fast` interpretation path,
+The development branch adds a normally one-call `adaptive_fast` interpretation path,
 64-stage sessions, and 31 follow-ups, retaining the shared $30 money cap and
 all historical reservations. Exact source alternatives and colloquial
 no-layover/strict-budget wording remain grounded and reviewable.
 
-Local verification passed 606 pytest checks and eleven browser suites. A real
+Local verification passed 616 pytest checks and eleven browser suites. A real
 Foundry chatbot replay retained both airport sets and changed only the layover
 limit when explicitly corrected; ordinary turns took 5.5–7.5 seconds. A fresh
 hotel request preserved required breakfast and optional cancellation, using
 a two-stage tool loop in 13.4 seconds. These are finite local observations.
 See [the full evidence and remaining limits](26-fast-conversation.md). Release
-to the isolated development Vercel project is pending exact-commit CI and
-hosted acceptance. Public production has not been changed.
+of the v19 selective-review follow-up is pending exact-commit CI and hosted
+acceptance; the earlier hosted v18 variation failed by re-asking an exact date. Public production has not been changed.
+
+One bounded v19 reviewer laboratory call also repaired the saved date-question
+failure while preserving airports, no layovers, and the strict budget. The
+grounded result and exact local artifact path are recorded in
+[the fast conversation evidence](26-fast-conversation.md).
 
 ## Isolated development shopping release — October 15
 

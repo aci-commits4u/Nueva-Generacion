@@ -279,6 +279,65 @@
           "no layovers"
         ]
       }
+    },
+    {
+      "id": "development-date-in-multi-detail-clarification",
+      "split": "development",
+      "domain": "flight",
+      "message": "tor to london and also no layovers and less than 800 $\nDepart from YYZ or YHM, arrive at LHR or LGW, on November 12, 2026. No layovers.",
+      "source_messages": [
+        {
+          "role": "user",
+          "content": "tor to london and also no layovers and less than 800 $",
+          "timestamp": "2026-10-16T16:00:00+00:00",
+          "reference_date": "2026-10-16"
+        },
+        {
+          "role": "user",
+          "content": "Depart from YYZ or YHM, arrive at LHR or LGW, on November 12, 2026. No layovers.",
+          "timestamp": "2026-10-16T16:01:00+00:00",
+          "reference_date": "2026-10-16"
+        }
+      ],
+      "expected_fields": {
+        "origin_airports": [
+          "YYZ",
+          "YHM"
+        ],
+        "destination_airports": [
+          "LHR",
+          "LGW"
+        ],
+        "departure_date": "2026-11-12",
+        "max_connections": 0,
+        "max_total_cents": 79999
+      },
+      "unsupported_groups": [],
+      "expected_metrics": {
+        "adaptive_required": true,
+        "known_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_connections",
+          "max_total_cents"
+        ],
+        "no_question_for_known": true,
+        "allowed_actions": [
+          "ready_for_review",
+          "review_required",
+          "inspect_offers"
+        ],
+        "source_coverage_phrases": [
+          "YYZ",
+          "YHM",
+          "LHR",
+          "LGW",
+          "November 12, 2026",
+          "no layovers",
+          "less than 800 $"
+        ]
+      }
     }
   ]
 }

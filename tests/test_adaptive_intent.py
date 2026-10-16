@@ -57,6 +57,91 @@ def test_generic_criteria_can_drive_a_generated_question_without_profile_field()
     assert result["criteria"][0]["verification"] == "unsupported"
 
 
+def _date_question_case(domain, quote, *, field="departure_date", source_messages=None):
+    raw = plan(
+        criteria=[{
+            "key": field,
+            "field": field,
+            "text": quote,
+            "source_quote": quote,
+            "kind": "ambiguity",
+            "status": "needs_clarification",
+        }],
+        question={
+            "criterion_key": field,
+            "field": field,
+            "text": "What date should I use?",
+            "why": "I need the date before I can search.",
+            "answer_kind": "date_choice",
+            "answer_semantics": None,
+            "options": [],
+        },
+    )
+    from app.adaptive_intent import normalize_plan
+    normalized = normalize_plan(
+        raw,
+        domain=domain,
+        source_text=quote,
+        source_messages=source_messages,
+    )
+    return raw, normalized
+
+
+def test_resolvable_question_feedback_flags_exact_explicit_date_without_mutating_draft():
+    from app.adaptive_intent import resolvable_question_feedback
+
+    quote = "Depart from YYZ or YHM, arrive at LHR or LGW, on November 12, 2026."
+    raw, normalized = _date_question_case("flight", quote)
+    feedback = resolvable_question_feedback(raw, normalized, "flight", quote, [])
+    assert feedback == {
+        "codes": ["question_answer_already_resolvable"],
+        "field": "departure_date",
+        "source_quote": quote,
+        "value": "2026-11-12",
+    }
+    assert "departure_date" not in raw["fields"]
+    assert "departure_date" not in normalized["draft"]["fields"]
+
+
+@pytest.mark.parametrize("quote", [
+    "I can travel November 12 or November 14, 2026.",
+    "Preferably November 12, 2026.",
+    "Not November 12, 2026.",
+    "November 12",
+])
+def test_resolvable_question_feedback_stays_silent_for_ambiguous_or_unsafe_dates(quote):
+    from app.adaptive_intent import resolvable_question_feedback
+
+    raw, normalized = _date_question_case("flight", quote)
+    assert resolvable_question_feedback(raw, normalized, "flight", quote, []) is None
+
+
+def test_resolvable_question_feedback_rejects_past_booking_date_with_trusted_reference():
+    from app.adaptive_intent import resolvable_question_feedback
+
+    quote = "Book the flight for November 12, 2025."
+    messages = [{
+        "role": "user",
+        "content": quote,
+        "timestamp": "2026-10-16T16:15:42Z",
+        "reference_date": "2026-10-16",
+    }]
+    raw, normalized = _date_question_case("flight", quote, source_messages=messages)
+    assert resolvable_question_feedback(
+        raw, normalized, "flight", quote, messages,
+    ) is None
+
+
+def test_resolvable_question_feedback_does_not_assign_hotel_role_to_date_range():
+    from app.adaptive_intent import resolvable_question_feedback
+
+    quote = "Stay from November 12 through November 14, 2026."
+    raw, normalized = _date_question_case(
+        "hotel", quote, field="checkin_date",
+    )
+    assert resolvable_question_feedback(raw, normalized, "hotel", quote, []) is None
+
+
 def test_generic_criterion_status_is_preserved_as_descriptive_metadata():
     from app.adaptive_intent import normalize_plan
 

@@ -27,7 +27,7 @@ async page => {
  await page.getByLabel('Add a detail or change your request').fill('Keep the captured requirements.');
  await page.getByRole('button',{name:'Send clarification'}).click();
  await page.getByRole('heading',{name:'Your captured details are preserved.'}).waitFor();
- if(!await page.getByText('The assistant reached its allowance before an additional review of merchant context.',{exact:false}).isVisible())throw new Error('Deferred review status was not visible to the customer');
+ if(!await page.getByText('The assistant reached its allowance before an additional AI review could run.',{exact:false}).isVisible())throw new Error('Deferred review status was not visible to the customer');
  await page.getByRole('button',{name:'Review requirements'}).click();
  await page.getByText('Conversation intent record · 1 conditions').click();
  if(!await page.getByText('From “quiet”',{exact:false}).isVisible())throw new Error('Generic customer criterion vanished during review');

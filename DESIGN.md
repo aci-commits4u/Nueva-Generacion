@@ -266,3 +266,9 @@ connection limit. Settled questions are suppressed while explicit corrections
 remain possible. Review copy invites the customer to check captured details;
 capacity-deferred tool review appears as system status, separate from AI prose.
 The actual live acceptance and limits are in [the conversation record](docs/26-fast-conversation.md).
+
+The v19 follow-up adds selective AI review for a proposed date question that
+contradicts resolvable customer evidence. The reviewer produces the corrected
+claim; no backend rule silently answers the customer. A resolved first-pass
+question and its stale prose are not restored after review. Local review
+validation now displays the actual missing choice rather than a network error.

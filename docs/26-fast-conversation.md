@@ -98,9 +98,61 @@ occurred during review; the tester resumed the existing context and did not
 repeat paid calls. That harness event is recorded transparently and is not a
 conversational failure.
 
+## Hosted v18 failure and selective v19 review
+
+V18 runtime `9795d35` reached the development deployment after exact-source CI
+38929689667 passed. The hosted variation then failed: the customer supplied
+both airport sets and November 12, 2026 in one comma-separated reply. The model
+retained the airports and zero layovers but classified the exact date as
+ambiguous and asked for it again. No manual date entry or retry was credited
+as success. See `artifacts/hosted-acceptance-failure-20261016.md`.
+
+V19 keeps ordinary turns at one AI pass and selectively adds a reviewer when
+an exact source-backed date contradicts the model's proposed question. The
+detector uses the existing temporal and grounding validators as feedback; it
+does not insert a date into the customer's requirements. The second AI role
+must produce a source-grounded claim. Ambiguous alternatives, qualified dates,
+and past booking dates do not trigger that correction as if already answered.
+Questions repaired by the reviewer are not restored from the first pass.
+Stale assistant prose attached to a suppressed answered question is omitted
+from the current chat while immutable run history remains available.
+
+The exact hosted-failure variant then passed a fresh local v19 DOM run in two
+live stages: 7.182 s initially and 4.473 s for the multi-detail reply. All five
+fields appeared correctly in review without a repeated date or layover
+question. After explicit optional choices, approval succeeded, the three-
+connection purchase returned HTTP 409, the matching simulated purchase
+completed, evidence downloaded, and the receipt survived reload. Root checked
+11 evidence properties, including canonical digest, trusted issuer signature,
+VI chain, exact approved date/airport sets/price/zero connections and absence
+of exceptions. See `artifacts/local-v19-uat-report.md`.
+
+That test also exposed a local review-validation error being labeled as a
+connection interruption. The UI now shows the actual unanswered-field message
+and makes no approval request until it is resolved. The browser regression
+checks this distinction.
+
+## V19 selective reviewer laboratory result (October 16, 2026)
+
+The saved v18 failure was replayed through the v19 selective reviewer with one
+bounded evaluation stage. The candidate had asked for a departure date even
+though the verified second customer turn already said “November 12, 2026.” The
+deterministic diagnostic supplied `question_answer_already_resolvable` as
+review context; no second attempt or fallback was used.
+
+The live reviewer returned a grounded draft containing departure date
+`2026-11-12`, origin airports `[YYZ, YHM]`, destination airports `[LHR, LGW]`,
+`max_connections: 0`, and `max_total_cents: 79999`. It retired the date
+question and returned `review_required` with `question: null`. Grounding passed.
+The single call took 4.4 seconds and used 5,020 prompt tokens plus 536
+completion tokens. The complete local result is retained in the ignored lab
+artifact at
+`/Users/victor/Nueva-Generacion-dev/ignored/artifacts/selective-review-lab-v19.json`.
+It is development evidence only and is not a deployment or purchase claim.
+
 ## Verification and budget boundary
 
-The latest local count is 606 pytest passes. All eleven headless browser regression suites passed, including the visible
+The latest local count is 616 pytest passes. All eleven headless browser regression suites passed, including the visible
 deferred-review warning and multiple-choice preservation. These deterministic
 fixtures remain separate from live UI evidence. The v18 report above is a completed local
 UAT artifact. No model calls were made for this documentation pass.
@@ -116,8 +168,8 @@ first grounded candidate, marks review as `review_required`, and shows a
 system warning. It does not fabricate AI text. Provider errors continue to
 propagate visibly.
 
-Future deployment is development-only and remains pending CI and hosted UAT;
-the v18 result is local evidence, not a deployment claim.
+The v19 development release is pending exact-source CI and hosted UAT;
+the v19 acceptance result above is local evidence at this checkpoint.
 Production remains on the v15 runtime and its prior operational cap until an
 explicit promotion. That distinction belongs in release engineering notes;
 the user-facing product does not need an unprompted environment warning.

@@ -1360,8 +1360,13 @@ def apply_adaptive_plan(draft, extraction):
         source_text=user_text(result.get('messages', [])),
     ) if adaptive else None)
     action = raw_plan.get('action') if raw_plan.get('action') in _ADAPTIVE_ACTIONS else 'review_required'
+    suppressed_question = None
     if adaptive:
-        if question is not None and not _adaptive_question_answered(question, result, criteria):
+        question_answered = (
+            question is not None
+            and _adaptive_question_answered(question, result, criteria)
+        )
+        if question is not None and not question_answered:
             result['questions'] = [question]
             if action != 'ask_user':
                 action = 'ask_user'
@@ -1370,6 +1375,20 @@ def apply_adaptive_plan(draft, extraction):
             # from the adaptive plan as well as the legacy question list. The
             # UI and POST controller must never render/bind an answered model
             # question from two different state paths.
+            if question_answered and raw_plan.get('action') == 'ask_user':
+                # ``assistant_message`` is often the model's prose version of
+                # its question.  Keeping it after the bound question has been
+                # answered makes the UI render a stale question as the latest
+                # assistant bubble even though the question card is gone.
+                # Preserve a small audit marker so clients can distinguish this
+                # intentional suppression from a planner that supplied no
+                # message.  The immutable ai_runs trace remains untouched.
+                suppressed_question = {
+                    'question_id': question.get('question_id') or question.get('id'),
+                    'criterion_key': question.get('criterion_key'),
+                    'field': question.get('field'),
+                    'reason': 'durable_answer',
+                }
             question = None
             result['questions'] = []
             if action == 'ask_user':
@@ -1407,12 +1426,17 @@ def apply_adaptive_plan(draft, extraction):
     tools = extraction.get('agent_tools') or extraction.get('adaptive_tools') or raw_plan.get('agent_tools') or raw_plan.get('tools') or []
     if isinstance(tools, dict):
         tools = [tools]
+    assistant_message = _bounded_adaptive_text(raw_plan.get('assistant_message'), 1000)
+    if suppressed_question is not None:
+        assistant_message = ''
     result['adaptive_plan'] = {
         'action': action,
-        'assistant_message': _bounded_adaptive_text(raw_plan.get('assistant_message'), 1000),
+        'assistant_message': assistant_message,
         'question': deepcopy(question),
         'offer_observations': deepcopy(raw_plan.get('offer_observations') or [])[:20] if isinstance(raw_plan.get('offer_observations'), list) else [],
     }
+    if suppressed_question is not None:
+        result['adaptive_plan']['suppressed_question'] = suppressed_question
     result['generic_criteria'] = criteria
     result['criteria'] = deepcopy(criteria)
     result['agent_tools'] = deepcopy(tools)[:20] if isinstance(tools, list) else []

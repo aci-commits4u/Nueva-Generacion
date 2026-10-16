@@ -51,6 +51,7 @@ from app.adaptive_intent import (
     merchant_context as build_merchant_context,
     normalize_plan,
     planner_validation_feedback,
+    resolvable_question_feedback,
     planner_public_view,
     prompt_context,
     source_quote_is_customer,
@@ -214,6 +215,9 @@ def _adaptive_prompt(domain, stage):
         'required profile field may use that field as its key even without a '
         'source criterion. Do not ask for details already supplied or '
         'explicitly declined. Do not emit a static/generic fallback question. '
+        'An exact yearful date supplied anywhere in a customer turn is already '
+        'a specific date; capture it rather than asking for it again unless '
+        'the date itself is qualified, negated, conflicting, or in the past. '
         'If no safe model-generated question is possible, use review_required with '
         'question=null. For flight airport questions, target exactly one of '
         'origin_airports or destination_airports; preserve multi-airport choices '
@@ -1062,6 +1066,13 @@ def _preserve_pending_question(candidate_plan, final_plan):
     question = candidate_plan.get('question')
     if not isinstance(question, dict) or not question.get('criterion_key'):
         return final_plan
+    final_fields = final_plan.get('draft', {}).get('fields', {}) if isinstance(final_plan.get('draft'), dict) else {}
+    resolved_field = question.get('field') or question.get('criterion_key')
+    if isinstance(final_fields, dict) and final_fields.get(resolved_field) is not None:
+        # A reviewer can repair an omission from customer evidence already in
+        # the turn. Restoring the candidate question would ask for that answer
+        # again and replace the reviewer's correct explanation with stale text.
+        return final_plan
     preserved = dict(final_plan)
     preserved['action'] = 'ask_user'
     preserved['question'] = question
@@ -1096,9 +1107,9 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     The legacy ``adaptive`` variant always performs the independent second
     review. ``adaptive_fast`` keeps the same source, schema, and final
     grounding gates, but completes an ordinary clarification turn from one
-    model response. It spends a second response only when a deliberate
-    read-only tool loop produced an observation that the model actually needs
-    to inspect. A server-required pre-review offer lookup remains bounded and
+    model response. It spends a second response for a deliberate read-only
+    observation or a proposed question contradicted by resolvable evidence. A source-backed question that appears already answered also triggers review.
+    A server-required pre-review offer lookup remains bounded and
     visible to the caller, but does not add a model call to a normal turn.
     """
     try:
@@ -1182,6 +1193,20 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         candidate_trace['partial_recovery'] = candidate_recovery
     candidate_fields = candidate_valid.get('fields', {}) if candidate_valid else {}
     candidate_issue_parts = []
+    answer_diagnostic = resolvable_question_feedback(
+        candidate_raw, candidate_plan, domain=domain,
+        source_text=source_text, source_messages=source_messages,
+    ) if fast else None
+    if answer_diagnostic:
+        candidate_trace['clarification_review'] = answer_diagnostic
+        candidate_issue_parts.append(
+            'The proposed question may ask for information already supplied. '
+            'Re-read the exact customer evidence and repair this omission '
+            'before asking another question. The deterministic date resolver '
+            'found a candidate value; you must still verify its meaning and '
+            'return the grounded claim yourself: '
+            + json.dumps(answer_diagnostic, ensure_ascii=True)
+        )
     if candidate_route_issue:
         candidate_issue_parts.append(candidate_route_issue)
     candidate_question_issue = format_planner_question_validation_feedback(
@@ -1231,9 +1256,10 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         and tool_result.get('status') not in {'blocked_missing_search_facts'}
         and tool_selection_origin == 'model'
     )
+    needs_extra_review = needs_tool_review or bool(answer_diagnostic)
     review_deferred_due_capacity = False
     review_capacity_warning = None
-    if fast and not needs_tool_review:
+    if fast and not needs_extra_review:
         final_raw = candidate_raw
         final_trace = dict(candidate_trace)
         final_trace['stage'] = 'adaptive_fast'
@@ -1425,7 +1451,7 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     if final_question_diagnostic is not None:
         final_trace['planner_validation'] = final_question_diagnostic
     final_trace['planner'] = planner_public_view(final_plan)
-    review_ran = (not fast or needs_tool_review) and not review_deferred_due_capacity
+    review_ran = (not fast or needs_extra_review) and not review_deferred_due_capacity
     _record_outcome(
         'adaptive_review' if review_ran else 'adaptive_plan',
         'passed',

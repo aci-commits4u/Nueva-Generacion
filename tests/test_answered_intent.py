@@ -147,6 +147,60 @@ def test_adaptive_nonstop_question_is_suppressed_by_same_source_zero_bound():
     assert result["fields"]["max_connections"] == 0
 
 
+def test_answered_question_clears_stale_assistant_prose_but_keeps_ai_trace():
+    draft = _adaptive_draft(
+        fields={
+            **_adaptive_draft()["fields"],
+            "max_connections": 0,
+        },
+        sources={
+            **_adaptive_draft()["sources"],
+            "max_connections": "also no layovers",
+        },
+        ai_runs=[{"revision": 1, "trace": [{"stage": "adaptive_plan"}]}],
+    )
+    question = {
+        "criterion_key": "nonstop",
+        "field": "nonstop",
+        "question": "Do you require a nonstop flight?",
+        "why": "This changes which offers are acceptable.",
+        "answer_kind": "boolean",
+        "answer_semantics": "requirement_boolean",
+        "options": ["Yes", "No"],
+    }
+    criterion = {
+        "key": "nonstop",
+        "field": "nonstop",
+        "text": "no layovers",
+        "source_quote": "also no layovers",
+        "kind": "requirement",
+        "verification": "supported",
+        "status": "needs_clarification",
+    }
+    extraction = _adaptive_extraction(question=question, criteria=[criterion], draft=draft)
+    extraction["adaptive_plan"]["assistant_message"] = "Do you require a nonstop flight?"
+
+    result = apply_adaptive_plan(draft, extraction)
+
+    assert result["questions"] == []
+    assert result["adaptive_plan"]["question"] is None
+    assert result["adaptive_plan"]["assistant_message"] == ""
+    assert result["adaptive_plan"]["suppressed_question"]["criterion_key"] == "nonstop"
+    assert result["ai_runs"] == draft["ai_runs"]
+
+
+def test_normal_review_assistant_message_is_not_cleared_without_suppressed_question():
+    draft = _adaptive_draft()
+    extraction = _adaptive_extraction(question=None, criteria=[], draft=draft)
+    extraction["adaptive_plan"]["action"] = "review_required"
+    extraction["adaptive_plan"]["assistant_message"] = "Review the captured requirements."
+
+    result = apply_adaptive_plan(draft, extraction)
+
+    assert result["adaptive_plan"]["assistant_message"] == "Review the captured requirements."
+    assert "suppressed_question" not in result["adaptive_plan"]
+
+
 def test_generic_requirement_boolean_is_downgraded_without_a_typed_field():
     draft = _adaptive_draft()
     question = {
