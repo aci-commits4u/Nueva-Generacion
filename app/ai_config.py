@@ -1,11 +1,33 @@
 """One selected default for interactive inference and live evaluations."""
 import os
-DEFAULT_PIPELINE='adaptive'
-PROMPT_VERSION='intent-envelope-v15-explicit-optionals'
+DEFAULT_PIPELINE='adaptive_fast'
+PROMPT_VERSION='intent-envelope-v18-evidence-sets'
 REASONING_EFFORTS={'low','medium','high'}
+ADAPTIVE_PIPELINES={'adaptive','adaptive_fast'}
 
 def selected_pipeline():
     return os.getenv('AI_PIPELINE_VERSION',DEFAULT_PIPELINE)
+
+
+def is_adaptive_pipeline(pipeline=None):
+    """Return whether a pipeline uses the model-directed question contract."""
+    return (pipeline or selected_pipeline()) in ADAPTIVE_PIPELINES
+
+
+def interpretation_call_count(pipeline=None, *, tool_loop=False):
+    """Return the minimum calls before a turn-specific read-only tool loop.
+
+    ``adaptive_fast`` is one model call for ordinary clarification turns.  A
+    second call is reserved only after the model deliberately selected a
+    read-only tool and the server has an observation for the reviewer to see.
+    The legacy adaptive pipeline remains a two-role comparison path.
+    """
+    pipeline = pipeline or selected_pipeline()
+    if pipeline == 'adaptive_fast':
+        return 2 if tool_loop else 1
+    if pipeline in {'adaptive', 'audited'}:
+        return 2
+    return 1
 
 
 def selected_reasoning_effort():

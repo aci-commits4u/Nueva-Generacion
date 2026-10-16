@@ -192,7 +192,7 @@ def _adaptive_engine_version_current(draft):
     # Early live adaptive drafts did not copy the pipeline to the top-level
     # record, but their server-owned adaptive plan is unambiguous evidence of
     # which interpretation path produced them.
-    adaptive = pipeline == 'adaptive' or (
+    adaptive = pipeline in {'adaptive', 'adaptive_fast'} or (
         pipeline is None and isinstance(draft.get('adaptive_plan'), dict)
     )
     if not adaptive:
@@ -228,7 +228,7 @@ def question_contract_current(draft):
     # plan. They use the legacy profile question contract and are current.
     if draft.get('mode') != 'live' or (pipeline is None and not isinstance(draft.get('adaptive_plan'), dict)):
         return True
-    if pipeline not in {None, 'adaptive'}:
+    if pipeline not in {None, 'adaptive', 'adaptive_fast'}:
         return True
     if not _adaptive_engine_version_current(draft):
         return False
@@ -712,6 +712,11 @@ def _adaptive_question(domain, raw, criteria, *, allow_offer_context=False,
     answer_semantics = raw.get('answer_semantics')
     if answer_semantics not in {'requirement_boolean', 'preference_boolean', None}:
         answer_semantics = None
+    # A generic criterion has no reviewed typed field to receive a Yes/No.
+    # Keep the question available as conversation context, but never let a
+    # generic boolean contract masquerade as consent for a profile operator.
+    if field is None and answer_semantics == 'requirement_boolean':
+        answer_semantics = None
     if answer_kind == 'boolean':
         # Only the first semantic is allowed to bind Yes/No to a true
         # requirement.  The wording check prevents an ambiguous model question
@@ -775,6 +780,195 @@ def _adaptive_question(domain, raw, criteria, *, allow_offer_context=False,
     return question
 
 
+def _criterion_record(question, draft, criteria):
+    """Resolve the planner record bound to a question."""
+    if not isinstance(question, dict):
+        return None
+    key = question.get('criterion_key')
+    field = question.get('field')
+    records = []
+    if isinstance(criteria, list):
+        records.extend(criteria)
+    if isinstance(draft, dict):
+        records.extend(draft.get('generic_criteria') or [])
+        records.extend(draft.get('criteria') or [])
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        if (key and item.get('key') == key) or (field and item.get('field') == field):
+            return item
+    return None
+
+
+def _criterion_source_quote(question, draft, criteria):
+    """Resolve a question's source from its criterion/field binding."""
+    record = _criterion_record(question, draft, criteria)
+    if record is not None:
+        quote = record.get('source_quote')
+        if isinstance(quote, str) and quote.strip():
+            return quote
+    field = question.get('field')
+    key = question.get('criterion_key')
+    sources = draft.get('sources') if isinstance(draft, dict) else None
+    if isinstance(sources, dict):
+        for candidate in (field, key):
+            quote = sources.get(candidate) if candidate else None
+            if isinstance(quote, str) and quote.strip():
+                return quote
+    return None
+
+
+def _same_intent_source(left, right):
+    """Match the same customer source span without substring collisions."""
+    if not isinstance(left, str) or not isinstance(right, str):
+        return False
+    normalize = lambda value: re.sub(
+        r'\s+', ' ', value.translate(_TEXT_EQUIVALENTS).casefold()
+    ).strip(' .!?;,: ')
+    left, right = normalize(left), normalize(right)
+    return bool(left and right and left == right)
+
+
+def _atomic_intent_source(value):
+    """Reject a whole-turn source that visibly contains multiple conditions."""
+    if not isinstance(value, str) or not value.strip():
+        return False
+    return not bool(re.search(
+        r'(?i)\b(?:and|or|but|after|before|while|with|plus|then)\b|[,;:&/()]',
+        value,
+    ))
+
+
+def _criterion_text(record):
+    if not isinstance(record, dict):
+        return None
+    text = record.get('text') or record.get('requirement')
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return re.sub(r'\s+', ' ', text.translate(_TEXT_EQUIVALENTS).casefold()).strip()
+
+
+def _same_criterion_meaning(left, right, left_source=None, right_source=None):
+    """Require criterion identity when source text covers multiple clauses."""
+    # A generic criterion and a typed profile field can share the same broad
+    # source sentence (for example, ``no layovers and after 9am``).  The
+    # sentence overlap is not evidence that they are the same requirement:
+    # the typed field may cover only the first clause.  Keep field roles
+    # separate before comparing copied planner text.  Two generic records may
+    # still use matching text when a planner gives the same condition a new
+    # key on a later turn.
+    left_field = left.get('field') if isinstance(left, dict) else None
+    right_field = right.get('field') if isinstance(right, dict) else None
+    if (left_field is None) != (right_field is None):
+        return False
+    if left_field is not None and right_field is not None and left_field != right_field:
+        return False
+    left_text, right_text = _criterion_text(left), _criterion_text(right)
+    if left_text and right_text:
+        return left_text == right_text
+    return (
+        _atomic_intent_source(left_source)
+        and _atomic_intent_source(right_source)
+        and _same_intent_source(left_source, right_source)
+    )
+
+
+def _semantically_covered_question(question, draft, criteria):
+    """Suppress only a question whose source is already represented.
+
+    The connection/nonstop relation is intentionally one-way at the source
+    level: a typed ``max_connections=0`` can cover a planner's duplicate
+    nonstop question when both point to the same source, but it never creates
+    ``nonstop=True``.  The inverse is supported because a true nonstop source
+    is already a zero-connection requirement.
+    """
+    if not isinstance(question, dict) or not isinstance(draft, dict):
+        return False
+    fields = draft.get('fields') if isinstance(draft.get('fields'), dict) else {}
+    sources = draft.get('sources') if isinstance(draft.get('sources'), dict) else {}
+    pending = {
+        item.get('field') for item in (draft.get('clarifications') or [])
+        if isinstance(item, dict)
+    }
+    field = question.get('field')
+    question_source = _criterion_source_quote(question, draft, criteria)
+    question_record = _criterion_record(question, draft, criteria)
+
+    def source_available(name):
+        value = sources.get(name)
+        return isinstance(value, str) and bool(value.strip())
+
+    if field in fields and fields.get(field) is not None and field not in pending:
+        return True
+    if field == 'nonstop' and fields.get('max_connections') == 0 and source_available('max_connections'):
+        return (
+            question_source is None
+            or _same_intent_source(question_source, sources.get('max_connections'))
+        )
+    if field == 'max_connections' and fields.get('nonstop') is True and source_available('nonstop'):
+        return (
+            question_source is None
+            or _same_intent_source(question_source, sources.get('nonstop'))
+        )
+    if field is None and question_source:
+        for covered_field in ('max_connections', 'nonstop'):
+            if (
+                fields.get(covered_field) is not None
+                and covered_field not in pending
+                and source_available(covered_field)
+                and _same_intent_source(question_source, sources.get(covered_field))
+            ):
+                covered_question = {
+                    'criterion_key': covered_field,
+                    'field': covered_field,
+                }
+                covered_record = _criterion_record(covered_question, draft, criteria)
+                if _same_criterion_meaning(
+                    question_record,
+                    covered_record,
+                    question_source,
+                    sources.get(covered_field),
+                ):
+                    return True
+    return False
+
+
+def _reply_source_quote(reply, draft):
+    """Resolve a prior server question's source from persisted criteria."""
+    if not isinstance(reply, dict) or not isinstance(draft, dict):
+        return None
+    key, field = reply.get('criterion_key'), reply.get('field')
+    records = [*(draft.get('generic_criteria') or []), *(draft.get('criteria') or [])]
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        if (key and item.get('key') == key) or (field and item.get('field') == field):
+            quote = item.get('source_quote')
+            if isinstance(quote, str) and quote.strip():
+                return quote
+    sources = draft.get('sources')
+    if isinstance(sources, dict):
+        for candidate in (field, key):
+            quote = sources.get(candidate) if candidate else None
+            if isinstance(quote, str) and quote.strip():
+                return quote
+    return None
+
+
+def _reply_criterion_record(reply, draft):
+    """Resolve a prior reply's planner criterion for semantic matching."""
+    if not isinstance(reply, dict) or not isinstance(draft, dict):
+        return None
+    key, field = reply.get('criterion_key'), reply.get('field')
+    records = [*(draft.get('generic_criteria') or []), *(draft.get('criteria') or [])]
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        if (key and item.get('key') == key) or (field and item.get('field') == field):
+            return item
+    return None
+
+
 def _adaptive_question_answered(question, draft, criteria=None):
     """Return true once the customer has answered this exact question."""
     qid = question.get('question_id')
@@ -786,6 +980,8 @@ def _adaptive_question_answered(question, draft, criteria=None):
     pending_fields = {
         item.get('field') for item in clarifications if isinstance(item, dict)
     }
+    if _semantically_covered_question(question, draft, criteria):
+        return True
     # Airport answers are choice sets.  Once the server has a non-empty,
     # source-backed set for the exact airport field, a reviewer may still
     # describe that criterion as ``needs_clarification`` or emit a narrower
@@ -802,6 +998,11 @@ def _adaptive_question_answered(question, draft, criteria=None):
         return True
     answered_index = None
     answered_keys = []
+    source_match_is_ambiguous = False
+    source_match_found = False
+    source_match_indexes = []
+    question_source = _criterion_source_quote(question, draft, criteria)
+    question_record = _criterion_record(question, draft, criteria)
     for index, message in enumerate(messages):
         reply = message.get('reply_to') if isinstance(message, dict) else None
         if not isinstance(reply, dict) or not is_trusted_adaptive_question(
@@ -811,6 +1012,39 @@ def _adaptive_question_answered(question, draft, criteria=None):
             answered_index = index
         if key and reply.get('criterion_key') == key:
             answered_keys.append((index, reply.get('question_id')))
+        reply_source = _reply_source_quote(reply, draft)
+        if (
+            question_source
+            and reply_source
+            and _same_intent_source(question_source, reply_source)
+            and _same_criterion_meaning(
+                question_record,
+                _reply_criterion_record(reply, draft),
+                question_source,
+                reply_source,
+            )
+        ):
+            source_match_found = True
+            source_match_indexes.append(index)
+            answered_keys.append((index, reply.get('question_id')))
+            if reply.get('field') is None and _generic_answer_is_ambiguous(
+                message.get('content')
+            ):
+                source_match_is_ambiguous = True
+    source_match_reopened = False
+    if source_match_indexes:
+        last_match = max(source_match_indexes)
+        for message in messages[last_match + 1:]:
+            if not isinstance(message, dict) or message.get('role') not in {'user', 'customer'}:
+                continue
+            content = message.get('content')
+            if isinstance(content, str) and re.search(
+                r'(?i)\b(?:actually|instead|correction|change(?:d)?|update(?:d)?|'
+                r'rather|no\s+longer|not\s+anymore)\b',
+                content,
+            ):
+                source_match_reopened = True
+                break
     criterion = next((item for item in (criteria or [])
                       if isinstance(item, dict) and item.get('key') == key), None)
     criterion_status = criterion.get('status') if criterion else None
@@ -819,10 +1053,15 @@ def _adaptive_question_answered(question, draft, criteria=None):
     # lets “I don't know” lead to a useful follow-up while preventing every
     # wording change from repeating an already answered question.
     if answered_keys and not any(item[1] == qid for item in answered_keys):
-        if criterion_status == 'needs_clarification' and question.get('why'):
+        if (source_match_reopened
+                or ((criterion_status == 'needs_clarification'
+             and question.get('why') and not source_match_found)
+                or source_match_is_ambiguous)):
             return False
         return True
     if answered_index is not None:
+        if source_match_reopened:
+            return False
         field = question.get('field')
         terms = {
             'nonstop': r'non[- ]?stop|direct|connection|layover',
@@ -1038,7 +1277,15 @@ def apply_adaptive_plan(draft, extraction):
     extraction = extraction if isinstance(extraction, dict) else {}
     mode = extraction.get('mode', result.get('mode', 'offline'))
     pipeline = extraction.get('pipeline', result.get('pipeline', 'offline'))
-    adaptive = mode == 'live' and pipeline == 'adaptive'
+    adaptive = mode == 'live' and pipeline in {'adaptive', 'adaptive_fast'}
+    # A paid first pass can remain useful when there is no capacity for an
+    # optional tool review. Keep this system status separate from AI prose and
+    # clear it on the next completed interpretation.
+    result['review_deferred'] = bool(extraction.get('review_deferred'))
+    if isinstance(extraction.get('review_warning'), dict):
+        result['review_warning'] = deepcopy(extraction['review_warning'])
+    else:
+        result.pop('review_warning', None)
     raw_plan = extraction.get('adaptive_plan') or extraction.get('planner') or extraction.get('plan')
     if raw_plan is None and any(key in extraction for key in ('action', 'question', 'criteria')):
         raw_plan = extraction
@@ -1218,10 +1465,17 @@ def questions(domain,fields,clarifications=None,messages=None):
     for key,spec in profile['fields'].items():
         if key not in mentioned or key in planned_fields:
             continue
-        # Nonstop is a stricter form of the connections rule. Asking for both
-        # makes the conversation appear contradictory and invites a model to
-        # manufacture a second preference.
-        if key=='max_connections' and fields.get('nonstop') is True:
+        # These two profile fields describe the same route constraint at
+        # different levels.  A source-backed zero-connection bound or a
+        # strict nonstop requirement already answers the other question; do
+        # not turn that equivalence into a second prompt.
+        if (
+            key == 'max_connections'
+            and fields.get('nonstop') is True
+        ) or (
+            key == 'nonstop'
+            and fields.get('max_connections') == 0
+        ):
             continue
         planned.append(_question(domain,key,spec,required=bool(spec.get('required'))))
     return planned
@@ -1561,6 +1815,8 @@ def provenance(extraction,revision,messages=None):
         'pipeline': extraction.get('pipeline', 'offline'),
         'model': extraction.get('model'),
         'trace': deepcopy(extraction.get('trace', [])),
+        'review_deferred': bool(extraction.get('review_deferred')),
+        'review_warning': deepcopy(extraction.get('review_warning')),
         'fields': deepcopy(extraction['fields']),
         'sources': deepcopy(extraction['sources']),
         'unsupported': deepcopy(extraction['unsupported']),

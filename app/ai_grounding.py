@@ -764,9 +764,9 @@ def clarification_guidance(data: object, message: str) -> list[str]:
 
 
 def _money_cents(quote: str) -> int | None:
-    qualifier = r"(?:under|below|at\s+most|up\s+to|max(?:imum)?(?:\s+of)?|budget(?:\s+of)?)"
+    qualifier = r"(?:under|below|less\s+than|at\s+most|up\s+to|max(?:imum)?(?:\s+of)?|budget(?:\s+of)?)"
     qualified = re.search(
-        rf"(?i)\b{qualifier}\s*(?:USD\s*)?\$?\s*(\d[\d,]*(?:\.\d{{1,2}})?)",
+        rf"(?i)\b{qualifier}\s*(?:USD\s*)?\$?\s*(\d[\d,]*(?:\.\d{{1,2}})?)\s*\$?",
         quote,
     )
     if qualified:
@@ -774,7 +774,7 @@ def _money_cents(quote: str) -> int | None:
             cents = int(Decimal(qualified.group(1).replace(",", "")) * 100)
         except (InvalidOperation, ValueError):
             return None
-        return cents - 1 if re.match(r"(?i)under|below", qualified.group(0).strip()) else cents
+        return cents - 1 if re.match(r"(?i)under|below|less\s+than", qualified.group(0).strip()) else cents
     dollar = re.search(r"\$\s*(\d[\d,]*(?:\.\d{1,2})?)", quote)
     if dollar:
         try:
@@ -785,9 +785,9 @@ def _money_cents(quote: str) -> int | None:
 
 
 _MONEY_BOUND = re.compile(
-    r"(?i)\b(?:under|below|at\s+most|up\s+to|max(?:imum)?(?:\s+of)?|"
+    r"(?i)\b(?:under|below|less\s+than|at\s+most|up\s+to|max(?:imum)?(?:\s+of)?|"
     r"budget(?:\s+of)?)\s*(?:USD\s*)?\$?\s*"
-    r"\d[\d,]*(?:\.\d{1,2})?"
+    r"\d[\d,]*(?:\.\d{1,2})?\s*\$?"
 )
 _MONEY_AMBIGUITY = re.compile(
     r"(?i)\b(?:around|about|roughly|approximately|flexible|prefer(?:ably)?|"
@@ -805,6 +805,7 @@ _MONEY_CORRECTION = re.compile(
 _MONEY_TOKEN = re.compile(
     r"(?i)(?:USD\s*\$?\s*|\$\s*)\d[\d,]*(?:\.\d{1,2})?"
     r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:USD|dollars?)\b"
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*\$"
 )
 _PRICE_UNIT_BASIS = re.compile(
     r"(?i)(?:\bper\s*[-/]?\s*(?:night|person|travell?er|room|unit|item|"
@@ -1262,11 +1263,79 @@ _NUMBER_WORDS = {
 }
 
 
+# A count phrase is a different operator from the boolean ``nonstop``
+# requirement.  In particular, ``no layovers`` is a supported upper bound of
+# zero connections; it must not be silently rewritten to ``nonstop=True``.
+_ZERO_CONNECTIONS = re.compile(
+    r"\b(?:zero|no|without(?:\s+any)?)\s+"
+    r"(?:connections?|layovers?|stops?)\b",
+    re.I,
+)
+
+
 def _integer_appears(value: int, quote: str) -> bool:
     if re.search(rf"\b{re.escape(str(value))}\b", quote):
         return True
     return any(number == value and re.search(rf"\b{word}\b", quote, re.I)
                for word, number in _NUMBER_WORDS.items())
+
+
+def _connection_count_appears(value: int, quote: str) -> bool:
+    """Prove a max-connections count without broadening nonstop semantics."""
+    if type(value) is not int:
+        return False
+    return (value == 0 and bool(_ZERO_CONNECTIONS.search(quote))) or _integer_appears(value, quote)
+
+
+def _same_grounded_phrase(left: object, right: object) -> bool:
+    """Compare source phrases conservatively for duplicate-condition cleanup."""
+    if not isinstance(left, str) or not isinstance(right, str):
+        return False
+    normalize = lambda value: re.sub(
+        r"\s+", " ", value.translate(_SOURCE_TYPOGRAPHY).casefold()
+    ).strip(" .!?;,: ")
+    left_normalized, right_normalized = normalize(left), normalize(right)
+    return bool(
+        left_normalized
+        and right_normalized
+        and (
+            left_normalized == right_normalized
+            or left_normalized in right_normalized
+            or right_normalized in left_normalized
+        )
+    )
+
+
+def _remove_represented_connection_conditions(data: dict) -> dict:
+    """Drop only a duplicate no-layover flag represented by max_connections=0.
+
+    The typed count remains the sole machine-enforceable requirement.  This
+    pass deliberately requires the model's unsupported phrase and typed source
+    to overlap; it does not discard unrelated conditions merely because they
+    mention travel stops.
+    """
+    fields = data.get("fields") if isinstance(data, dict) else None
+    sources = data.get("sources") if isinstance(data, dict) else None
+    unsupported = data.get("unsupported") if isinstance(data, dict) else None
+    if (
+        not isinstance(fields, dict)
+        or fields.get("max_connections") != 0
+        or not isinstance(sources, dict)
+        or not _ZERO_CONNECTIONS.search(str(sources.get("max_connections") or ""))
+        or not isinstance(unsupported, list)
+    ):
+        return data
+    typed_source = sources.get("max_connections")
+    data["unsupported"] = [
+        item
+        for item in unsupported
+        if not (
+            isinstance(item, str)
+            and _ZERO_CONNECTIONS.search(item)
+            and _same_grounded_phrase(item, typed_source)
+        )
+    ]
+    return data
 
 
 def _integer_with_unit_supports(value: int, quote: str, unit: str) -> bool:
@@ -1397,6 +1466,9 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         if not _airport_quote_supports(value, quote, message, source_messages, key):
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key == "max_total_cents":
+        if (_NON_USD_CURRENCY.search(quote.translate(_SOURCE_TYPOGRAPHY))
+                or _NON_USD_CURRENCY.search(message.translate(_SOURCE_TYPOGRAPHY))):
+            raise GroundingFailure("price currency is not the reviewed USD total")
         if _price_unit_source_span(quote, message):
             raise GroundingFailure("unit-based price is not an all-in total")
         if type(value) is not int or _money_cents(quote) != value:
@@ -1420,13 +1492,14 @@ def _ground_field(key: str, value, quote: str, message: str, domain: str,
         if not all(isinstance(item, str) and _time_in_quote(item, quote) for item in value):
             raise GroundingFailure("departure window is not supported by its source quotation")
     elif key in {"max_connections", "max_duration_minutes"}:
-        if not re.search(r"\b(?:connection|connections|stop|stops|minute|minutes|hour|hours)\b", quote, re.I):
+        units = r"connection|connections|layover|layovers|stop|stops|minute|minutes|hour|hours"
+        if not re.search(rf"\b(?:{units})\b", quote, re.I):
             raise GroundingFailure(f"{key} source quotation lacks its unit")
         if key == "max_duration_minutes":
             duration = re.search(r"\b(\d+)\s*(hour|hours|minute|minutes)\b", quote, re.I)
             supported = bool(duration and value == int(duration.group(1)) * (60 if duration.group(2).casefold().startswith("hour") else 1))
         else:
-            supported = _integer_appears(value, quote)
+            supported = _connection_count_appears(value, quote)
         if not supported:
             raise GroundingFailure(f"{key} value is not supported by its source quotation")
     elif key in {"rooms", "adults"}:
@@ -1818,6 +1891,7 @@ def validate_extraction(domain: str, message: str, data: dict,
         if value is None:
             raise EnvelopeFailure("null fields are not customer no-preference choices")
         _ground_field(key, value, canonical["sources"].get(key), message, domain, source_messages)
+    canonical = _remove_represented_connection_conditions(canonical)
     return canonical
 
 
@@ -2038,6 +2112,7 @@ def recover_grounded_parts(
         },
     }
     result = _preserve_flight_scope_conditions(result, domain, message)
+    result = _remove_represented_connection_conditions(result)
     result["unsupported"] = list(dict.fromkeys(result["unsupported"]))
     if len(result["unsupported"]) > 20:
         return None

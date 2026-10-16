@@ -199,6 +199,86 @@
         "no_question_for_declined": true,
         "source_coverage_phrases": ["Tampa", "2026-11-14", "2026-11-17", "under $300", "breakfast or cancellation"]
       }
+    },
+    {
+      "id": "development-colloquial-layovers-postfix-price",
+      "split": "development",
+      "domain": "flight",
+      "message": "tor to london and also no layovers and less than 800 $",
+      "expected_fields": {
+        "max_connections": 0,
+        "max_total_cents": 79999
+      },
+      "unsupported_groups": [],
+      "expected_metrics": {
+        "adaptive_required": true,
+        "known_fields": [
+          "max_connections",
+          "max_total_cents"
+        ],
+        "no_question_for_known": true,
+        "source_coverage_phrases": [
+          "no layovers",
+          "less than 800 $"
+        ]
+      }
+    },
+    {
+      "id": "development-multi-detail-allowed-airport-sets",
+      "split": "development",
+      "domain": "flight",
+      "message": "Get me from Toronto to London, and also no layovers, less than 800 $. I can travel November 12, 2026. Use the exact date November 12, 2026. Depart from YYZ or YHM and arrive at LHR or LGW. Keep no layovers and keep the maximum strictly less than 800 dollars.",
+      "source_messages": [
+        {
+          "role": "user",
+          "content": "Get me from Toronto to London, and also no layovers, less than 800 $. I can travel November 12, 2026.",
+          "timestamp": "2026-10-16T16:00:00+00:00",
+          "reference_date": "2026-10-16"
+        },
+        {
+          "role": "user",
+          "content": "Use the exact date November 12, 2026. Depart from YYZ or YHM and arrive at LHR or LGW. Keep no layovers and keep the maximum strictly less than 800 dollars.",
+          "timestamp": "2026-10-16T16:01:00+00:00",
+          "reference_date": "2026-10-16"
+        }
+      ],
+      "expected_fields": {
+        "origin_airports": [
+          "YYZ",
+          "YHM"
+        ],
+        "destination_airports": [
+          "LHR",
+          "LGW"
+        ],
+        "departure_date": "2026-11-12",
+        "max_connections": 0,
+        "max_total_cents": 79999
+      },
+      "unsupported_groups": [],
+      "expected_metrics": {
+        "adaptive_required": true,
+        "known_fields": [
+          "origin_airports",
+          "destination_airports",
+          "departure_date",
+          "max_connections",
+          "max_total_cents"
+        ],
+        "no_question_for_known": true,
+        "allowed_actions": [
+          "inspect_offers",
+          "ready_for_review",
+          "review_required"
+        ],
+        "source_coverage_phrases": [
+          "YYZ",
+          "YHM",
+          "LHR",
+          "LGW",
+          "no layovers"
+        ]
+      }
     }
   ]
 }

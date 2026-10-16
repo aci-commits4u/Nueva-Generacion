@@ -12,7 +12,7 @@ export function conversationMarkup(d,escapeHTML,options={}){
  const observations=hasExecutedTool(tools)&&Array.isArray(plan.offer_observations)?plan.offer_observations:[];
  const messages=d.messages||[{content:d.message}];
  const runs=d.ai_runs||[];
- const maxFollowups=Number.isFinite(Number(d.max_followups))?Number(d.max_followups):11;
+ const maxFollowups=Number.isFinite(Number(d.max_followups))?Number(d.max_followups):31;
  const usedFollowups=messages.filter(m=>m.reply_to).length;
  const remaining=Number.isFinite(Number(d.followups_remaining))?Math.max(0,Number(d.followups_remaining)):Math.max(0,maxFollowups-usedFollowups);
  const followupLabel=remaining===1?'follow-up':'follow-ups';
@@ -43,7 +43,7 @@ function plannerStatus(plan,tools,escapeHTML,d){
   if(available.length)return available.slice(0,3).map(name=>({name,status:'available',summary:'Available to inspect; not yet used.'}));
   return [{name:tool?.name||tool?.tool||'Context',status:tool?.status||'available',summary:tool?.summary||tool?.message||''}];
  }).slice(0,4).map(tool=>`<li><span class="tool-status ${escapeHTML(tool.status)}" aria-hidden="true"></span><div><b>${escapeHTML({inspect_offers:'Inspect signed offers',retrieve_policy:'Read merchant policy'}[tool.name]||tool.name)}</b>${tool.summary?`<small>${escapeHTML(tool.summary)}</small>`:''}</div><em>${escapeHTML(statusLabel(tool.status))}</em></li>`).join('');
- const detail=action==='ask_user'?'The question is generated from your words and the current task context.':action==='review_required'?'The assistant did not mark this draft ready. Review the captured rules and unresolved conditions before approval.':'The assistant may use read-only context, but it cannot approve or purchase. Facts appear here only after the server receives them.';
+ const detail=action==='ask_user'?'The question is generated from your words and the current task context.':action==='review_required'?'Review the captured rules and any unresolved conditions before approval.':'The assistant may use read-only context, but it cannot approve or purchase. Facts appear here only after the server receives them.';
  return `<section class="adaptive-activity" aria-label="Adaptive assistant activity"><div class="adaptive-activity-top"><span class="activity-mark" aria-hidden="true">✦</span><div><span class="eyebrow">ADAPTIVE INTENT ENGINE</span><b>${escapeHTML(actionCopy)}</b></div><span class="activity-mode">${tools.length?'Context-aware':'Live interpretation'}</span></div>${rows?`<ul class="tool-list">${rows}</ul>`:''}<p class="small">${escapeHTML(detail)} It does not authorize a purchase.</p></section>`;
 }
 
@@ -57,8 +57,9 @@ function actionLabel(action){
 
 function readinessMarkup(plan,d,escapeHTML){
  const action=plan.action;
+ if(d?.review_deferred)return '<section class="question-card question-complete needs-review" role="status"><span class="eyebrow">REQUEST SAVED / AI REVIEW PAUSED</span><h2>Your captured details are preserved.</h2><p class="small">The assistant reached its allowance before an additional review of merchant context. Open the requirements to check what was captured. This request has not been approved.</p></section>';
  if(action==='ready_for_review')return '<section class="question-card question-complete ready-review"><span class="eyebrow">READY FOR YOUR REVIEW</span><h2>The adaptive pass is ready.</h2><p class="small">Review the captured rules and approve them yourself. The assistant has not authorized anything.</p></section>';
- if(action==='review_required')return `<section class="question-card question-complete needs-review"><span class="eyebrow">REVIEW REQUIRED</span><h2>This interpretation needs your review.</h2><p class="small">The assistant could not safely mark every condition ready. Open the review to correct, remove, or explicitly resolve each remaining condition.${d?.unsupported?.length||d?.clarifications?.length?' Unresolved details remain visible there.':''}</p></section>`;
+ if(action==='review_required')return `<section class="question-card question-complete needs-review"><span class="eyebrow">YOUR REVIEW</span><h2>Check your captured requirements.</h2><p class="small">Open the review to confirm the details before you approve.${d?.unsupported?.length||d?.clarifications?.length?' Unresolved conditions remain visible and must be addressed there.':' You can edit the requirements or add another detail to the conversation.'}</p></section>`;
  if(action==='inspect_offers'||action==='retrieve_policy')return `<section class="question-card question-complete context-pending"><span class="eyebrow">READ-ONLY CONTEXT</span><h2>${action==='inspect_offers'?'Offer facts are selected for review.':'Merchant policy is selected for review.'}</h2><p class="small">Only server-returned facts can appear in the next step. The assistant does not treat this selection as customer approval.</p></section>`;
  return '<section class="question-card question-complete"><span class="eyebrow">COVERAGE CHECK</span><h2>We have enough to review.</h2><p class="small">Open the structured review to check captured values, unresolved details, and anything that still needs your choice.</p></section>';
 }

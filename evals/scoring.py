@@ -181,7 +181,7 @@ def score_adaptive_case(case, result, evaluation_context=None, *, variant='adapt
         if not isinstance(nested_context, dict):
             nested_context = result.get('merchant_context_evaluation')
         evaluation_context = nested_context if isinstance(nested_context, dict) else {}
-    adaptive_active = variant == 'adaptive'
+    adaptive_active = variant in {'adaptive','adaptive_fast'}
     if adaptive_active:
         planner, question_contract_valid = _bound_adaptive_result(result, case)
         question = planner.get('question') if isinstance(planner.get('question'), dict) else None

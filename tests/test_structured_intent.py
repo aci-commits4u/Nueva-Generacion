@@ -27,6 +27,53 @@ def test_catalog_is_customer_only_bounded_and_stable():
     assert first[-1]["id"].startswith("t2p")
 
 
+def test_catalog_keeps_disjunctive_identity_sets_in_one_source_span():
+    initial = "Get me from Toronto to London, and also no layovers, less than 800 $."
+    update = (
+        "Use the exact date November 12, 2026. Depart from YYZ or YHM and "
+        "arrive at LHR or LGW. Keep no layovers and keep the maximum strictly "
+        "less than 800 dollars."
+    )
+    catalog = build_source_catalog(None, [
+        {"role": "user", "content": initial},
+        {"role": "user", "content": update},
+    ])
+    texts = {item["text"] for item in catalog}
+    assert "Depart from YYZ or YHM" in texts
+    assert "and arrive at LHR or LGW." in texts
+    assert "or YHM" not in texts
+    assert "or LGW." not in texts
+
+
+def test_hydration_accepts_full_disjunctive_airport_refs():
+    initial = "Get me from Toronto to London, and also no layovers, less than 800 $."
+    update = (
+        "Use the exact date November 12, 2026. Depart from YYZ or YHM and "
+        "arrive at LHR or LGW. Keep no layovers and keep the maximum strictly "
+        "less than 800 dollars."
+    )
+    catalog = build_source_catalog(None, [
+        {"role": "user", "content": initial},
+        {"role": "user", "content": update},
+    ])
+    refs = {item["text"]: item["id"] for item in catalog}
+    data = hydrate_response({
+        "supported_claims": [
+            {"field": "origin_airports", "value": ["YYZ", "YHM"],
+             "source_ref": refs["Depart from YYZ or YHM"]},
+            {"field": "destination_airports", "value": ["LHR", "LGW"],
+             "source_ref": refs["and arrive at LHR or LGW."]},
+        ],
+        "unsupported": [], "clarifications": [], "criteria": [],
+        "action": "review_required", "assistant_message": "Review.",
+        "question": None, "explanation": "Review.", "offer_observations": [],
+    }, domain="flight", catalog=catalog, require_wire=True)
+    assert data["fields"] == {
+        "origin_airports": ["YYZ", "YHM"],
+        "destination_airports": ["LHR", "LGW"],
+    }
+
+
 def test_long_customer_turn_keeps_contiguous_whole_turn_fallback():
     customer = " ".join(["quiet"] * 60) + " under $300"
     catalog = build_source_catalog(customer, [{"role": "user", "content": customer}])
@@ -89,6 +136,70 @@ def test_unknown_and_conflicting_refs_fail_closed():
         pass
     else:
         raise AssertionError("conflicting field claims must fail closed")
+
+
+def test_duplicate_equal_claims_keep_latest_complete_grounded_source():
+    catalog = [
+        {"id": "t1p0e22hsourceone", "text": "Keep the total under 800 dollars."},
+        {"id": "t2p0e49hsourcetwo", "text": "Keep the total strictly less than 800 dollars."},
+    ]
+    data = hydrate_response({
+        "supported_claims": [
+            {"field": "max_total_cents", "value": 79999,
+             "source_ref": catalog[0]["id"]},
+            {"field": "max_total_cents", "value": 79999,
+             "source_ref": catalog[1]["id"]},
+        ],
+        "unsupported": [], "clarifications": [], "criteria": [],
+        "action": "review_required", "assistant_message": "Review.",
+        "question": None, "explanation": "Review.", "offer_observations": [],
+    }, domain="flight", catalog=catalog, require_wire=True)
+    assert data["fields"] == {"max_total_cents": 79999}
+    assert data["sources"]["max_total_cents"] == catalog[1]["text"]
+
+
+def test_duplicate_equal_profile_criteria_keep_latest_source():
+    catalog = [
+        {"id": "t1p0e20hsourceone", "text": "I can travel November 12, 2026."},
+        {"id": "t2p0e38hsourcetwo", "text": "Keep the date November 12, 2026."},
+    ]
+    data = hydrate_response({
+        "supported_claims": [], "unsupported": [], "clarifications": [],
+        "criteria": [
+            {"key": "departure_date", "source_ref": catalog[0]["id"],
+             "kind": "requirement", "status": "captured"},
+            {"key": "departure_date", "source_ref": catalog[1]["id"],
+             "kind": "requirement", "status": "captured"},
+        ],
+        "action": "review_required", "assistant_message": "Review.",
+        "question": None, "explanation": "Review.", "offer_observations": [],
+    }, domain="flight", catalog=catalog, require_wire=True)
+    assert len(data["criteria"]) == 1
+    assert data["criteria"][0]["source_quote"] == catalog[1]["text"]
+
+
+def test_duplicate_profile_criteria_with_changed_status_still_fail_closed():
+    catalog = [
+        {"id": "t1p0e20hsourceone", "text": "I can travel November 12, 2026."},
+        {"id": "t2p0e38hsourcetwo", "text": "Keep the date November 12, 2026."},
+    ]
+    wire = {
+        "supported_claims": [], "unsupported": [], "clarifications": [],
+        "criteria": [
+            {"key": "departure_date", "source_ref": catalog[0]["id"],
+             "kind": "requirement", "status": "captured"},
+            {"key": "departure_date", "source_ref": catalog[1]["id"],
+             "kind": "requirement", "status": "needs_clarification"},
+        ],
+        "action": "review_required", "assistant_message": "Review.",
+        "question": None, "explanation": "Review.", "offer_observations": [],
+    }
+    try:
+        hydrate_response(wire, domain="flight", catalog=catalog, require_wire=True)
+    except StructuredIntentError:
+        pass
+    else:
+        raise AssertionError("changed duplicate criterion status must fail closed")
 
 
 def test_source_id_question_binds_criterion_when_model_omits_criteria():

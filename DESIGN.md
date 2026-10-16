@@ -252,3 +252,17 @@ prototype dependency-free. Headless desktop and mobile captures were used to
 review the rendered result, including the warm landing foundation markers and
 the live shopping controls. No commit or deployment is part of this direction
 pass.
+
+## October 16: faster, continuous clarification
+
+Development uses one source-grounded AI pass per ordinary turn, with another
+pass only after a model-selected read-only tool. Low reasoning was faster in
+the bounded flight/hotel comparison; the full source history stays available.
+The 64-stage session and 31-follow-up envelope replaces the accidental
+four-exchange cutoff without increasing the $30 monetary ceiling.
+
+Source spans retain OR alternatives, and no-layover wording grounds a zero
+connection limit. Settled questions are suppressed while explicit corrections
+remain possible. Review copy invites the customer to check captured details;
+capacity-deferred tool review appears as system status, separate from AI prose.
+The actual live acceptance and limits are in [the conversation record](docs/26-fast-conversation.md).

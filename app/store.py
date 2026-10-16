@@ -24,6 +24,8 @@ EMERGENCY_AI_BUDGET_ENV = 'AI_EMERGENCY_BUDGET_CENTS'
 MAX_EMERGENCY_AI_BUDGET_CENTS = 1_000
 LEGACY_RESERVATION_CENTS = 10
 MIN_RESERVATION_CENTS = 2
+DEFAULT_OPERATIONAL_CALL_LIMIT = 1_500
+DEFAULT_SESSION_CALL_LIMIT = 64
 
 
 def encode_entity(key,state):
@@ -183,11 +185,26 @@ def _session_budget_key(session):
 
 
 def _limits():
-    # Daily capacity can be tuned without expanding the student's lifetime allowance.
-    return {'lifetime': max(0, min(500, int(os.getenv('AI_CALL_LIMIT', '500')))),
+    # Daily capacity can be tuned without expanding the student's lifetime
+    # allowance.  The operational ceiling is derived from the most conservative
+    # permitted reservation rate and the configured money allowance.  This keeps
+    # a very large environment value from bypassing the $30 application cap,
+    # while allowing the normal $0.02 reservation to use all 1,500 affordable
+    # stages when the explicitly enabled emergency allowance is present.
+    try:
+        configured_lifetime = int(os.getenv('AI_CALL_LIMIT', str(DEFAULT_OPERATIONAL_CALL_LIMIT)))
+    except (TypeError, ValueError):
+        configured_lifetime = 0
+    maximum_affordable = _total_ai_budget_cents() // MIN_RESERVATION_CENTS
+    lifetime = max(0, min(configured_lifetime, maximum_affordable))
+    try:
+        session = int(os.getenv('AI_SESSION_LIMIT', str(DEFAULT_SESSION_CALL_LIMIT)))
+    except (TypeError, ValueError):
+        session = 0
+    return {'lifetime': lifetime,
             'interactive': int(os.getenv('AI_DAILY_LIMIT', '80')),
             'evaluation': int(os.getenv('AI_EVAL_DAILY_LIMIT', '100')),
-            'monitor': 2, 'session': int(os.getenv('AI_SESSION_LIMIT', '16'))}
+            'monitor': 2, 'session': max(0, session)}
 
 
 def _reservation_rate_cents():

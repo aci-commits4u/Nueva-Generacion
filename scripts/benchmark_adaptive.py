@@ -336,7 +336,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', default=str(ROOT / 'evals' / 'adaptive_cases.json'))
     parser.add_argument('--output', required=True)
-    parser.add_argument('--variant', choices=['adaptive', 'baseline', 'guided', 'audited'], default='adaptive')
+    parser.add_argument('--variant', choices=['adaptive', 'adaptive_fast', 'baseline', 'guided', 'audited'], default='adaptive')
     parser.add_argument('--split', default='holdout')
     parser.add_argument('--case', action='append')
     parser.add_argument('--max-cases', type=int, default=3)

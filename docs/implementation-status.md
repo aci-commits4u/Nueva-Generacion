@@ -1,5 +1,21 @@
 # Implementation and verification record
 
+## Faster development conversation — October 16
+
+The development branch adds a one-call `adaptive_fast` interpretation path,
+64-stage sessions, and 31 follow-ups, retaining the shared $30 money cap and
+all historical reservations. Exact source alternatives and colloquial
+no-layover/strict-budget wording remain grounded and reviewable.
+
+Local verification passed 606 pytest checks and eleven browser suites. A real
+Foundry chatbot replay retained both airport sets and changed only the layover
+limit when explicitly corrected; ordinary turns took 5.5–7.5 seconds. A fresh
+hotel request preserved required breakfast and optional cancellation, using
+a two-stage tool loop in 13.4 seconds. These are finite local observations.
+See [the full evidence and remaining limits](26-fast-conversation.md). Release
+to the isolated development Vercel project is pending exact-commit CI and
+hosted acceptance. Public production has not been changed.
+
 ## Isolated development shopping release — October 15
 
 Development is deployed at **https://intent-judge-perfected-dev.vercel.app** on

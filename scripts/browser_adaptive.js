@@ -8,7 +8,7 @@ async page => {
  await page.route('**/api/intents/*/clarify',async route=>{
   calls++;body=route.request().postDataJSON();
   if(calls===1)return route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({detail:'Fixture interpretation failure',error:{code:'ai_interpretation',message:'Fixture interpretation failure'}})});
-  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draft(2))});
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(calls===3?{...draft(3),review_deferred:true,review_warning:{kind:'adaptive_review_capacity_unavailable',code:'ai_session_limit'}}:draft(2))});
  });
  await page.setViewportSize({width:1280,height:900});
  await page.goto(origin+'/?domain=general');
@@ -22,13 +22,17 @@ async page => {
  if(calls!==1)throw new Error('Failure automatically replayed the model request');
  if(!await page.getByLabel('No fan noise',{exact:true}).isChecked()||!await page.getByLabel('No audible electrical hum',{exact:true}).isChecked())throw new Error('Generic selections were lost on provider failure');
  await page.getByRole('button',{name:'Use 2 selected options'}).click();
- await page.getByRole('heading',{name:'This interpretation needs your review.'}).waitFor();
+ await page.getByRole('heading',{name:'Check your captured requirements.'}).waitFor();
  if(calls!==2||body.message!=='I require no fan noise.; I require no audible electrical hum.')throw new Error('Explicit generic multi-answer did not retain both complete choices');
+ await page.getByLabel('Add a detail or change your request').fill('Keep the captured requirements.');
+ await page.getByRole('button',{name:'Send clarification'}).click();
+ await page.getByRole('heading',{name:'Your captured details are preserved.'}).waitFor();
+ if(!await page.getByText('The assistant reached its allowance before an additional review of merchant context.',{exact:false}).isVisible())throw new Error('Deferred review status was not visible to the customer');
  await page.getByRole('button',{name:'Review requirements'}).click();
  await page.getByText('Conversation intent record · 1 conditions').click();
  if(!await page.getByText('From “quiet”',{exact:false}).isVisible())throw new Error('Generic customer criterion vanished during review');
  if(await page.locator('[data-remove-condition]').count()!==1)throw new Error('Unknown condition was not part of explicit review');
  await page.setViewportSize({width:390,height:844});
  if(await page.evaluate(()=>document.documentElement.scrollWidth)>390)throw new Error('Adaptive review overflowed mobile viewport');
- return {result:'PASS',mode:'intercepted UI fixtures; no inference',generatedGenericQuestion:true,multipleChoicesConfirmed:true,providerFailurePreservedChoices:true,unsupportedCriterionReviewed:true,mobileWidth:390};
+ return {result:'PASS',mode:'intercepted UI fixtures; no inference',generatedGenericQuestion:true,multipleChoicesConfirmed:true,providerFailurePreservedChoices:true,unsupportedCriterionReviewed:true,deferredReviewVisible:true,mobileWidth:390};
 }

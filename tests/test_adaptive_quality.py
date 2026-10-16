@@ -51,7 +51,7 @@ def _generic_result():
 
 def test_adaptive_holdout_has_eight_cases_and_covers_requested_failure_modes():
     cases = _cases()
-    assert len(cases) == 8
+    assert len([case for case in cases if case.get('split')=='holdout']) == 8
     ids = {case['id'] for case in cases}
     assert {'flight-known-airports-and-date', 'flight-latest-budget-correction',
             'hotel-policy-and-offers', 'general-new-task',

@@ -123,15 +123,15 @@ def test_assistant_question_cannot_be_used_as_customer_source(monkeypatch):
   run_pipeline('flight','Customer: under $300\nQuestion: zero connections?\nCustomer: Yes','s',variant='guided',source_text='under $300\nYes')
 
 
-def test_unset_pipeline_uses_selected_adaptive_default(monkeypatch):
+def test_unset_pipeline_uses_selected_fast_adaptive_default(monkeypatch):
  from app.ai_pipeline import run_pipeline
  monkeypatch.delenv('AI_PIPELINE_VERSION',raising=False)
  reservations=[]
  monkeypatch.setattr('app.ai_pipeline.reserve_ai_calls',lambda *a,**k:reservations.append((a,k)) or 2)
  monkeypatch.setattr('app.ai_pipeline.call_json',lambda stage,*a,**k:(proposed(),{'stage':stage,'duration_ms':1,'tokens':{}}))
  r=run_pipeline('flight','nonstop under $300','s')
- assert r['pipeline']=='adaptive' and len(r['trace'])==2
- assert reservations==[(('s',2),{'purpose':'interactive'})]
+ assert r['pipeline']=='adaptive_fast' and len(r['trace'])==1
+ assert reservations==[(('s',1),{'purpose':'interactive'})]
 
 
 def test_audit_repairs_invalid_candidate_and_retains_bounded_flag(monkeypatch):

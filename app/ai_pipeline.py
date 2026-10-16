@@ -79,6 +79,17 @@ _OUTCOME_CODES = {
     'ai_disabled',
 }
 
+# ``adaptive_fast`` reserves the ordinary turn first and only reserves the
+# optional review after a model-selected read-only tool has returned.  A
+# capacity rejection at that point is recoverable because the first proposal
+# has already passed the same grounding/validation path used by the full
+# pipeline.  Provider and configuration failures must still surface.
+_FAST_REVIEW_CAPACITY_ERRORS = frozenset({
+    'ai_budget_limit',
+    'ai_daily_limit',
+    'ai_session_limit',
+})
+
 
 def _record_outcome(stage: str, outcome: str, request_id: str | None = None) -> None:
     """Record bounded operational evidence without making it a dependency."""
@@ -133,6 +144,10 @@ def _adaptive_prompt(domain, stage):
             'type': spec.get('type'),
             'meaning': spec.get('label'),
             'required': bool(spec.get('required')),
+            'matching': spec.get('op'),
+            **({'values_mean':'all acceptable alternatives; preserve the whole allowed set'}
+               if spec.get('type')=='strings' and spec.get('op')=='in' else {}),
+            **({'allowed_values':spec['enum']} if spec.get('enum') else {}),
         }
         for key, spec in profile.get('fields', {}).items()
     }
@@ -202,7 +217,16 @@ def _adaptive_prompt(domain, stage):
         'If no safe model-generated question is possible, use review_required with '
         'question=null. For flight airport questions, target exactly one of '
         'origin_airports or destination_airports; preserve multi-airport choices '
-        'and never mix route ends.\n\n'
+        'and never mix route ends. A set-valued field represents ALL acceptable '
+        'alternatives, not an unfinished single selection. Explicit identities '
+        'joined with or, either, any of, or a list are a complete allowed set '
+        'unless the customer expressly says those identities are uncertain. '
+        'Capture every allowed value in one array; do not ask the customer to '
+        'pick one. One reply can resolve both route ends and another detail. '
+        'Retire an earlier city/airport ambiguity once explicit acceptable '
+        'identities have been supplied, including in a reply to another question. '
+        'The shape of an older single-choice question never narrows a later '
+        'customer answer to one value.\n\n'
         'OPTIONALITY: Treat words such as optional, not required, can skip, '
         'or no preference as nonbinding customer preferences. Preserve the '
         'preference when useful for review, but do not ask the customer to '
@@ -221,9 +245,27 @@ def _adaptive_prompt(domain, stage):
         'express an amount in cents. Foreign currency must remain separate: do '
         'not convert or guess an exchange rate; the demo\'s bounded profile '
         'accepts USD. '
+        'For flights, phrases such as no layovers, no stopovers, no connections, '
+        'or zero stops are explicit max_connections=0 requirements. An explicit '
+        'nonstop requirement is the stricter nonstop=true requirement because it '
+        'also covers technical stops; do not treat max_connections=0 as a '
+        'nonstop claim. Preserve the exact phrase that supports the chosen '
+        'field. Once either zero connections or nonstop is captured, never ask '
+        'a broader duplicate question about whether the customer wants no '
+        'layovers or nonstop travel. A phrase such as less than X is a strict '
+        'upper bound, using X*100-1 cents after the supported currency basis is '
+        'established. In this USD profile, $, dollars, USD, or an unqualified '
+        'amount under the profile default establishes USD; less than $800 is '
+        '79999 cents. Do not ask the customer to restate a clear currency or '
+        'amount. An explicit foreign currency remains separate and is never '
+        'converted. '
         'A nightly/per-person/per-room amount is not an all-in total. Dates must '
         'remain exact dates or exact ranges; do not invent dates or do not invent '
-        'example dates. Airports require '
+        'example dates. For a booking request, when the trusted clock proves '
+        'an explicit travel date is past, keep its exact source as a date '
+        'clarification and ask for the intended upcoming date; never silently '
+        'change its year. Historical-information requests are different from '
+        'a request to book. Preserve every unrelated requirement. Airports require '
         'explicit identity and preserve all accepted codes. Use only fields in '
         'the profile; keep baggage, passengers, round trips, qualitative needs, '
         'and other unenforceable conditions as source-backed generic criteria or '
@@ -489,6 +531,95 @@ def _quarantine_adaptive_plan(candidate):
     return result
 
 
+def _compact_source_messages(messages):
+    """Keep customer evidence and answer bindings without replaying UI state.
+
+    Adaptive calls already receive an exact source catalogue.  Repeating the
+    full conversation context and every durable message field increases model
+    input without adding provenance.  This projection retains the customer
+    words, server clock metadata, and the small question binding needed to
+    interpret a short answer.
+    """
+    compact = []
+    for item in messages or []:
+        if not isinstance(item, dict):
+            continue
+        row = {
+            key: item[key] for key in ('role', 'content', 'timestamp', 'reference_date')
+            if key in item and isinstance(item[key], (str, type(None)))
+        }
+        reply = item.get('reply_to')
+        if isinstance(reply, dict):
+            row['reply_to'] = {
+                key: reply[key] for key in (
+                    'question_id', 'id', 'domain', 'criterion_key', 'field',
+                    'question', 'response_type', 'answer_kind',
+                    'answer_semantics', 'options', 'origin', 'binding',
+                    'contract_digest',
+                ) if key in reply
+            }
+        answer = item.get('structured_answer')
+        if isinstance(answer, dict):
+            row['structured_answer'] = {
+                key: answer[key] for key in ('question_id', 'field', 'values', 'source_quote')
+                if key in answer
+            }
+        compact.append(row)
+    return compact
+
+
+def _compact_current_draft(current_draft):
+    """Send only state that can affect the next grounded interpretation."""
+    if not isinstance(current_draft, dict):
+        return current_draft
+    keep = (
+        'revision', 'fields', 'sources', 'clarifications', 'unsupported',
+        'criteria', 'pending_question', 'structured_answer', 'time_zone',
+        'trusted_reference_date', 'trusted_clock_context',
+    )
+    return {key: current_draft[key] for key in keep if key in current_draft}
+
+
+def _compact_adaptive_candidate(candidate):
+    """Keep the proposal and question contract; omit prior merchant prose."""
+    if not isinstance(candidate, dict):
+        return candidate
+    result = {}
+    for key in (
+        'fields', 'sources', 'unsupported', 'clarifications', 'explanation',
+        'action', 'assistant_message', 'question', 'criteria',
+    ):
+        if key in candidate:
+            result[key] = candidate[key]
+    return result
+
+
+def _compact_tool_result(tool_result):
+    """Bound tool evidence while retaining facts needed for a review loop."""
+    if not isinstance(tool_result, dict):
+        return tool_result
+    result = {
+        key: tool_result[key] for key in (
+            'tool', 'status', 'read_only', 'count', 'required_fields',
+            'policy', 'summary',
+        ) if key in tool_result
+    }
+    offers = tool_result.get('offers')
+    if isinstance(offers, list):
+        rows = []
+        for offer in offers[:8]:
+            if not isinstance(offer, dict):
+                continue
+            rows.append({
+                key: offer[key] for key in (
+                    'id', 'offer_hash', 'facts', 'signed', 'provenance',
+                    'draft_comparison',
+                ) if key in offer
+            })
+        result['offers'] = rows
+    return result
+
+
 def _compile_adaptive_draft_contract(raw, *, domain, source_text, source_messages=None):
     """Bridge adaptive metadata into the strict legacy draft envelope.
 
@@ -596,13 +727,23 @@ def _compile_adaptive_response(raw, *, domain, source_text, source_messages=None
 
 def call_json(stage, domain, message, variant, candidate=None, *, source_text=None,
               source_messages=None, candidate_issue=None, reasoning_effort=None,
-              current_draft=None, tool_result=None, merchant_context=None):
+              current_draft=None, tool_result=None, merchant_context=None,
+              compact_adaptive_payload=False):
     """Call the configured provider and return its parsed JSON plus trace."""
     started = time.monotonic()
+    customer_source_text = message if source_text is None else source_text
+    adaptive_compact = variant == 'adaptive' and compact_adaptive_payload
     payload = {
-        'customer_conversation': message,
-        'customer_source_text': message if source_text is None else source_text,
-        'customer_source_messages': source_messages or [],
+        # The exact catalogue and customer messages are the provenance source
+        # for adaptive calls.  The compact path intentionally drops the
+        # duplicated rendered conversation/source_text copies.
+        **({
+            'customer_source_messages': _compact_source_messages(source_messages),
+        } if adaptive_compact else {
+            'customer_conversation': message,
+            'customer_source_text': customer_source_text,
+            'customer_source_messages': source_messages or [],
+        }),
         'trusted_clock_context': [
             {'timestamp':item.get('timestamp'),'reference_date':item.get('reference_date')}
             for item in (source_messages or [])
@@ -610,18 +751,24 @@ def call_json(stage, domain, message, variant, candidate=None, *, source_text=No
         ],
     }
     source_catalog = build_source_catalog(
-        payload['customer_source_text'], source_messages,
+        customer_source_text, source_messages,
     ) if variant == 'adaptive' else []
     if variant == 'adaptive':
         # Only exact customer turns enter this catalogue. Interface questions,
         # merchant facts, and tool output remain separate untrusted context.
         payload['customer_source_catalog'] = source_catalog
     if candidate is not None:
-        payload['candidate_draft'] = _quarantine(candidate)
+        candidate_for_payload = (
+            _compact_adaptive_candidate(candidate)
+            if adaptive_compact else candidate
+        )
+        payload['candidate_draft'] = _quarantine(candidate_for_payload)
         if variant == 'adaptive':
-            payload['candidate_adaptive_plan'] = _quarantine_adaptive_plan(candidate)
+            payload['candidate_adaptive_plan'] = _quarantine_adaptive_plan(
+                candidate_for_payload
+            )
     if domain == 'flight':
-        airport_text = payload['customer_source_text']
+        airport_text = customer_source_text
         payload['airport_reference'] = {
             # Keep the flat list for older provider adapters, but make the
             # route roles explicit so the model cannot mix London departures
@@ -643,7 +790,10 @@ def call_json(stage, domain, message, variant, candidate=None, *, source_text=No
         # This is read-only state supplied by the server.  It is deliberately
         # kept separate from candidate_draft so the auditor cannot mistake it
         # for provider authority or an instruction.
-        payload['current_draft'] = dict(current_draft)
+        payload['current_draft'] = (
+            _compact_current_draft(current_draft)
+            if adaptive_compact else dict(current_draft)
+        )
         payload['current_draft'].pop('latest_customer_turn', None)
         latest_customer_turn = _verified_latest_customer_turn(
             source_messages, current_draft,
@@ -657,7 +807,10 @@ def call_json(stage, domain, message, variant, candidate=None, *, source_text=No
         # Tool output is explicitly marked as untrusted merchant data.  It is
         # context for the independent planner only, never an instruction or a
         # source of customer intent.
-        payload['executed_read_only_tool'] = tool_result
+        payload['executed_read_only_tool'] = (
+            _compact_tool_result(tool_result)
+            if adaptive_compact else tool_result
+        )
     if variant == 'adaptive':
         # Always show the planner the configured merchant capability/policy
         # context. It is metadata about the merchant adapter, never customer
@@ -745,6 +898,7 @@ def call_json(stage, domain, message, variant, candidate=None, *, source_text=No
                 data, domain=domain, catalog=source_catalog, require_wire=True,
             )
         except StructuredIntentError as exc:
+            LOGGER.warning('Adaptive source contract rejected stage=%s reason=%s',stage,str(exc))
             raise _failure(
                 'ai_interpretation',
                 'Live AI returned a response that could not be grounded to customer words. No fallback was used.',
@@ -935,20 +1089,24 @@ def _preserve_pending_question(candidate_plan, final_plan):
 
 
 def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
-                           source_messages, current_draft, reasoning_effort):
-    """Run the two-stage model-directed interpreter.
+                           source_messages, current_draft, reasoning_effort,
+                           fast=False):
+    """Run the model-directed interpreter.
 
-    Stage one proposes a grounded envelope and chooses one read-only context
-    action. The server executes that action at most once. Stage two receives
-    the original request plus the actual tool result and independently audits
-    both the envelope and next action. Planner metadata is advisory; the
-    returned legacy envelope is still validated by ``ai_grounding``.
+    The legacy ``adaptive`` variant always performs the independent second
+    review. ``adaptive_fast`` keeps the same source, schema, and final
+    grounding gates, but completes an ordinary clarification turn from one
+    model response. It spends a second response only when a deliberate
+    read-only tool loop produced an observation that the model actually needs
+    to inspect. A server-required pre-review offer lookup remains bounded and
+    visible to the caller, but does not add a model call to a normal turn.
     """
     try:
         candidate_raw, candidate_trace = call_json(
             'adaptive_plan', domain, message, 'adaptive',
             source_text=source_text, source_messages=source_messages,
             reasoning_effort=reasoning_effort, current_draft=current_draft,
+            compact_adaptive_payload=fast,
         )
     except AIServiceError:
         raise
@@ -1064,20 +1222,78 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
             'selection_origin': tool_selection_origin,
         }
 
-    try:
-        final_raw, final_trace = call_json(
-            'adaptive_review', domain, message, 'adaptive',
-            candidate=candidate_raw, source_text=source_text,
-            source_messages=source_messages,
-            candidate_issue=candidate_issue,
-            reasoning_effort=reasoning_effort, current_draft=current_draft,
-            tool_result=tool_result,
-        )
-    except AIServiceError:
-        raise
-    except Exception as exc:
-        raise _failure('ai_provider', 'Live AI provider is unavailable. No fallback was used.',
-                       stage='adaptive_review', retryable=True, cause=exc)
+    # A fast turn is complete after the first grounded proposal unless the
+    # model deliberately selected a read-only tool. A server-required
+    # ``pre_review_requirement`` offer lookup is still bounded and logged, but
+    # does not add a model call to every complete request.
+    needs_tool_review = (
+        fast and isinstance(tool_result, dict)
+        and tool_result.get('status') not in {'blocked_missing_search_facts'}
+        and tool_selection_origin == 'model'
+    )
+    review_deferred_due_capacity = False
+    review_capacity_warning = None
+    if fast and not needs_tool_review:
+        final_raw = candidate_raw
+        final_trace = dict(candidate_trace)
+        final_trace['stage'] = 'adaptive_fast'
+        final_trace['review_skipped'] = 'no_read_only_observation'
+    else:
+        if fast:
+            # The first reservation covers the ordinary turn. Only reserve the
+            # extra call after the tool completed, so a blocked/no-op tool can
+            # never consume the second stage.
+            try:
+                reserve_ai_calls(session, 1, purpose=purpose)
+            except AIServiceError as exc:
+                if exc.code not in _FAST_REVIEW_CAPACITY_ERRORS:
+                    raise
+                # The candidate is still unapproved and will continue through
+                # the existing final validators below.  Keep the read-only
+                # observation, but do not pretend that an independent review
+                # happened or silently switch providers/parsers.
+                _record_outcome('adaptive_review', exc.code, exc.request_id)
+                review_deferred_due_capacity = True
+                review_capacity_warning = {
+                    'code': exc.code,
+                    'kind': 'adaptive_review_capacity_unavailable',
+                    'stage': 'adaptive_review',
+                    'message': (
+                        'The first grounded interpretation was preserved for '
+                        'review, but the optional independent AI review could '
+                        'not run because live capacity is unavailable.'
+                    ),
+                    'candidate_preserved': True,
+                    'review_ran': False,
+                    'read_only_tool_observed': isinstance(tool_result, dict),
+                }
+                final_raw = candidate_raw
+                final_trace = dict(candidate_trace)
+                final_trace['stage'] = 'adaptive_fast'
+                final_trace['review_skipped'] = 'capacity_unavailable'
+                final_trace['review_capacity_warning'] = review_capacity_warning
+            except Exception as exc:
+                raise _failure(
+                    'ai_provider',
+                    'Live AI provider is unavailable. No fallback was used.',
+                    stage='adaptive_review', retryable=True, cause=exc,
+                )
+        if not review_deferred_due_capacity:
+            try:
+                final_raw, final_trace = call_json(
+                    'adaptive_review', domain, message, 'adaptive',
+                    candidate=candidate_raw, source_text=source_text,
+                    source_messages=source_messages,
+                    candidate_issue=candidate_issue,
+                    reasoning_effort=reasoning_effort, current_draft=current_draft,
+                    tool_result=tool_result,
+                    compact_adaptive_payload=fast,
+                )
+            except AIServiceError:
+                raise
+            except Exception as exc:
+                raise _failure('ai_provider', 'Live AI provider is unavailable. No fallback was used.',
+                               stage='adaptive_review', retryable=True, cause=exc)
 
     final_raw = _compile_adaptive_response(
         final_raw, domain=domain, source_text=source_text,
@@ -1088,13 +1304,17 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         final_draft, domain, source_text, source_messages=source_messages
     )
     if tool_result is not None:
-        final_trace['reviewed_read_only_tool'] = {
+        tool_observation = {
             'tool': tool_result.get('tool'),
             'status': tool_result.get('status'),
             'read_only': tool_result.get('read_only', True),
             'count': tool_result.get('count'),
             'selection_origin': tool_selection_origin,
         }
+        if review_deferred_due_capacity:
+            final_trace['read_only_tool_observation'] = tool_observation
+        else:
+            final_trace['reviewed_read_only_tool'] = tool_observation
 
     # Reuse the audited recovery path. It preserves a valid candidate field if
     # a reviewer accidentally omits it, while still rejecting invented values.
@@ -1185,6 +1405,16 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     )
     final_plan = _constrain_unexecuted_tool_action(final_plan, tool_result)
     final_plan = _preserve_pending_question(candidate_plan, final_plan)
+    if review_deferred_due_capacity:
+        # A capacity-deferred candidate is never ready for authorization.  The
+        # candidate fields and tool observation remain available for review,
+        # while the action is held explicitly and no question is re-asked.
+        final_plan = dict(final_plan)
+        final_plan['action'] = 'review_required'
+        final_plan['question'] = None
+        # Preserve the model's actual words. The separate review_warning is
+        # rendered as system status, never as a fabricated assistant reply.
+        final_trace['review_capacity_warning'] = review_capacity_warning
     final_question_diagnostic = planner_validation_feedback(
         final_raw,
         final_plan,
@@ -1195,7 +1425,12 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
     if final_question_diagnostic is not None:
         final_trace['planner_validation'] = final_question_diagnostic
     final_trace['planner'] = planner_public_view(final_plan)
-    _record_outcome('adaptive_review', 'passed', final_trace.get('response_id'))
+    review_ran = (not fast or needs_tool_review) and not review_deferred_due_capacity
+    _record_outcome(
+        'adaptive_review' if review_ran else 'adaptive_plan',
+        'passed',
+        final_trace.get('response_id'),
+    )
     agent_tools = []
     for descriptor in prompt_context(domain).get('available_read_only_tools', []):
         name = descriptor.get('name')
@@ -1215,8 +1450,9 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         **final,
         'mode': 'live',
         'model': os.environ.get('AZURE_OPENAI_DEPLOYMENT'),
-        'pipeline': 'adaptive',
-        'trace': [candidate_trace, final_trace],
+        'pipeline': 'adaptive_fast' if fast else 'adaptive',
+        'trace': [candidate_trace, final_trace]
+        if review_ran else [final_trace],
         'planner': planner_public_view(final_plan),
         # Stable names used by the API/UI integration. Keep ``planner`` as an
         # alias for traces produced during the rollout.
@@ -1229,6 +1465,8 @@ def _run_adaptive_pipeline(domain, message, session, *, purpose, source_text,
         'next_step': final_plan['action'],
         'merchant_context_used': tool_result is not None,
         'read_only_tool_log': tool_result,
+        'review_deferred': review_deferred_due_capacity,
+        'review_warning': review_capacity_warning,
     }
 
 
@@ -1236,7 +1474,7 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
                  source_messages=None, current_draft=None):
     variant = variant or selected_pipeline()
     source_text = message if source_text is None else source_text
-    if variant not in {'baseline', 'guided', 'audited', 'adaptive'}:
+    if variant not in {'baseline', 'guided', 'audited', 'adaptive', 'adaptive_fast'}:
         raise _failure('ai_configuration', 'The selected AI pipeline is unavailable.', stage='preflight', status_code=500)
     if os.getenv('MOCK_LLM') == '1':
         raise _failure('offline_only',
@@ -1261,11 +1499,12 @@ def run_pipeline(domain, message, session, variant=None, purpose='interactive', 
             retryable=True,
             cause=exc,
         )
-    if variant == 'adaptive':
+    if variant in {'adaptive', 'adaptive_fast'}:
         return _run_adaptive_pipeline(
             domain, message, session, purpose=purpose,
             source_text=source_text, source_messages=source_messages,
             current_draft=current_draft, reasoning_effort=reasoning_effort,
+            fast=variant == 'adaptive_fast',
         )
     traces = []
     try:

@@ -21,7 +21,7 @@ from app.profile_registry import get_profile,validate_fields,normalise_review_fi
 from app.rules_engine import evaluate
 from app.store import get_store,ai_capacity
 from app.ai_errors import AIServiceError
-from app.ai_config import selected_pipeline,selected_reasoning_effort
+from app.ai_config import selected_pipeline,selected_reasoning_effort,interpretation_call_count
 from app.intent_service import offline_extract,refresh
 from app.vi_adapter import issue,verify,offer_hash,sign_record,read_signed
 from app.evidence import make_evidence
@@ -33,8 +33,10 @@ from app.airport_reference import search_airports,airport_reference_metadata
 
 ROOT=Path(__file__).resolve().parent.parent
 app=FastAPI(title='Intent Judge',version='1.0.0')
-# One initial interpretation plus eleven replies fits the 24-stage session cap.
-MAX_FOLLOWUPS=11
+# One initial interpretation plus 31 replies fits a 64-stage session even
+# when every turn needs two model stages. Ordinary fast turns use one; the
+# authoritative live quota still applies before each paid stage.
+MAX_FOLLOWUPS=31
 
 
 @app.get('/api/airports')
@@ -49,7 +51,7 @@ def live_configuration_ready():
     except ValueError: return False
     return bool(endpoint.scheme=='https' and endpoint.netloc and
                 os.getenv('AZURE_OPENAI_API_KEY') and os.getenv('AZURE_OPENAI_DEPLOYMENT') and
-                selected_pipeline() in {'baseline','guided','audited','adaptive'})
+                selected_pipeline() in {'baseline','guided','audited','adaptive','adaptive_fast'})
 
 
 def conversation_view(draft):
@@ -240,7 +242,7 @@ def runtime_environment():
 def ai_status(request:Request):
     capacity=ai_capacity(session_id(request))
     pipeline=selected_pipeline()
-    calls=2 if pipeline in {'audited','adaptive'} else 1
+    calls=interpretation_call_count(pipeline)
     configured=live_configuration_ready()
     reason=None
     if not configured:
@@ -256,6 +258,7 @@ def ai_status(request:Request):
     reset_at=datetime.fromtimestamp(time.time()+capacity['reset_after_seconds'],timezone.utc).isoformat()
     return {'configured':configured,'available':reason is None,'reason':reason.public() if reason else None,
             'pipeline':pipeline,'model':os.getenv('AZURE_OPENAI_DEPLOYMENT'),'interpretation_calls':calls,
+            'interpretation_calls_max':2 if pipeline=='adaptive_fast' else calls,
             'remaining_calls':capacity['remaining_calls'],'session_remaining_calls':capacity['session_remaining_calls'],
             'remaining_interpretations':min(capacity['remaining_calls'],capacity['session_remaining_calls'])//calls,
             'budget':{key:capacity[key] for key in ('reserved_cents','ordinary_allowance_cents','emergency_allowance_cents','emergency_used_cents','total_allowance_cents','emergency_enabled')},

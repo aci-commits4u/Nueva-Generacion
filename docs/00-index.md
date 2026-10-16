@@ -45,3 +45,4 @@ These labels distinguish product aspiration from evidence. Detailed proposal exa
 - [23 — Source-reference contract](23-source-reference-contract.md): v14 key-derived source references, the v13 hydration failure checkpoint, provider evidence, and deterministic approval boundaries.
 - [24 — Environments and release](24-environments-and-release.md): separate worktrees, projects, storage, signing keys, shared budget, and CI-gated deployment manifests.
 - [25 — Live shopping and UAT](25-live-shopping-and-uat.md): isolated development shopping, the read-only Kiwi boundary, evidence classes, UI direction, and remaining deployment limits.
+- [26 — Faster conversation](26-fast-conversation.md): v16 latency and grounding changes, the airport-choice UAT failure, v17 set semantics, and development budget/release boundaries.

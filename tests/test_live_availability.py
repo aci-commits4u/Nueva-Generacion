@@ -317,15 +317,17 @@ def test_public_quota_error_keeps_actionable_type_and_no_provider_details(client
     assert client.get('/api/session').json()['intents'] == []
 
 
-def test_clarification_allows_eleven_turns_with_explicit_remaining_count(client):
+def test_clarification_allows_thirty_one_turns_with_explicit_remaining_count(client):
     draft = client.post('/api/intents', json={'domain': 'flight', 'message': 'nonstop under $300', 'mode': 'offline'}).json()
-    assert draft['followups_remaining'] == 11
-    for i in range(11):
-        response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': f'EWR detail {i}'})
+    assert draft['followups_remaining'] == 31
+    for i in range(31):
+        # Keep this boundary test below the separate 5,000-character source
+        # safety limit; it is testing follow-up count, not payload capacity.
+        response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': 'please'})
         assert response.status_code == 200
         draft = response.json()
-        assert draft['followups_remaining'] == 10 - i
-    response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': 'another detail'})
+        assert draft['followups_remaining'] == 30 - i
+    response = client.post(f"/api/intents/{draft['id']}/clarify", json={'revision': draft['revision'], 'message': 'another detail after the cap'})
     assert response.status_code == 409
 
 

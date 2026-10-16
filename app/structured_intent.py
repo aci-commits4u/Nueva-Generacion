@@ -21,7 +21,15 @@ from app.profile_registry import get_profile
 _MAX_CATALOG_CHARS = 15000
 _MAX_SEGMENT_CHARS = 80
 _MAX_SEGMENTS = 80
-_CLAUSE_BREAK = re.compile(r"\s+(?=(?:and|or|but|with|plus|also)\s+)", re.IGNORECASE)
+# Keep ``or`` alternatives in one contiguous source span.  A set-valued
+# claim such as ``YYZ or YHM`` needs one ref containing both identities; if
+# ``or`` is treated as a clause boundary, the model can only cite one half of
+# the customer's allowed set and hydration/grounding will discard the claim.
+# Independent clauses still split on conjunctions so source refs stay useful.
+_CLAUSE_BREAK = re.compile(r"\s+(?=(?:and|but|with|plus|also)\s+)", re.IGNORECASE)
+
+
+_SOURCE_REF = re.compile(r"^t(\d+)p(\d+)e(\d+)h[0-9a-f]+$")
 
 
 class StructuredIntentError(ValueError):
@@ -305,6 +313,35 @@ def _catalog_map(catalog: list[dict[str, str]]) -> dict[str, str]:
     return {item.get("id"): item.get("text") for item in catalog if isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("text"), str)}
 
 
+def _source_ref_rank(ref: Any, catalog_position: int) -> tuple[int, int, int, int]:
+    """Rank refs by customer turn, then by contiguous evidence length.
+
+    Catalog IDs are server-created and encode the source turn and offsets. The
+    fallback keeps the function deterministic for older/test catalogs whose
+    IDs do not use that format. A later turn is the better provenance for an
+    unchanged repeated value; within that turn, the longest contiguous span is
+    the most complete evidence available to the downstream grounder.
+    """
+    if isinstance(ref, str):
+        match = _SOURCE_REF.fullmatch(ref)
+        if match:
+            turn, start, end = (int(value) for value in match.groups())
+            return turn, end - start, end, catalog_position
+    return 0, 0, 0, catalog_position
+
+
+def _preferred_source_ref(current: Any, candidate: Any,
+                          positions: dict[str, int]) -> Any:
+    """Choose the safer provenance ref without merging disjoint source text."""
+    if not isinstance(candidate, str):
+        return current
+    if not isinstance(current, str):
+        return candidate
+    current_rank = _source_ref_rank(current, positions.get(current, -1))
+    candidate_rank = _source_ref_rank(candidate, positions.get(candidate, -1))
+    return candidate if candidate_rank > current_rank else current
+
+
 def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
                      require_wire: bool = False) -> Any:
     """Hydrate a structured response into the legacy envelope.
@@ -327,6 +364,11 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
     if set(raw) != expected_keys:
         raise StructuredIntentError("structured response has unexpected top-level keys")
     refs = _catalog_map(catalog)
+    ref_positions = {
+        item.get("id"): index
+        for index, item in enumerate(catalog)
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
     profile_fields = get_profile(domain).get("fields", {})
     field_names = set(profile_fields)
     registered_keys = field_names | set(refs)
@@ -338,6 +380,7 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
 
     fields: dict[str, Any] = {}
     sources: dict[str, str] = {}
+    field_refs: dict[str, str] = {}
     for claim in raw.get("supported_claims") or []:
         if not isinstance(claim, dict) or set(claim) != {"field", "value", "source_ref"}:
             raise StructuredIntentError("supported claim shape is invalid")
@@ -346,11 +389,20 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
         if field not in field_names or value is None:
             raise StructuredIntentError("supported claim targets an out-of-scope field")
         if field in fields:
-            if fields[field] != value or sources[field] != refs[ref]:
+            if fields[field] != value:
                 raise StructuredIntentError("conflicting duplicate supported claim")
+            preferred = _preferred_source_ref(
+                field_refs.get(field),
+                ref,
+                ref_positions,
+            )
+            if preferred == ref:
+                sources[field] = refs[ref]
+                field_refs[field] = ref
             continue
         fields[field] = deepcopy(value)
         sources[field] = refs[ref]
+        field_refs[field] = ref
 
     unsupported: list[str] = []
     for item in raw.get("unsupported") or []:
@@ -376,6 +428,7 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
 
     criteria: list[dict[str, Any]] = []
     criteria_by_key: dict[str, dict[str, Any]] = {}
+    criteria_refs: dict[str, str | None] = {}
     for item in raw.get("criteria") or []:
         if not isinstance(item, dict) or "key" not in item:
             raise StructuredIntentError("criterion shape is invalid")
@@ -418,10 +471,32 @@ def hydrate_response(raw: Any, *, domain: str, catalog: list[dict[str, str]],
         }
         previous = criteria_by_key.get(key)
         if previous is not None:
+            # A repeated profile criterion may cite a newer source span while
+            # preserving the same field meaning and review status. Accept that
+            # exact semantic duplicate, choosing the better contiguous source;
+            # retain the fail-closed conflict for changed kind/status/value or
+            # a missing-vs-grounded source distinction.
+            previous_ref = criteria_refs.get(key)
+            same_meaning = (
+                previous.get("key") == row["key"]
+                and previous.get("field") == row["field"]
+                and previous.get("kind") == row["kind"]
+                and previous.get("status") == row["status"]
+                and previous.get("verification") == row["verification"]
+                and previous_ref is not None
+                and ref is not None
+            )
+            if same_meaning:
+                preferred = _preferred_source_ref(previous_ref, ref, ref_positions)
+                if preferred == ref:
+                    previous.update(row)
+                    criteria_refs[key] = ref
+                continue
             if previous != row:
                 raise StructuredIntentError("conflicting duplicate criterion")
             continue
         criteria_by_key[key] = row
+        criteria_refs[key] = ref
         criteria.append(row)
 
     question = raw.get("question")
