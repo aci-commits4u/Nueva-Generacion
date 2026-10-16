@@ -1,0 +1,94 @@
+{
+  "schema": "intent-judge.ledger-validation-summary.v1",
+  "date": "2026-10-16",
+  "source_commit": "814862287fe768e46ebd295c8fab4eaf31161c55",
+  "pipeline": "ledger",
+  "prompt_version": "intent-ledger-v6-readiness-question-contract",
+  "model": "gpt-oss-120b",
+  "status": "failed_live_acceptance",
+  "activated": false,
+  "production_changed": false,
+  "candidate_winner_established": false,
+  "complete_live_ledger_conversations_verified": 0,
+  "stage_attempts_or_reservations": 43,
+  "initial_window_cap": 32,
+  "amended_window_cap": 44,
+  "reservation_cents_per_stage": 2,
+  "observed_new_reservations_cents": 86,
+  "azure_billing_spend_verified": false,
+  "deterministic_tests": 711,
+  "offline_browser_suites": 11,
+  "ci_url": "https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38968100354",
+  "raw_evidence_scope": "Ignored local artifacts; no browser state or credentials published",
+  "sealed_holdout": false,
+  "primary_quality_superiority_established": false,
+  "runs": [
+    {
+      "name": "initial_calibration",
+      "stages": 5,
+      "outcome": "Scope contract errors, semantic over-strengthening; failures retained"
+    },
+    {
+      "name": "v3_complete_input_calibration",
+      "stages": 1,
+      "outcome": "One response retained zero connections without adding nonstop"
+    },
+    {
+      "name": "paired_v3_pilot",
+      "stages": 7,
+      "outcome": "A4/B3; both failed airport update; B exclusive-budget error"
+    },
+    {
+      "name": "airport_update_diagnostic",
+      "stages": 2,
+      "outcome": "Correct set edit, invalid next-vs-base revision"
+    },
+    {
+      "name": "blind_v3_ui",
+      "stages": 7,
+      "outcome": "Includes malformed tester input and explicit corrected resubmission; dropped meaning"
+    },
+    {
+      "name": "v4_exposed_ui_regressions",
+      "stages": 6,
+      "outcome": "Improved retention; category/decline omissions and no useful questions"
+    },
+    {
+      "name": "v5_ui_regressions",
+      "stages": 3,
+      "outcome": "General invalid operation; flight missing-date question omitted"
+    },
+    {
+      "name": "v5_general_diagnostic",
+      "stages": 2,
+      "outcome": "no_preference/active status contradiction; reviewer did capture category/use case"
+    },
+    {
+      "name": "v6_initial_schema_ui",
+      "stages": 3,
+      "outcome": "Provider no-proposal responses; includes two flight attempts, first pending observation abandoned"
+    },
+    {
+      "name": "v6_schema_fixed_general",
+      "stages": 1,
+      "outcome": "Timeout 36.671s; retention ungraded"
+    },
+    {
+      "name": "v6_schema_fixed_flight",
+      "stages": 6,
+      "outcome": "Two openings, one followup; incomplete journey and semantic error; followup outcome unobserved"
+    }
+  ],
+  "remaining_research": [
+    "Simplify the model wire contract and measure provider schema-compilation/total response time",
+    "Qualify model instruction-following independently of architecture",
+    "Re-run untouched semantic ambiguity/correction families and a complete UI conversation before activation"
+  ],
+  "limitations": [
+    "No complete live ledger purchase journey verified",
+    "One successful draft broadened an ambiguous destination across countries",
+    "The same wording produced inconsistent connection/nonstop strength",
+    "Provider failures and unobserved HTTP responses are not semantic passes",
+    "Code and offline browser tests do not establish model quality"
+  ]
+}

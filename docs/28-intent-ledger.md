@@ -54,7 +54,7 @@ Fixture-based tests are software-contract checks, not model-quality evidence. Li
 | Independent v4 browser regressions | Flight retained more of the complex request and held unsupported constraints; hotel retained location alternatives, quiet-room/late-check-in/parking preferences and scoped budget; general retained hard features, delivery, and soft priorities. Category and some explicit no-preference statements still disappeared. All three failed to ask a useful focused question. |
 | v4 timing | Flight 22.907 s, hotel 23.252 s, general 13.998 s, two stages each. These are individual exposed regressions, not p50/p95 estimates. A speed improvement has not been established. |
 
-V5 explicitly addresses category/use-case capture, explicit declines, and answerable required gaps. Prompt assertions do not establish that these fixes work; live v5 results and the activation decision must be recorded below before any release claim.
+V5 explicitly addresses category/use-case capture, explicit declines, and answerable required gaps. Prompt assertions alone do not establish that these fixes work.
 
 V5 live checks still failed: general returned 502 after 20.332 s, and a correctly captured BOS/ORD request omitted its date question after 9.751 s. An isolated diagnostic showed that both model stages used `op=no_preference` with `status=active`; the reviewer did capture category and use case. Operation branches now enforce their cross-field status/value/target contract in the response schema. No output normalization substitutes for that validation.
 
@@ -82,6 +82,14 @@ The quality page labels B experimental and separates historical one-shot benchma
 
 ## Release decision
 
-Pending the final finite v6 user tests after the schema compatibility correction. No source commit, CI result, deployment, or complete live conversation is implied by this candidate record. Production activation requires a separate release decision. C, the bounded discovery-agent challenger, remains unimplemented.
+**Do not activate this candidate.** The implementation is pushed on `feature/intent-ledger`, source commit `814862287fe768e46ebd295c8fab4eaf31161c55`. Its [exact-source CI](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38968100354) passed the deterministic and browser jobs. Live acceptance did not pass. Neither the deployed development instance nor production was changed, and no deployment manifest/upload was attempted.
+
+After the schema compatibility correction, the independent tester obtained two real flight drafts with useful date questions (19.208 s and 17.908 s). The first broadened the ambiguous destination “San Jose” to airports in different countries and strengthened the plane-change condition to nonstop. The second captured AUS/SJC, the budget and zero connections correctly. Its date/alternate-airport clarification was submitted once but no response was observed through a 100-second wait. A successful opening is not a complete conversation or purchase proof. The duplicate opening was a tester/harness restart and is retained; it must not replace the first interpretation in quality scoring.
+
+The post-correction general opening timed out after 36.671 s with one reserved stage; no proposal was returned. Category/decline retention therefore remains unverified for that final contract. No offline fallback or manual repair was credited as success. No complete live ledger purchase journey was verified.
+
+The window ended at **43 stage attempts/reservations**, matching the observed shared reservation change from 2,484 to 2,570 cents: **86 cents of additional reservations**, not verified Azure billing. The lifetime ceiling remains 3,000 cents. All failed and unobserved attempts count. The [machine-readable validation summary](../evals/experiments/ledger-validation-2026-10-16.json) records the run accounting and acceptance failure.
+
+The next useful experiment is a simpler model wire contract that avoids redundant state fields and complex grammar branches, with model instruction-following qualified separately from architecture. Measure total response deadlines and schema overhead before adding a discovery-agent loop. Retest untouched ambiguity/correction families and an actual complete UI conversation. Current evidence supports keeping the ledger as an experiment, not replacing the incumbent or claiming faster answers. C remains unimplemented.
 
 Changing the default back to A affects new requests only. Existing B conversations stay pinned; disabling live AI preserves them but does not constitute a tested deployment rollback. A rollback must account for saved B state and the original deployment. Do not assume an older binary can safely edit the new ledger.
