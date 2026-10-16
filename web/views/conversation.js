@@ -32,6 +32,7 @@ export function conversationMarkup(d,escapeHTML,options={}){
 }
 
 function plannerStatus(plan,tools,escapeHTML,d){
+ if(d?.pipeline==='ledger'||d?.intent_ledger)return '';
  if(d?.mode!=='live'||(!plan.action&&!plan.question&&!tools.length))return '';
  const action=plan.action||'clarify';
  const actionCopy={ask_user:'Asking you for a material detail',ask_merchant:'Checking merchant context',request_external_search:'Gathering read-only options',review_offer:'Reviewing an offer against the draft',propose_ready_for_approval:'Ready for your review',inspect_offers:'Inspecting signed offer facts',retrieve_policy:'Checking merchant policy',ready_for_review:'Ready for your review',review_required:'Review needed before proceeding',clarify:'Choosing the next useful detail'}[action]||'Choosing the next useful detail';

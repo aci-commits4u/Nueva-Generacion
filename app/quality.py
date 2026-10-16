@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
 
-from app.ai_config import PROMPT_VERSION, selected_pipeline
+from app.ai_config import PROMPT_VERSION, selected_pipeline, prompt_version_for
 from app.store import get_store
 from evals.scoring import score_adaptive_case
 
@@ -185,7 +185,12 @@ def overview():
             native = None
     return {
         'pipeline': selected_pipeline(),
-        'prompt_version': PROMPT_VERSION,
+        'prompt_version': prompt_version_for(),
+        'ledger_quality': ({
+            'status': 'experimental',
+            'scope': 'Whole-conversation A/B trials are separate from the historical one-shot benchmark.',
+            'live_superiority_established': False,
+        } if selected_pipeline() == 'ledger' else None),
         'benchmarks': benchmarks,
         'adaptive_experiments': adaptive_experiments,
         'adaptive_quality_contract': {
@@ -212,6 +217,12 @@ def canary(authorization):
     ):
         raise HTTPException(401, 'Authenticated quality scheduler required.')
     date = datetime.now(timezone.utc).date()
+    if selected_pipeline() == 'ledger':
+        # The old one-shot scorer is not a semantic ledger trajectory judge.
+        # Do not spend credit or publish a misleading pass for a new contract.
+        return {'date':date.isoformat(),'status':'skipped','variant':'ledger',
+                'prompt_version':prompt_version_for('ledger'),
+                'reason':'The ledger arm uses explicit bounded trajectory evaluations; the legacy one-shot canary is not applicable.'}
     # The adversarial merchant-context fixture is exercised by the dedicated
     # benchmark harness, where its bounded tool-data injection is installed.
     # The daily canary remains a plain production-shaped request and never

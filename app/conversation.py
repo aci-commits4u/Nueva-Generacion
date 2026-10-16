@@ -1,6 +1,6 @@
 """Profile-driven clarification without AI consent or guessed preferences."""
 from app.profile_registry import get_profile,digest
-from app.ai_config import PROMPT_VERSION
+from app.ai_config import PROMPT_VERSION, prompt_version_for
 from app.airport_reference import (
     airport_context_for_field,
     airport_field_scope,
@@ -192,7 +192,7 @@ def _adaptive_engine_version_current(draft):
     # Early live adaptive drafts did not copy the pipeline to the top-level
     # record, but their server-owned adaptive plan is unambiguous evidence of
     # which interpretation path produced them.
-    adaptive = pipeline in {'adaptive', 'adaptive_fast'} or (
+    adaptive = pipeline in {'adaptive', 'adaptive_fast', 'ledger'} or (
         pipeline is None and isinstance(draft.get('adaptive_plan'), dict)
     )
     if not adaptive:
@@ -210,7 +210,7 @@ def _adaptive_engine_version_current(draft):
     ]
     if not versions:
         return True
-    return all(version == PROMPT_VERSION for version in versions)
+    return all(version == prompt_version_for(pipeline or 'adaptive') for version in versions)
 
 
 def question_contract_current(draft):
@@ -228,7 +228,7 @@ def question_contract_current(draft):
     # plan. They use the legacy profile question contract and are current.
     if draft.get('mode') != 'live' or (pipeline is None and not isinstance(draft.get('adaptive_plan'), dict)):
         return True
-    if pipeline not in {None, 'adaptive', 'adaptive_fast'}:
+    if pipeline not in {None, 'adaptive', 'adaptive_fast', 'ledger'}:
         return True
     if not _adaptive_engine_version_current(draft):
         return False
@@ -1273,6 +1273,9 @@ def apply_adaptive_plan(draft, extraction):
     to profile questions: no valid AI question means no question.  Offline and
     legacy pipelines keep the existing deterministic profile question list.
     """
+    if isinstance(extraction, dict) and extraction.get('pipeline') == 'ledger':
+        from app.ledger_conversation import attach_ledger_plan
+        return attach_ledger_plan(draft, extraction)
     result = deepcopy(draft)
     extraction = extraction if isinstance(extraction, dict) else {}
     mode = extraction.get('mode', result.get('mode', 'offline'))
@@ -1846,6 +1849,8 @@ def provenance(extraction,revision,messages=None):
         'unsupported': deepcopy(extraction['unsupported']),
         'clarifications': deepcopy(extraction.get('clarifications', [])),
         'guidance': extraction['explanation'],
+        'intent_ledger': deepcopy(extraction.get('intent_ledger')),
+        'ledger_transition': deepcopy(extraction.get('ledger_transition')),
         # These are immutable per-run context snapshots.  They are never
         # merged into the approved fields, even when a later run changes the
         # question or merchant tool result.

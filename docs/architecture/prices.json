@@ -1,0 +1,16 @@
+{
+  "schema": "ai-architect.prices.v1",
+  "generated_at": "2026-10-16",
+  "status": "unresolved_not_a_quote",
+  "rows": [
+    {
+      "item": "Existing Azure Foundry gpt-oss-120b deployment token rates",
+      "input_usd_per_million_tokens": null,
+      "output_usd_per_million_tokens": null,
+      "source_url": "https://azure.microsoft.com/en-us/pricing/details/azure-openai/",
+      "retrieved_at": "2026-10-16",
+      "evidence": "Public search gpt-oss row returns $- placeholders; no applicable subscription/region quote obtained. Null is unknown, not free.",
+      "billing_scope": "deployment-specific; region and agreement not verified"
+    }
+  ]
+}

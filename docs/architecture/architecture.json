@@ -1,0 +1,197 @@
+{
+  "schema": "ai-architect.architecture.v1",
+  "generated_at": "2026-10-16",
+  "goal": "Compare three customer-intent architectures before user-approved application implementation.",
+  "scope": "scoped design review, not completed production lifecycle",
+  "source_commit": "ef4fc34484cf5432153a9ad423165625202a2bc8",
+  "recommended": "B \u2014 transactional semantic intent ledger; unimplemented hypothesis",
+  "approval_status": "approved_dev_implementation",
+  "decisions": {
+    "model": {
+      "verdict": "OPEN",
+      "evidence": "app/ai_pipeline.py:L845; app/foundry_client.py:L75; app/foundry_client.py:L143",
+      "deferral_cost": "2026-10-16: applicable rates/quota and alternate-model results unknown; no fair model comparison yet."
+    },
+    "loop": {
+      "verdict": "OPEN",
+      "evidence": "app/ai_pipeline.py:L1259; app/main.py:L531",
+      "deferral_cost": "2026-10-16: B/C await implementation approval and paired trials; A retains known semantic reconciliation risks."
+    },
+    "trust": {
+      "verdict": "MADE",
+      "evidence": "app/main.py:L609; app/vi_adapter.py:L117; app/main.py:L741"
+    },
+    "run": {
+      "verdict": "OPEN",
+      "evidence": "vercel.json:L5; app/store.py:L373",
+      "deferral_cost": "2026-10-16: C durable-runner decision deferred until measured deadline/recovery need; long-run behavior unproven."
+    }
+  },
+  "planes": {
+    "experience": {
+      "owner": "Victor/product owner and conversation UI",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "observability": {
+      "owner": "runtime maintainer/trace component",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "evaluation": {
+      "owner": "eval maintainer and fresh UAT reviewer",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "orchestration": {
+      "owner": "runtime maintainer/reducer and bounded runner",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "tools": {
+      "owner": "merchant integration maintainer/allowlisted adapters",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "context": {
+      "owner": "intent-state maintainer/source and ledger store",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    },
+    "model": {
+      "owner": "AI maintainer/provider adapter",
+      "assignment_status": "proposed role; real production staffing unresolved"
+    }
+  },
+  "gates": {
+    "gate.frame": {
+      "status": "PASS",
+      "evidence": [
+        "app/main.py:L457",
+        "app/main.py:L609"
+      ],
+      "scope": "design completeness only"
+    },
+    "gate.discovery": {
+      "status": "PASS",
+      "evidence": [
+        "requirements.txt:L7",
+        "app/ai_pipeline.py:L749",
+        ".github/workflows/tests.yml:L20"
+      ],
+      "scope": "design completeness only"
+    },
+    "gate.flow": {
+      "status": "PASS",
+      "evidence": [
+        "app/main.py:L457",
+        "app/main.py:L609",
+        "app/main.py:L741"
+      ],
+      "scope": "design completeness only"
+    },
+    "gate.decisions": {
+      "status": "PASS",
+      "evidence": [
+        "app/ai_pipeline.py:L845",
+        "app/main.py:L531",
+        "app/vi_adapter.py:L117",
+        "vercel.json:L5"
+      ],
+      "scope": "design completeness only"
+    },
+    "gate.economics": {
+      "status": "FAIL",
+      "evidence": [
+        "app/store.py:L373",
+        "Applicable Azure unit rates, remaining allowance and value/payback inputs unknown."
+      ],
+      "scope": "unresolved lifecycle gate"
+    },
+    "gate.trust": {
+      "status": "PASS",
+      "evidence": [
+        "app/ai_pipeline.py:L749",
+        "app/ai_pipeline.py:L763",
+        "app/ai_pipeline.py:L814",
+        "app/ai_pipeline.py:L822",
+        "app/vi_adapter.py:L117",
+        "app/main.py:L609",
+        "app/main.py:L741"
+      ],
+      "scope": "design completeness only"
+    },
+    "gate.evals": {
+      "status": "FAIL",
+      "evidence": [
+        "tests/test_adaptive_quality.py:L54",
+        "New 24-case trajectory design has no executable app adapter; B/C unimplemented; no new paid trials."
+      ],
+      "scope": "unresolved lifecycle gate"
+    },
+    "gate.operate": {
+      "status": "FAIL",
+      "evidence": [
+        "vercel.json:L5",
+        "Production ownership, recovery/rollback and C runner not tested for proposed system."
+      ],
+      "scope": "unresolved lifecycle gate"
+    },
+    "gate.verify": {
+      "status": "FAIL",
+      "evidence": [
+        "Fresh independent review/receipt completed; initial imprecise pointers recorded and corrected in proposed reports.",
+        "Full lifecycle incomplete: B/C unimplemented; new live trajectory adapter/evaluations, economics and operations unresolved."
+      ],
+      "scope": "unresolved lifecycle gate"
+    }
+  },
+  "verified_by": {
+    "role": "fresh_context_independent_reviewer",
+    "report": "review.md",
+    "receipt": "receipts/2026-10-16-verify.md",
+    "scope": "initial design/evidence critique only, not proposed implementation or full lifecycle verification",
+    "verdict": "FAIL full lifecycle; dev-only experiment conditional",
+    "followup_receipt": "receipts/2026-10-16-followup.md",
+    "final_delta": "Final pointer/false-HOLD-threshold changes parent-checked only; no third independent audit."
+  },
+  "artifacts": [
+    "00-frame.md",
+    "01-discovery.md",
+    "02-user-flows.md",
+    "03-experience-blueprint.md",
+    "04-roi.md",
+    "05-trust-boundary.md",
+    "05-trust-boundary.proposed.md",
+    "06-evals/cases.jsonl",
+    "06-evals/rubric.md",
+    "06-evals/rubric.proposed-v2.md",
+    "06-evals/rubric.proposed.md",
+    "07-runbook.md",
+    "SOP.md",
+    "SYSTEM.md",
+    "SYSTEM.proposed-v2.md",
+    "SYSTEM.proposed.md",
+    "WORKFLOW.md",
+    "adr/ADR-0001-intent-operations.md",
+    "adr/ADR-0002-bounded-discovery.md",
+    "adr/ADR-0003-authority-and-vi.md",
+    "adr/ADR-0004-model-experiments.md",
+    "architecture.json",
+    "final-corrections.md",
+    "prices.json",
+    "receipts/2026-10-16-followup.md",
+    "receipts/2026-10-16-verify.md",
+    "review-response.md",
+    "review.md",
+    "sources.md"
+  ],
+  "active_proposals": [
+    "SYSTEM.proposed-v2.md",
+    "05-trust-boundary.proposed.md",
+    "06-evals/rubric.proposed-v2.md",
+    "final-corrections.md"
+  ],
+  "implementation": {
+    "status": "in_progress",
+    "approved_scope": "B ledger and A/B trajectory harness, production unchanged",
+    "approval_date": "2026-10-16",
+    "plan": "docs/plans/2026-10-16-intent-ledger.md",
+    "baseline_offline_tests": 616,
+    "live_results": "not_yet_run"
+  }
+}

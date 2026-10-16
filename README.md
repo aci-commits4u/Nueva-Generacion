@@ -4,6 +4,8 @@
 
 **Development instance: [intent-judge-perfected-dev.vercel.app](https://intent-judge-perfected-dev.vercel.app)** · Branch: `develop`
 
+The [intent-ledger experiment](docs/28-intent-ledger.md) records the new semantic state design, live failures, test limits, and activation decision. It is not a production-quality or speed-improvement claim.
+
 The development checkout is `/Users/victor/Nueva-Generacion-dev`; the existing
 release checkout is `/Users/victor/Nueva-Generacion`. Both release branches
 start from accepted snapshot `d6f8131`. The production project is
