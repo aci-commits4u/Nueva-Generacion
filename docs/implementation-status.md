@@ -2,24 +2,29 @@
 
 ## Faster development conversation — October 16
 
-The development branch adds a normally one-call `adaptive_fast` interpretation path,
-64-stage sessions, and 31 follow-ups, retaining the shared $30 money cap and
-all historical reservations. Exact source alternatives and colloquial
-no-layover/strict-budget wording remain grounded and reviewable.
+Development is READY at **https://intent-judge-perfected-dev.vercel.app/**.
+Runtime source `a670e0c` is deployed as `dpl_5pyLdGTs4br2VpKuPanxWmTxXF6N`;
+[its exact-source CI](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38932105356)
+passed **616 pytest checks and eleven browser suites**. The app runs
+`adaptive_fast`, prompt `intent-envelope-v19-selective-review`, one ordinary
+model stage with a second only for selected context or a contradicted date
+question. Session allowance is 64 stages and 31 follow-ups. The shared $30
+money cap and historical reservations are unchanged.
 
-Local verification passed 616 pytest checks and eleven browser suites. A real
-Foundry chatbot replay retained both airport sets and changed only the layover
-limit when explicitly corrected; ordinary turns took 5.5–7.5 seconds. A fresh
-hotel request preserved required breakfast and optional cancellation, using
-a two-stage tool loop in 13.4 seconds. These are finite local observations.
-See [the full evidence and remaining limits](26-fast-conversation.md). Release
-of the v19 selective-review follow-up is pending exact-commit CI and hosted
-acceptance; the earlier hosted v18 variation failed by re-asking an exact date. Public production has not been changed.
+The first hosted v18 variation exposed another genuine date re-ask. V19 fixed
+it and then passed the exact original request plus one multi-detail reply in
+a fresh hosted browser session. Both airport sets, date, strict price, and
+zero layovers persisted with no repeated question. The live replies took
+11.789 s and 6.887 s. The three-connection purchase returned HTTP 409; the
+matching simulated purchase, evidence download, and receipt reload passed.
+Root verified eleven signature/digest/intent bindings against the configured
+trusted keys. No real booking or payment was made.
 
-One bounded v19 reviewer laboratory call also repaired the saved date-question
-failure while preserving airports, no layovers, and the strict budget. The
-grounded result and exact local artifact path are recorded in
-[the fast conversation evidence](26-fast-conversation.md).
+A separate one-stage real AI reviewer experiment repaired the saved v18 bad
+interpretation in 4.4 s. A hotel memory check and intentional layover correction
+are recorded separately; these finite samples are not a claim of perfect
+understanding. See [the full conversation evidence](26-fast-conversation.md).
+Production remains on its prior v15 deployment and was not promoted.
 
 ## Isolated development shopping release — October 15
 

@@ -150,6 +150,41 @@ artifact at
 `/Users/victor/Nueva-Generacion-dev/ignored/artifacts/selective-review-lab-v19.json`.
 It is development evidence only and is not a deployment or purchase claim.
 
+## Hosted v19 acceptance and release
+
+The development deployment is READY at
+**https://intent-judge-perfected-dev.vercel.app/**. Runtime source
+`a670e0cb65f9b161faa2fb61baf9afaa655bf53f` is deployment
+`dpl_5pyLdGTs4br2VpKuPanxWmTxXF6N`; [exact-source CI
+38932105356](https://github.com/aci-commits4u/Nueva-Generacion/actions/runs/38932105356)
+passed 616 pytest checks and all eleven browser suites before deployment.
+
+A fresh hosted DOM session repeated the exact v18 failing inputs. Both airport
+sets, November 12, 2026, strict `79999` cents, and zero connections persisted.
+There was no remaining question about the date, airports, budget, nonstop, or
+layovers. The two live responses took **11.789 s** and **6.887 s**, consuming
+two model stages total. These hosted timings include the application path;
+the faster local measurements above are not presented as hosted latency.
+
+Explicit review and optional choices led to the signed comparison. The bad
+three-connection purchase returned HTTP 409; the matching simulated purchase
+completed. Evidence downloaded and the receipt restored after reload. Root
+independently verified eleven digest, trusted issuer signature, VI chain,
+purchase binding, and approved-intent properties in the downloaded packet.
+No real booking or payment occurred. Evidence is retained in
+`artifacts/hosted-v19-uat-report.md`, `hosted-v19-evidence.json`, and
+`hosted-v19-signature-verification.json`. A deployment-scoped runtime scan
+returned no error/fatal log counts after acceptance.
+
+Production remained READY on `dpl_GnMbCwaXUYxyyToc5w8oZQqLf4En`, runtime
+`f505c4c48203d3f8b4f881c639cc8c43db37aade`. No production promotion occurred.
+
+The model inventory was inspected read-only. This resource has only
+`gpt-oss-120b` deployed. Microsoft documents strict structured outputs for
+`gpt-oss-20b`, but this account exposed no deployable SKU/quota for it. No model
+resource was created. The selected change therefore improves the existing
+live model path rather than claiming an untested provider replacement.
+
 ## Verification and budget boundary
 
 The latest local count is 616 pytest passes. All eleven headless browser regression suites passed, including the visible
@@ -168,8 +203,8 @@ first grounded candidate, marks review as `review_required`, and shows a
 system warning. It does not fabricate AI text. Provider errors continue to
 propagate visibly.
 
-The v19 development release is pending exact-source CI and hosted UAT;
-the v19 acceptance result above is local evidence at this checkpoint.
+The v19 development release and hosted acceptance are complete as recorded
+above.
 Production remains on the v15 runtime and its prior operational cap until an
 explicit promotion. That distinction belongs in release engineering notes;
 the user-facing product does not need an unprompted environment warning.
